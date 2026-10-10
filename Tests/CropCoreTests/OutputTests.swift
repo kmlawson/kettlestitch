@@ -190,6 +190,23 @@ final class ExportTests:XCTestCase {
 }
 
 final class ClaudeReviewTests:XCTestCase {
+    func testTokenUseIsReadAddedUpAndLogged() throws {
+        let same=#""corners":{"top_left":{"x":0.1,"y":0.1},"top_right":{"x":0.9,"y":0.1},"bottom_right":{"x":0.9,"y":0.9},"bottom_left":{"x":0.1,"y":0.9}}"#
+        let output=Data("{\"type\":\"result\",\"is_error\":false,\"result\":\"\",\"total_cost_usd\":0.0123,\"usage\":{\"input_tokens\":1200,\"cache_creation_input_tokens\":300,\"cache_read_input_tokens\":40,\"output_tokens\":85},\"structured_output\":{\"verdict\":\"good\",\"comment\":\"ok\",\(same)}}".utf8)
+        let usage=try XCTUnwrap(ClaudeReview.parse(output,current:current).usage)
+        XCTAssertEqual(usage,ReviewUsage(inputTokens:1540,outputTokens:85,cost:0.0123));XCTAssertEqual(usage.summary,"1,540 tokens in, 85 out, $0.0123")
+        XCTAssertNil(try ClaudeReview.parse(reply("{\"verdict\":\"good\",\"comment\":\"\",\(same)}"),current:current).usage,"An answer without counts has none")
+        XCTAssertEqual((usage+ReviewUsage(inputTokens:10,outputTokens:5)).summary,"1,550 tokens in, 90 out, $0.0123")
+        XCTAssertEqual(ReviewUsage(inputTokens:10,outputTokens:5).summary,"10 tokens in, 5 out")
+        let url=FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString+".json");defer{try? FileManager.default.removeItem(at:url)}
+        XCTAssertEqual(UsageLog.text(UsageLog.read(url)),"No requests have been sent to Claude yet.")
+        try UsageLog.append(UsageEntry(date:Date(timeIntervalSince1970:1_800_000_000),file:"IMG_1.HEIC",model:"Haiku 5.5",seconds:8.4,usage:usage),to:url)
+        try UsageLog.append(UsageEntry(date:Date(timeIntervalSince1970:1_800_000_060),file:"IMG_2.HEIC",model:"Haiku 5.5",seconds:11,usage:ReviewUsage(inputTokens:10,outputTokens:5)),to:url)
+        let lines=UsageLog.text(UsageLog.read(url),timeZone:TimeZone(identifier:"UTC")!).components(separatedBy:"\n")
+        XCTAssertEqual(lines[0],"2 requests in all: 1,550 tokens in, 90 out, $0.0123")
+        XCTAssertEqual(lines[2],"2027-01-15 08:01:00  Haiku 5.5  IMG_2.HEIC  11 s  10 tokens in, 5 out","Newest first")
+        XCTAssertEqual(lines[3],"2027-01-15 08:00:00  Haiku 5.5  IMG_1.HEIC  8 s  1,540 tokens in, 85 out, $0.0123")
+    }
     func testAVisibleSplitIsSentAndAMovedOneComesBack() throws {
         var page=Page(path:"/photos/a.jpg");page.quad=current;page.split=PageSplit(top:0.47,bottom:0.47)
         let ends=try XCTUnwrap(ClaudeReview.splitEnds(page))

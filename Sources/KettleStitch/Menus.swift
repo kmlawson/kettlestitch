@@ -98,7 +98,7 @@ extension AppDelegate: NSMenuItemValidation, NSMenuDelegate {
         crop.addItem(.separator())
         add(crop,"Add Picture Zone",#selector(addZone),"p",[.command,.option]);add(crop,"Remove Picture Zones",#selector(removeZones))
         crop.addItem(.separator())
-        add(crop,"Send to Claude",#selector(sendToClaude),"c",[.command,.option])
+        add(crop,"Send to Claude",#selector(sendToClaude),"c",[.command,.option]);add(crop,"Claude Usage Log…",#selector(showUsageLog))
         crop.addItem(.separator())
         add(crop,"Stop Background Work",#selector(stop),".")
 
@@ -125,6 +125,21 @@ extension AppDelegate: NSMenuItemValidation, NSMenuDelegate {
     }
 }
 
+/// The history of requests to Claude: when each was made, how long it took and what it cost in tokens.
+final class UsageLogController: NSObject {
+    let window=NSPanel(contentRect:NSRect(x:0,y:0,width:760,height:420),styleMask:[.titled,.closable,.resizable,.utilityWindow],backing:.buffered,defer:false)
+    let text=NSTextView()
+    let url:URL
+    init(url:URL){
+        self.url=url;super.init()
+        window.title="Claude Usage Log";window.isReleasedWhenClosed=false;window.isFloatingPanel=false;window.hidesOnDeactivate=false;window.minSize=NSSize(width:480,height:200)
+        text.isEditable=false;text.font = .monospacedSystemFont(ofSize:12,weight:.regular);text.textContainerInset=NSSize(width:12,height:12);text.autoresizingMask=[.width]
+        let scroll=NSScrollView();scroll.hasVerticalScroller=true;scroll.documentView=text
+        window.contentView=scroll;window.center()
+    }
+    func reload(){text.string=UsageLog.text(UsageLog.read(url))}
+    func show(){reload();window.makeKeyAndOrderFront(nil)}
+}
 /// The keyboard reference, laid out from `ShortcutReference`.
 final class ShortcutsController: NSObject {
     let window=NSPanel(contentRect:NSRect(x:0,y:0,width:560,height:640),styleMask:[.titled,.closable,.resizable,.utilityWindow],backing:.buffered,defer:false)

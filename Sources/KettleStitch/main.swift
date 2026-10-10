@@ -85,6 +85,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
     var exportSheet: ExportSheetController?
     var settings: SettingsController?
     var shortcuts: ShortcutsController?
+    var usageLog: UsageLogController?
+    /// Where the history of requests to Claude is kept.
+    var usageURL=URL(fileURLWithPath:"/dev/null")
     var shortcutMonitor: Any?
     var thumbs=NSCache<NSString,NSImage>()
     var thumbnailPending=Set<String>()
@@ -111,7 +114,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
         do {try FileManager.default.createDirectory(at:support,withIntermediateDirectories:true)} catch {showError(error)}
         // The app opens empty. Each session gets its own untitled file, so unnamed work from an earlier
         // session is never overwritten; it stays reachable under File ▸ Open Recent.
-        projectURL=support.appendingPathComponent(LaunchPolicy.untitledName(Date()))
+        projectURL=support.appendingPathComponent(LaunchPolicy.untitledName(Date()));usageURL=support.appendingPathComponent(UsageLog.fileName)
         if let asked=LaunchPolicy.projectToOpen(arguments:CommandLine.arguments,testDirectory:testDirectory),FileManager.default.fileExists(atPath:asked.path) {
             do {project=try Project.read(asked);project.selected=min(max(0,project.selected),max(0,project.pages.count-1));projectURL=asked} catch {showError(error)}
         }
@@ -758,11 +761,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
         let saved=UserDefaults.standard.string(forKey:"claudeModel")
         return ClaudeReview.models.contains{$0.id==saved} ? saved!:ClaudeReview.models[0].id
     }
+    @objc func showUsageLog(){
+        if usageLog == nil {usageLog=UsageLogController(url:usageURL)}
+        usageLog!.show()
+    }
     @objc func showSettings(){
         if settings == nil {settings=SettingsController()}
         settings!.show()
     }
-    /// Asks Claude to judge the crop of every targeted page. Fixes arrive as proposals; the crop itself is never replaced.
+    /// Asks Claude to judge the crop of every targeted page. A fix is selected at once and stays among the proposals; Undo puts the old crop back.
     @objc func sendToClaude(){
         let targets=targetIndexes;guard !reviewing,!targets.isEmpty else{return}
         guard let key=Keychain.read(),!key.isEmpty else{showSettings();settings?.explain("Add an Anthropic API key to send crops to Claude.");return}
@@ -770,13 +777,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
         let pages=targets.map{project.pages[$0]},model=claudeModel,token=generation
         beginReview(pages,model:ClaudeReview.models.first{$0.id==model}?.title ?? model)
         reviewQueue.addOperation{[weak self] in
-            var good=0,fixes=0,failure:Error?
+            var good=0,fixes=0,failure:Error?,spent:ReviewUsage?
             for (number,page) in pages.enumerated() {
                 let proceed=DispatchQueue.main.sync{()->Bool in
                     guard let self,!self.reviewCancelled,self.generation==token else{return false}
                     self.reviewWaiting(for:page,number:number+1);return true
                 }
                 if !proceed{break}
+                let asked=Date()
                 let result=Result{try ClaudeReview.run(page,model:model,apiKey:key,executable:executable){process in DispatchQueue.main.async{self?.reviewProcess=process}}}
                 var stop=false
                 DispatchQueue.main.sync{
@@ -788,6 +796,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
                         if review.quad != nil{fixes+=1}else if review.good{good+=1}
                         self.reviewPending.remove(page.id);self.reviewActive=nil
                         self.record(review,for:page,done:number+1,of:pages.count)
+                        if let usage=review.usage {
+                            spent=(spent ?? ReviewUsage())+usage
+                            try? UsageLog.append(UsageEntry(date:asked,file:URL(fileURLWithPath:page.path).lastPathComponent,model:self.reviewModel,seconds:Date().timeIntervalSince(asked),usage:usage),to:self.usageURL)
+                            self.usageLog?.reload()
+                            if pages.count==1 {self.status.stringValue += " · "+usage.summary}
+                        }
                     }
                 }
                 if stop{break}
@@ -796,7 +810,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
                 let stopped=self.reviewCancelled;self.endReview()
                 if let failure,!stopped {self.status.stringValue="Claude review failed";self.showError(failure)}
                 else if stopped {self.status.stringValue="Stopped; Claude's finished reviews are kept"}
-                else if pages.count>1 {self.status.stringValue="Claude reviewed \(good+fixes) of \(pages.count): \(good) good, \(fixes) with a proposed fix — look for “Claude” under Proposals"}
+                else if pages.count>1 {self.status.stringValue="Claude reviewed \(good+fixes) of \(pages.count): \(good) good, \(fixes) fixed — Undo on a page puts its old crop back"+(spent.map{" · "+$0.summary} ?? "")}
             }
         }
     }
@@ -838,11 +852,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
             return
         }
         save();table.reloadData(forRowIndexes:IndexSet(integer:i),columnIndexes:IndexSet(integer:0))
-        // Unlike a crop fix, which waits as a proposal, a moved split line is applied; Undo puts it back.
+        // Claude's crop and split line are applied as they arrive; Undo puts the page back as it was.
         let moved=project.pages[i].split != before.split
-        if moved {undoStack.append(.pages([before]));redoStack.removeAll()}
-        if current==i {refreshDetail();if canvas.preview{renderPreview()}}
-        if total==1 {status.stringValue=(review.quad != nil ? "Claude proposes a fix · press ] or choose “Claude” under Proposal to try it":review.good ? "Claude: crop looks right":"Claude: no usable fix")+(moved ? " · Claude moved the split line (Undo puts it back)":"")}
+        if moved || project.pages[i].quad != before.quad {undoStack.append(.pages([before]));redoStack.removeAll()}
+        if current==i {canvas.quad=project.pages[i].quad;refreshDetail();if canvas.preview{renderPreview()}}
+        if total==1 {status.stringValue=(review.quad != nil ? "Claude’s fix is selected · Undo puts the old crop back":review.good ? "Claude: crop looks right":"Claude: no usable fix")+(moved ? " · Claude moved the split line (Undo puts it back)":"")}
     }
 
     func showError(_ error:Error){let alert=NSAlert(error:error);alert.runModal()}

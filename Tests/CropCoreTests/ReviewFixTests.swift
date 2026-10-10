@@ -25,11 +25,12 @@ final class ClaudeProposalPersistenceTests:XCTestCase {
 
 final class ReviewRecordingTests:XCTestCase {
     let sent=square(0.1,0.9)
-    func testFixBecomesAProposalWithANote() {
+    func testFixIsSelectedAndKeptAsAProposalWithANote() {
         var p=page();p.quad=sent;p.candidates=[Candidate(quad:square(0.05,0.95),score:0.8,source:"Edges"),Candidate(quad:square(0.2,0.8),score:0,source:Candidate.claudeSource)]
         XCTAssertTrue(p.record(CropReview(good:false,comment:"Top-left moved out.",quad:square(0.08,0.9)),sentQuad:sent))
         XCTAssertEqual(p.candidates.filter{$0.source==Candidate.claudeSource}.map{$0.quad},[square(0.08,0.9)],"The earlier Claude proposal is replaced")
-        XCTAssertEqual(p.reviewNote,"Claude proposes a fix — Top-left moved out.");XCTAssertEqual(p.quad,sent,"The crop itself is never changed")
+        XCTAssertEqual(p.reviewNote,"Claude's fix selected — Top-left moved out.")
+        XCTAssertEqual(p.quad,square(0.08,0.9),"Claude's crop is selected at once");XCTAssertEqual(p.status,"Proposal selected");XCTAssertFalse(p.reviewed)
     }
     func testGoodVerdictAndEmptyComment() {
         var p=page();p.quad=sent

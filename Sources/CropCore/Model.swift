@@ -154,15 +154,16 @@ public struct Page: Codable, Identifiable {
     /// A crop set by hand. Claude's comment described the crop it replaces, so it goes.
     public mutating func setManualCrop(_ q: Quad) {quad=q;status="Manual";reviewed=false;reviewNote=nil}
     public mutating func selectProposal(_ q: Quad) {quad=q;status="Proposal selected";reviewed=false}
-    /// Stores Claude's verdict on the crop that was sent. Returns false, changing nothing, if the crop has been edited since.
+    /// Stores Claude's verdict on the crop that was sent and selects its fix, if it made one. Returns false, changing nothing, if the crop has been edited since.
     /// A moved split line is applied, provided the line is still the one that was sent.
     @discardableResult public mutating func record(_ review: CropReview, sentQuad: Quad, sentSplit: PageSplit? = nil) -> Bool {
         guard quad == sentQuad else {return false}
         let moved=review.split != nil && split != nil && split == sentSplit
         if moved {split=review.split}
         candidates.removeAll{$0.source == Candidate.claudeSource}
-        if let fix=review.quad {candidates=Candidate.ordered(candidates+[Candidate(quad:fix,score:0,source:Candidate.claudeSource)])}
-        let verdict=(review.quad != nil ? "Claude proposes a fix":review.good ? "Claude: crop looks right":"Claude: no usable fix")+(moved ? "; split line moved":"")
+        // Claude's crop is selected at once and stays in the list; the crop it replaces is one Undo away.
+        if let fix=review.quad {candidates=Candidate.ordered(candidates+[Candidate(quad:fix,score:0,source:Candidate.claudeSource)]);selectProposal(fix);revision+=1}
+        let verdict=(review.quad != nil ? "Claude's fix selected":review.good ? "Claude: crop looks right":"Claude: no usable fix")+(moved ? "; split line moved":"")
         reviewNote=review.comment.isEmpty ? verdict:verdict+" — "+review.comment
         return true
     }

@@ -3,6 +3,55 @@ import CoreGraphics
 import CoreText
 import UniformTypeIdentifiers
 
+/// What one request, or several added together, cost. Input counts every token read, cached or not.
+public struct ReviewUsage: Codable, Equatable {
+    public var inputTokens: Int
+    public var outputTokens: Int
+    /// In US dollars, as the tool reports it; nil when it did not.
+    public var cost: Double?
+    public init(inputTokens: Int = 0, outputTokens: Int = 0, cost: Double? = nil) {self.inputTokens=inputTokens;self.outputTokens=outputTokens;self.cost=cost}
+    public static func + (a: ReviewUsage, b: ReviewUsage) -> ReviewUsage {
+        ReviewUsage(inputTokens:a.inputTokens+b.inputTokens,outputTokens:a.outputTokens+b.outputTokens,cost:a.cost == nil && b.cost == nil ? nil:(a.cost ?? 0)+(b.cost ?? 0))
+    }
+    static func grouped(_ n: Int) -> String {
+        let formatter=NumberFormatter();formatter.numberStyle = .decimal;formatter.locale=Locale(identifier:"en_US_POSIX");formatter.groupingSeparator=",";formatter.usesGroupingSeparator=true
+        return formatter.string(from:NSNumber(value:n)) ?? String(n)
+    }
+    public var summary: String {
+        "\(ReviewUsage.grouped(inputTokens)) tokens in, \(ReviewUsage.grouped(outputTokens)) out"+(cost.map{String(format:", $%.4f",$0)} ?? "")
+    }
+}
+/// One request to Claude, as kept in the usage log.
+public struct UsageEntry: Codable, Equatable {
+    public var date: Date
+    public var file: String
+    public var model: String
+    public var seconds: Double
+    public var usage: ReviewUsage
+    public init(date: Date, file: String, model: String, seconds: Double, usage: ReviewUsage) {self.date=date;self.file=file;self.model=model;self.seconds=seconds;self.usage=usage}
+}
+/// The history of requests, kept as JSON in the app's support folder. Nothing in it leaves the Mac.
+public enum UsageLog {
+    public static let fileName = "claude-usage.json"
+    public static func read(_ url: URL) -> [UsageEntry] {
+        let decoder=JSONDecoder();decoder.dateDecodingStrategy = .iso8601
+        return (try? decoder.decode([UsageEntry].self,from:Data(contentsOf:url))) ?? []
+    }
+    public static func append(_ entry: UsageEntry, to url: URL) throws {
+        let encoder=JSONEncoder();encoder.dateEncodingStrategy = .iso8601;encoder.outputFormatting=[.prettyPrinted,.sortedKeys]
+        try encoder.encode(read(url)+[entry]).write(to:url,options:.atomic)
+    }
+    /// The log as text, newest request first, under a line of totals.
+    public static func text(_ entries: [UsageEntry], timeZone: TimeZone = .current) -> String {
+        guard !entries.isEmpty else {return "No requests have been sent to Claude yet."}
+        let formatter=DateFormatter();formatter.locale=Locale(identifier:"en_US_POSIX");formatter.timeZone=timeZone;formatter.dateFormat="yyyy-MM-dd HH:mm:ss"
+        let total=entries.reduce(ReviewUsage()){$0+$1.usage}
+        let lines=entries.reversed().map{entry in
+            "\(formatter.string(from:entry.date))  \(entry.model)  \(entry.file)  \(Int(entry.seconds.rounded())) s  \(entry.usage.summary)"
+        }
+        return "\(entries.count) request\(entries.count == 1 ? "":"s") in all: \(total.summary)\n\n"+lines.joined(separator:"\n")
+    }
+}
 public struct CropReview: Equatable {
     public var good: Bool
     public var comment: String
@@ -10,6 +59,8 @@ public struct CropReview: Equatable {
     public var quad: Quad?
     /// A corrected line between the facing pages, or nil when there is none or the current one should stand.
     public var split: PageSplit? = nil
+    /// Tokens and cost of the request, when the tool reported them.
+    public var usage: ReviewUsage? = nil
 }
 /// What the interface shows while pages are with Claude.
 public enum ReviewProgress {
@@ -50,9 +101,9 @@ public enum ClaudeReview {
         let dividing=split.map{ends in """
 
 
-        The spread will be divided into its two pages along a line. Current line: s1 (x \(String(format:"%.4f",ends.0.x)), y \(String(format:"%.4f",ends.0.y))), s2 (x \(String(format:"%.4f",ends.1.x)), y \(String(format:"%.4f",ends.1.y))).
+        The spread is divided into its two pages along a line. Current line: s1 (x \(String(format:"%.4f",ends.0.x)), y \(String(format:"%.4f",ends.0.y))), s2 (x \(String(format:"%.4f",ends.1.x)), y \(String(format:"%.4f",ends.1.y))).
 
-        A correct line runs along the fold between the two facing pages, the whole way across the spread from one edge of the crop to the opposite edge. A printed rule, the border of a printed frame or the edge of a column of text is not the fold, even where it is darker than the fold. If the line is within about half a percent of the fold along its whole length, return s1 and s2 unchanged in "split". Otherwise return corrected coordinates for them, each on the edge of the crop it is on now, and say so in "comment". The verdict is about the crop's corners only.
+        A correct line runs along the fold between the two facing pages, the whole way across the spread from one edge of the crop to the opposite edge. A printed rule, the border of a printed frame or the edge of a column of text is not the fold, even where it is darker. If the line is within about half a percent of the fold along its whole length, return s1 and s2 unchanged. Otherwise return corrected coordinates, each end on the edge of the crop it is on now. The verdict is about the corners only.
         """} ?? ""
         let current=zip(cornerKeys,quad.points).map{String(format:"%@ (x %.4f, y %.4f)",$0,$1.x,$1.y)}.joined(separator:", ")
         return """
@@ -66,16 +117,22 @@ public enum ClaudeReview {
 
         Current crop: \(current).
 
-        A correct crop follows the outer boundary of the whole book or spread, including every visible page, as tightly as possible. It leaves out the table or background and never cuts into the paper. Do not split the spread into separate pages. Fingers holding the book may overlap the boundary; place the corner where the paper corner is or would be.
+        A correct crop follows the outer boundary of the whole book or spread, including every visible page, as tightly as possible. It leaves out the table or background and never cuts into the paper. Do not shrink it to one page of a spread. Fingers holding the book may overlap the boundary; place the corner where the paper corner is or would be.
 
-        Judge each corner separately. If every corner is within about one percent of the right place, answer with verdict "good" and return the corners unchanged. Otherwise answer with verdict "adjust", give corrected coordinates for only the corners that are wrong, and return the others exactly as given. In "comment", say in one or two sentences which corners you moved and why, or why the crop is already right.\(dividing)
+        Judge each corner separately. If every corner is within about one percent of the right place, the verdict is "good" and the corners are returned unchanged. Otherwise the verdict is "adjust", with corrected coordinates for only the corners that are wrong and the others exactly as given.\(dividing)
+
+        Answer in this fixed format and nothing more. Do not describe the page or explain your reasoning.
+        - "verdict": "good" or "adjust".
+        - "corners": all four corners.\(split == nil ? "":"\n- \"split\": s1 and s2.")
+        - "comment": at most ten words naming only what you moved, such as "TL, BR moved out"\(split == nil ? "":" or \"split moved right\""); "ok" if you moved nothing.
         """
     }
     public static func arguments(model: String, prompt: String, split: Bool = false) -> [String] {
         ["-p",prompt,"--bare","--model",model,"--tools","Read","--output-format","json","--json-schema",schema(split:split),"--no-session-persistence"]
     }
     /// Reads the tool's JSON result. Unchanged or invalid coordinates produce no proposal.
-    /// With `split` and `rotation`, a moved dividing line is read too and expressed across the current crop.
+    /// With `split` and `rotation`, the dividing line is read too and expressed across the crop that results,
+    /// so it stays on the same place in the photograph when the corners move.
     public static func parse(_ output: Data, current: Quad, split: PageSplit? = nil, rotation: Int = 0) throws -> CropReview {
         guard let root=try? JSONSerialization.jsonObject(with:output) as? [String:Any] else {
             throw CropError.message("Claude returned an unreadable reply: "+String(decoding:output.prefix(300),as:UTF8.self))
@@ -96,12 +153,12 @@ public enum ClaudeReview {
             }
             if points.count == 4 {let proposed=Quad(points);if proposed.valid,proposed.distance(current)>0.002 {quad=proposed}}
         }
-        let good=verdict == "good"
+        let good=verdict == "good",final=good ? current:quad ?? current
         var moved:PageSplit?
         if let split,let line=answer["split"] as? [String:Any] {
             let ends=splitKeys.compactMap{key->(u:Double,v:Double)? in
                 guard let end=line[key] as? [String:Any],let x=(end["x"] as? NSNumber)?.doubleValue,let y=(end["y"] as? NSNumber)?.doubleValue else {return nil}
-                return SplitGeometry.position(of:Point(x,y),quad:current,rotation:rotation)
+                return SplitGeometry.position(of:Point(x,y),quad:final,rotation:rotation)
             }
             // The ends need not lie exactly on the crop's edges; the line through them is carried to both.
             if ends.count == 2,abs(ends[1].v-ends[0].v)>0.2 {
@@ -110,7 +167,13 @@ public enum ClaudeReview {
                 if line.top.isFinite,line.bottom.isFinite,max(abs(line.top-split.top),abs(line.bottom-split.bottom))>0.003 {moved=line.clamped}
             }
         }
-        return CropReview(good:good,comment:comment,quad:good ? nil:quad,split:moved)
+        return CropReview(good:good,comment:comment,quad:good ? nil:quad,split:moved,usage:usage(root))
+    }
+    /// Token counts and cost from the tool's result, nil when it gave none.
+    static func usage(_ root: [String:Any]) -> ReviewUsage? {
+        guard let counts=root["usage"] as? [String:Any] else {return nil}
+        func count(_ key: String) -> Int {(counts[key] as? NSNumber)?.intValue ?? 0}
+        return ReviewUsage(inputTokens:count("input_tokens")+count("cache_creation_input_tokens")+count("cache_read_input_tokens"),outputTokens:count("output_tokens"),cost:(root["total_cost_usd"] as? NSNumber)?.doubleValue)
     }
     /// The photograph with the crop outline, corner labels and a labelled coordinate grid.
     public static func overlay(_ image: CGImage, quad: Quad, split: (Point, Point)? = nil) throws -> CGImage {
