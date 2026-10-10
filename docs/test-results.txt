@@ -1,0 +1,65 @@
+[0/1] Planning build
+Building for debugging...
+[0/12] Write sources
+[3/12] Write swift-version--58304C5D6DBC2206.txt
+[5/17] Emitting module CropCore
+[6/17] Compiling CropCore Imaging.swift
+[7/17] Compiling CropCore Model.swift
+[8/17] Compiling CropCore ProposalPolicy.swift
+[9/17] Compiling CropCore Detector.swift
+[10/18] Compiling CropCore BackgroundBoundary.swift
+[11/26] Emitting module CropCheck
+[12/26] Compiling CropCheck main.swift
+[13/26] Compiling CropCheck CollectionCheck.swift
+[13/26] Write Objects.LinkFileList
+[15/26] Emitting module CropCoreTests
+[16/26] Compiling CropCoreTests GeometryTests.swift
+[17/26] Compiling PageCrop Canvas.swift
+[17/26] Write Objects.LinkFileList
+[19/26] Emitting module PageCrop
+[20/26] Compiling PageCrop main.swift
+[20/26] Write Objects.LinkFileList
+[21/26] Linking CropCheck
+[22/26] Applying CropCheck
+[23/26] Linking PageCropPackageTests
+[24/26] Linking PageCrop
+[25/26] Applying PageCrop
+Build complete! (3.17s)
+Test Suite 'All tests' started at 2026-10-10 10:20:51.589.
+Test Suite 'PageCropPackageTests.xctest' started at 2026-10-10 10:20:51.591.
+Test Suite 'DetectorTests' started at 2026-10-10 10:20:51.591.
+Test Case '-[CropCoreTests.DetectorTests testIllustrationDoesNotReplaceWholeSpread]' started.
+Test Case '-[CropCoreTests.DetectorTests testIllustrationDoesNotReplaceWholeSpread]' passed (0.340 seconds).
+Test Suite 'DetectorTests' passed at 2026-10-10 10:20:51.931.
+	 Executed 1 test, with 0 failures (0 unexpected) in 0.340 (0.340) seconds
+Test Suite 'EdgeMovementTests' started at 2026-10-10 10:20:51.931.
+Test Case '-[CropCoreTests.EdgeMovementTests testOnlyTwoEndpointsMoveTogetherAndClampTogether]' started.
+Test Case '-[CropCoreTests.EdgeMovementTests testOnlyTwoEndpointsMoveTogetherAndClampTogether]' passed (0.000 seconds).
+Test Suite 'EdgeMovementTests' passed at 2026-10-10 10:20:51.932.
+	 Executed 1 test, with 0 failures (0 unexpected) in 0.000 (0.000) seconds
+Test Suite 'GeometryTests' started at 2026-10-10 10:20:51.932.
+Test Case '-[CropCoreTests.GeometryTests testProjectRoundTrip300]' started.
+Test Case '-[CropCoreTests.GeometryTests testProjectRoundTrip300]' passed (0.017 seconds).
+Test Case '-[CropCoreTests.GeometryTests testRectificationAndRotation]' started.
+Test Case '-[CropCoreTests.GeometryTests testRectificationAndRotation]' passed (0.004 seconds).
+Test Case '-[CropCoreTests.GeometryTests testRejectCrossedDegenerateAndOutside]' started.
+Test Case '-[CropCoreTests.GeometryTests testRejectCrossedDegenerateAndOutside]' passed (0.000 seconds).
+Test Suite 'GeometryTests' passed at 2026-10-10 10:20:51.952.
+	 Executed 3 tests, with 0 failures (0 unexpected) in 0.021 (0.021) seconds
+Test Suite 'ProposalPolicyTests' started at 2026-10-10 10:20:51.952.
+Test Case '-[CropCoreTests.ProposalPolicyTests testAreaThresholdAndUserExamples]' started.
+Test Case '-[CropCoreTests.ProposalPolicyTests testAreaThresholdAndUserExamples]' passed (0.000 seconds).
+Test Case '-[CropCoreTests.ProposalPolicyTests testLargeSkewRejectedButModeratePerspectiveAllowed]' started.
+Test Case '-[CropCoreTests.ProposalPolicyTests testLargeSkewRejectedButModeratePerspectiveAllowed]' passed (0.000 seconds).
+Test Case '-[CropCoreTests.ProposalPolicyTests testSavedProposalsFilteredWithoutChangingManualOrReviewedCrops]' started.
+Test Case '-[CropCoreTests.ProposalPolicyTests testSavedProposalsFilteredWithoutChangingManualOrReviewedCrops]' passed (0.000 seconds).
+Test Suite 'ProposalPolicyTests' passed at 2026-10-10 10:20:51.953.
+	 Executed 3 tests, with 0 failures (0 unexpected) in 0.000 (0.000) seconds
+Test Suite 'PageCropPackageTests.xctest' passed at 2026-10-10 10:20:51.953.
+	 Executed 8 tests, with 0 failures (0 unexpected) in 0.361 (0.361) seconds
+Test Suite 'All tests' passed at 2026-10-10 10:20:51.953.
+	 Executed 8 tests, with 0 failures (0 unexpected) in 0.361 (0.363) seconds
+◇ Test run started.
+↳ Testing Library Version: 124.4
+↳ Target Platform: arm64e-apple-macos14.0
+✔ Test run with 0 tests passed after 0.001 seconds.

@@ -1,0 +1,20 @@
+EDIT_UNDO_REDO_REVIEW_EXPORT passed
+UI_SMOKE pages=300 loaded=true canvas=(0.0, 0.0, 839.0, 628.0)
+        5.22 real         0.92 user         0.94 sys
+           239452160  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+               27973  page reclaims
+               10207  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                  31  messages sent
+                   0  messages received
+                   0  signals received
+                3831  voluntary context switches
+               16810  involuntary context switches
+         13597661356  instructions retired
+          5797056357  cycles elapsed
+           473760800  peak memory footprint

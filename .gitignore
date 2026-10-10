@@ -1,0 +1,6 @@
+.build/
+dist/
+.DS_Store
+.qa/
+sample-images/
+docs/*-notes-and-research.md

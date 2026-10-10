@@ -1,0 +1,26 @@
+Processed 20/148
+Processed 40/148
+Processed 60/148
+Processed 80/148
+Processed 100/148
+Processed 120/148
+Processed 140/148
+REAL_COLLECTION unique=148 processed=148 proposed=147 failures=0 total_seconds=16.30 median_seconds=0.102 p95_seconds=0.135
+       16.62 real         8.35 user         3.96 sys
+           106168320  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+              691689  page reclaims
+               30513  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                   0  messages sent
+                   0  messages received
+                   0  signals received
+                1340  voluntary context switches
+              133881  involuntary context switches
+        134879782482  instructions retired
+         40168702732  cycles elapsed
+           145408720  peak memory footprint

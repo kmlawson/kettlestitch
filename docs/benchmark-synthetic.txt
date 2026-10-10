@@ -1,0 +1,31 @@
+Processed 25/300
+Processed 50/300
+Processed 75/300
+Processed 100/300
+Processed 125/300
+Processed 150/300
+Processed 175/300
+Processed 200/300
+Processed 225/300
+Processed 250/300
+Processed 275/300
+Processed 300/300
+RESULT images=300 detected=300 seconds=11.19 mean_normalized_corner_error=0.00305
+       11.20 real         6.93 user         3.31 sys
+            89473024  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+             1599182  page reclaims
+                 679  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                   0  messages sent
+                   0  messages received
+                   0  signals received
+                 413  voluntary context switches
+              113743  involuntary context switches
+        108286102418  instructions retired
+         32704344396  cycles elapsed
+           141001520  peak memory footprint
