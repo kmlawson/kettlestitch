@@ -81,6 +81,51 @@ public struct Candidate: Codable {
     public var score: Double
     public var source: String
     public init(quad: Quad, score: Double, source: String) {self.quad=quad;self.score=score;self.source=source}
+    /// A fresh detection replaces the detector's earlier proposals but keeps Claude's.
+    public static func merging(detected: [Candidate], into existing: [Candidate]) -> [Candidate] {
+        ordered(detected+existing.filter{$0.source == claudeSource})
+    }
+    public static let claudeSource = "Claude"
+    /// The highest-scoring proposal first, then the rest from largest to smallest.
+    public static func ordered(_ candidates: [Candidate]) -> [Candidate] {
+        guard let best=candidates.indices.max(by:{candidates[$0].score<candidates[$1].score}) else {return []}
+        var rest=candidates;let first=rest.remove(at:best)
+        return [first]+rest.sorted{$0.quad.area>$1.quad.area}
+    }
+}
+public enum Cleanup: String, Codable, CaseIterable {
+    case none, blackAndWhite, grayscale, color
+    public var title: String {
+        switch self {case .none:return "None";case .blackAndWhite:return "Black & White";case .grayscale:return "Grayscale";case .color:return "Color"}
+    }
+    /// Modes whose output has no colour.
+    public var isMonochrome: Bool {self == .grayscale || self == .blackAndWhite}
+}
+/// Brightness and contrast are -1...1 with 0 neutral.
+public struct Adjustments: Codable, Equatable {
+    public var cleanup = Cleanup.none
+    public var brightness = 0.0
+    public var contrast = 0.0
+    /// Speck removal for black-and-white output: 1 cautious, 2 normal, 3 aggressive; nil is off.
+    public var despeckle: Int?
+    public init() {}
+    public var isIdentity: Bool {self == Adjustments()}
+}
+public enum PaperSize: String, Codable, CaseIterable {
+    case a3, a4, a5, b5, letter, legal
+    public var title: String {
+        switch self {case .a3:return "A3";case .a4:return "A4";case .a5:return "A5";case .b5:return "B5";case .letter:return "US Letter";case .legal:return "US Legal"}
+    }
+    /// Portrait width and height in centimetres.
+    public var centimetres: (Double, Double) {
+        switch self {case .a3:return (29.7,42.0);case .a4:return (21.0,29.7);case .a5:return (14.8,21.0);case .b5:return (17.6,25.0);case .letter:return (21.59,27.94);case .legal:return (21.59,35.56)}
+    }
+}
+/// Physical size of the corrected output. Height follows the crop's aspect ratio.
+public struct PageFormat: Codable, Equatable {
+    public var widthCM: Double?
+    public var fitInto: PaperSize?
+    public init(widthCM: Double? = nil, fitInto: PaperSize? = nil) {self.widthCM=widthCM;self.fitInto=fitInto}
 }
 public struct Page: Codable, Identifiable {
     public var id = UUID()
@@ -92,7 +137,39 @@ public struct Page: Codable, Identifiable {
     public var rotation = 0
     public var revision = 0
     public var imageAspectRatio: Double?
+    // Optional so that version 1 projects written before these existed still decode.
+    public var adjustments: Adjustments?
+    public var format: PageFormat?
+    public var flagged: Bool?
+    public var split: PageSplit?
+    /// Degrees each output part is turned clockwise as seen: one value for the whole crop, or left then right page.
+    public var deskew: [Double]?
+    public var pictureZones: [PictureZone]?
+    /// Claude's latest comment on this crop.
+    public var reviewNote: String?
     public init(path: String) {self.path=path;imageAspectRatio=Imaging.aspectRatio(URL(fileURLWithPath:path))}
+    public func deskewAngle(part: Int, of count: Int) -> Double {
+        guard let deskew,deskew.count == count,deskew.indices.contains(part) else {return 0}
+        return deskew[part]
+    }
+    /// Turns every part by `delta` degrees. A list for a different number of parts starts again from level.
+    public static func nudged(_ current: [Double]?, by delta: Double, parts: Int) -> [Double]? {
+        let base=current?.count == parts ? current!:[Double](repeating:0,count:parts)
+        let result=base.map{((min(SkewDetector.limit,max(-SkewDetector.limit,$0+delta)))*10000).rounded()/10000}
+        return result.allSatisfy{abs($0)<1e-9} ? nil:result
+    }
+    /// A crop set by hand. Claude's comment described the crop it replaces, so it goes.
+    public mutating func setManualCrop(_ q: Quad) {quad=q;status="Manual";reviewed=false;reviewNote=nil}
+    public mutating func selectProposal(_ q: Quad) {quad=q;status="Proposal selected";reviewed=false}
+    /// Stores Claude's verdict on the crop that was sent. Returns false, changing nothing, if the crop has been edited since.
+    @discardableResult public mutating func record(_ review: CropReview, sentQuad: Quad) -> Bool {
+        guard quad == sentQuad else {return false}
+        candidates.removeAll{$0.source == Candidate.claudeSource}
+        if let fix=review.quad {candidates=Candidate.ordered(candidates+[Candidate(quad:fix,score:0,source:Candidate.claudeSource)])}
+        let verdict=review.quad != nil ? "Claude proposes a fix":review.good ? "Claude: crop looks right":"Claude: no usable fix"
+        reviewNote=review.comment.isEmpty ? verdict:verdict+" — "+review.comment
+        return true
+    }
     public mutating func filterProposals() {
         if imageAspectRatio == nil {imageAspectRatio=Imaging.aspectRatio(URL(fileURLWithPath:path))}
         // Missing sources cannot supply trustworthy pixel-space geometry.
@@ -101,8 +178,11 @@ public struct Page: Codable, Identifiable {
             guard let aspect=ratio else{return false}
             return ProposalPolicy.accepts(q,imageAspectRatio:aspect)
         }
-        candidates.removeAll { !accepts($0.quad) }
-        if !reviewed, ["Check proposal","Proposal selected"].contains(status), !accepts(quad) {
+        // The limits describe what the detector may propose. Claude's proposal was asked for and is kept as given.
+        candidates.removeAll { $0.source != Candidate.claudeSource && !accepts($0.quad) }
+        candidates=Candidate.ordered(candidates)
+        let fromClaude=candidates.contains{$0.source == Candidate.claudeSource && $0.quad == quad}
+        if !reviewed, !fromClaude, ["Check proposal","Proposal selected"].contains(status), !accepts(quad) {
             quad=candidates.first?.quad ?? .full
             status=candidates.isEmpty ? "No suitable proposal — crop manually":"Check proposal"
             revision += 1
@@ -119,6 +199,13 @@ public struct Project: Codable {
         guard p.version == 1, p.pages.allSatisfy({$0.quad.valid && $0.candidates.allSatisfy{$0.quad.valid}}) else {throw CropError.message("Unsupported or invalid project geometry")}
         for i in p.pages.indices {p.pages[i].filterProposals()}
         return p
+    }
+    /// Undoes or redoes a change to the page list. The snapshot decides which pages exist and in what order;
+    /// each surviving page keeps whatever has been done to it since.
+    public static func restoringStructure(_ snapshot: [Page], current: [Page]) -> [Page] {
+        var latest:[UUID:Page]=[:]
+        for page in current {latest[page.id]=page}
+        return snapshot.map{latest[$0.id] ?? $0}
     }
     public func save(_ url: URL) throws {
         let encoder = JSONEncoder(); encoder.outputFormatting = [.prettyPrinted, .sortedKeys]

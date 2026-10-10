@@ -2,11 +2,29 @@ import AppKit
 import CropCore
 
 final class CropCanvas: NSView {
-    static let emptyProjectMessage="Open a folder of page photographs\nYour originals stay untouched."
+    static let emptyProjectMessage="Drop photographs or a folder here\nor choose File ▸ Import Photographs.\n\nYour originals stay untouched."
     var placeholder=CropCanvas.emptyProjectMessage {didSet{needsDisplay=true}}
     var image: CGImage? {didSet {needsDisplay=true}}
     var quad=Quad.full {didSet{needsDisplay=true}}
     var preview=false {didSet{needsDisplay=true}}
+    /// The proposed division between facing pages, and the output rotation it is measured in.
+    var split: PageSplit? {didSet{needsDisplay=true}}
+    var rotation=0 {didSet{needsDisplay=true}}
+    var onSplitCommit: ((PageSplit)->Void)?
+    /// Picture zones of the page, and the one being drawn while `zoneMode` is on.
+    var zones: [PictureZone]=[] {didSet{needsDisplay=true}}
+    var zoneMode=false {didSet{needsDisplay=true;window?.invalidateCursorRects(for:self)}}
+    var onZoneCommit: ((PictureZone)->Void)?
+    var onZoneRemove: ((Int)->Void)?
+    static let zoneColor=NSColor.systemBlue
+    private var zoneStart: (Double,Double)?
+    private var zoneDraft: PictureZone?
+    static let splitColor=NSColor.systemPink
+    private enum SplitGrip {case top,bottom,line}
+    private var splitGrip: SplitGrip?
+    private var splitBefore: PageSplit?
+    private var splitStart=0.0
+    var isDraggingSplit: Bool {splitGrip != nil}
     var zoom: CGFloat=1 {didSet{needsDisplay=true}}
     var pan=CGPoint.zero
     var onCommit: ((Quad)->Void)?
@@ -37,11 +55,17 @@ final class CropCanvas: NSView {
         NSColor(calibratedWhite:0.105,alpha:1).setFill();bounds.fill()
         guard let image else {
             let s=placeholder
-            let attrs: [NSAttributedString.Key:Any]=[.font:NSFont.systemFont(ofSize:20),.foregroundColor:NSColor.lightGray]
-            (s as NSString).draw(in:CGRect(x:60,y:bounds.midY-30,width:bounds.width-100,height:90),withAttributes:attrs);return
+            let centred=NSMutableParagraphStyle();centred.alignment = .center
+            let attrs: [NSAttributedString.Key:Any]=[.font:NSFont.systemFont(ofSize:18),.foregroundColor:NSColor.lightGray,.paragraphStyle:centred]
+            (s as NSString).draw(in:CGRect(x:40,y:bounds.midY-50,width:max(0,bounds.width-80),height:120),withAttributes:attrs);return
         }
         NSImage(cgImage:image,size:NSSize(width:image.width,height:image.height)).draw(in:imageRect)
-        guard !preview else {return}
+        if preview {
+            // The corrected output is shown, so the split is simply a line across it.
+            // A split spread is shown as its two pages, so there is no single output to draw zones over.
+            if split==nil {let r=imageRect;for zone in zones {drawZone([CGPoint(x:r.minX+zone.minU*r.width,y:r.minY+zone.minV*r.height),CGPoint(x:r.minX+zone.maxU*r.width,y:r.minY+zone.minV*r.height),CGPoint(x:r.minX+zone.maxU*r.width,y:r.minY+zone.maxV*r.height),CGPoint(x:r.minX+zone.minU*r.width,y:r.minY+zone.maxV*r.height)],draft:false)}}
+            return
+        }
         let path=NSBezierPath();path.move(to:position(quad.points[0]));for p in quad.points.dropFirst(){path.line(to:position(p))};path.close()
         let shade=NSBezierPath(rect:imageRect);shade.append(path);shade.windingRule = .evenOdd
         NSColor.black.withAlphaComponent(0.52).setFill();shade.fill()
@@ -51,6 +75,8 @@ final class CropCanvas: NSView {
             NSColor.white.setFill();NSBezierPath(ovalIn:r).fill()
             if i==corner {NSColor.systemMint.setStroke();let ring=NSBezierPath(ovalIn:r.insetBy(dx:-4,dy:-4));ring.lineWidth=2;ring.stroke()}
         }
+        for zone in zones+(zoneDraft.map{[$0]} ?? []) {if let outline=zone.outline(quad:quad,rotation:rotation) {drawZone(outline.map(position),draft:zone==zoneDraft)}}
+        if let ends=splitEnds {drawSplit(from:ends.0,to:ends.1,handles:true)}
         if let edge {
             NSColor.white.setStroke();let selected=NSBezierPath()
             selected.move(to:position(quad.points[edge]));selected.line(to:position(quad.points[(edge+1)%4]));selected.lineWidth=3;selected.stroke()
@@ -71,13 +97,53 @@ final class CropCanvas: NSView {
             NSColor.systemMint.setStroke();let cross=NSBezierPath();cross.move(to:CGPoint(x:box.midX-12,y:box.midY));cross.line(to:CGPoint(x:box.midX+12,y:box.midY));cross.move(to:CGPoint(x:box.midX,y:box.midY-12));cross.line(to:CGPoint(x:box.midX,y:box.midY+12));cross.stroke();NSGraphicsContext.restoreGraphicsState()
         }
     }
+    func drawZone(_ corners:[CGPoint],draft:Bool){
+        let path=NSBezierPath();path.move(to:corners[0]);for p in corners.dropFirst(){path.line(to:p)};path.close()
+        CropCanvas.zoneColor.withAlphaComponent(draft ? 0.25:0.14).setFill();path.fill()
+        CropCanvas.zoneColor.setStroke();path.lineWidth=1.5;path.setLineDash([6,4],count:2,phase:0);path.stroke()
+    }
+    private func outputPosition(_ p:CGPoint)->(Double,Double)? {SplitGeometry.position(of:normalized(p),quad:quad,rotation:rotation).map{($0.u,$0.v)}}
+    /// The index of the picture zone under a point in the view, topmost first.
+    func zone(at p:CGPoint)->Int? {
+        guard !preview,let (u,v)=outputPosition(p) else{return nil}
+        return zones.indices.reversed().first{zones[$0].contains(u,v)}
+    }
+    override func rightMouseDown(with event:NSEvent){
+        if let index=zone(at:convert(event.locationInWindow,from:nil)) {onZoneRemove?(index)} else {super.rightMouseDown(with:event)}
+    }
+    override func resetCursorRects(){if zoneMode {addCursorRect(bounds,cursor:.crosshair)}}
+    /// The split's two ends in view coordinates while the photograph is shown.
+    var splitEnds: (CGPoint,CGPoint)? {
+        guard image != nil,let split,let line=SplitGeometry.line(split,quad:quad,rotation:rotation) else{return nil}
+        return (position(line.0),position(line.1))
+    }
+    func drawSplit(from a:CGPoint,to b:CGPoint,handles:Bool){
+        let line=NSBezierPath();line.move(to:a);line.line(to:b);line.lineWidth=splitGrip == nil ? 2:3
+        NSColor.black.withAlphaComponent(0.35).setStroke();let shadow=line.copy() as! NSBezierPath;shadow.lineWidth=line.lineWidth+2;shadow.stroke()
+        CropCanvas.splitColor.setStroke();line.stroke()
+        guard handles else{return}
+        for p in [a,b] {let r=CGRect(x:p.x-5,y:p.y-5,width:10,height:10);CropCanvas.splitColor.setFill();NSBezierPath(rect:r).fill();NSColor.white.setStroke();NSBezierPath(rect:r).stroke()}
+    }
+    /// Which part of the split, if any, a click at `p` takes hold of: an end moves alone, the line moves whole.
+    private func splitGrip(at p:CGPoint)->SplitGrip? {
+        guard let (a,b)=splitEnds else{return nil}
+        if hypot(p.x-a.x,p.y-a.y)<=14 {return .top}
+        if hypot(p.x-b.x,p.y-b.y)<=14 {return .bottom}
+        let dx=b.x-a.x,dy=b.y-a.y,len=dx*dx+dy*dy
+        guard len>0 else{return nil}
+        let t=min(1,max(0,((p.x-a.x)*dx+(p.y-a.y)*dy)/len))
+        return hypot(p.x-a.x-t*dx,p.y-a.y-t*dy)<=8 ? .line:nil
+    }
+    private func across(_ p:CGPoint)->Double? {SplitGeometry.position(of:normalized(p),quad:quad,rotation:rotation)?.u}
     override func mouseDown(with event: NSEvent) {
-        keyboardSelection=false;window?.makeFirstResponder(self);start=convert(event.locationInWindow,from:nil);oldPan=pan;before=quad;showMagnifier=false;magnifierOpposite=false;edge=nil;corner=nil
+        keyboardSelection=false;window?.makeFirstResponder(self);start=convert(event.locationInWindow,from:nil);oldPan=pan;before=quad;showMagnifier=false;magnifierOpposite=false;edge=nil;corner=nil;splitGrip=nil;splitBefore=split
         guard !preview else {return}
+        if zoneMode {zoneStart=outputPosition(start);zoneDraft=nil;return}
         corner=(0..<4).min{hypot(position(quad.points[$0]).x-start.x,position(quad.points[$0]).y-start.y)<hypot(position(quad.points[$1]).x-start.x,position(quad.points[$1]).y-start.y)}
         if let c=corner, hypot(position(quad.points[c]).x-start.x,position(quad.points[c]).y-start.y)>24 {corner=nil}
         moving=event.modifierFlags.contains(.option)
         if moving {corner=nil}
+        else if corner==nil,let grip=splitGrip(at:start) {splitGrip=grip;splitStart=across(start) ?? 0.5}
         else if corner==nil {
             func distanceToEdge(_ i:Int)->CGFloat {
                 let a=position(quad.points[i]),b=position(quad.points[(i+1)%4])
@@ -92,10 +158,18 @@ final class CropCanvas: NSView {
     }
     override func mouseDragged(with event: NSEvent) {
         let p=convert(event.locationInWindow,from:nil)
+        if zoneMode,!preview {if let a=zoneStart,let b=outputPosition(p){zoneDraft=PictureZone(from:a,to:b);needsDisplay=true};return}
         if let corner, !preview {
             if event.modifierFlags.contains(.shift) {
                 if let q=before.movingCornerPreservingAngles(corner,to:normalized(p)){quad=q}
             } else {var q=quad;q.points[corner]=normalized(p);if q.valid {quad=q}}
+        }
+        else if let grip=splitGrip,let old=splitBefore,let u=across(p),!preview {
+            switch grip {
+            case .top:split=PageSplit(top:u,bottom:old.bottom).clamped
+            case .bottom:split=PageSplit(top:old.top,bottom:u).clamped
+            case .line:split=old.moved(by:u-splitStart)
+            }
         }
         else if let edge,!preview {
             let r=imageRect
@@ -106,7 +180,18 @@ final class CropCanvas: NSView {
             let q=Quad(before.points.map{Point($0.x+dx,$0.y+dy)});if q.valid {quad=q}
         } else {pan=CGPoint(x:oldPan.x+p.x-start.x,y:oldPan.y+p.y-start.y);needsDisplay=true}
     }
-    override func mouseUp(with event: NSEvent) {showMagnifier=false;if quad != before {onCommit?(quad)};needsDisplay=true}
+    override func mouseUp(with event: NSEvent) {
+        showMagnifier=false
+        if zoneMode {
+            // One drag draws one zone; a slip of the mouse draws none.
+            let drawn=zoneDraft;zoneMode=false;zoneStart=nil;zoneDraft=nil
+            if let drawn,drawn.isUsable {onZoneCommit?(drawn)}
+            return
+        }
+        if splitGrip != nil {splitGrip=nil;if let split,split != splitBefore {onSplitCommit?(split)}}
+        else if quad != before {onCommit?(quad)}
+        needsDisplay=true
+    }
     override func scrollWheel(with event: NSEvent) {pan.x-=event.scrollingDeltaX;pan.y-=event.scrollingDeltaY;needsDisplay=true}
     override func magnify(with event: NSEvent) {zoom=min(8,max(0.5,zoom*(1+event.magnification)))}
     override func keyDown(with event: NSEvent) {

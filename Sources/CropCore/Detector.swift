@@ -58,7 +58,7 @@ public final class Detector {
         candidates.sort{$0.score>$1.score}
         var unique: [Candidate]=[]
         for c in candidates where !unique.contains(where:{$0.quad.distance(c.quad)<0.012}) {unique.append(c)}
-        return Array(unique.prefix(6))
+        return Candidate.ordered(Array(unique.prefix(6)))
     }
 }
 private struct Gray {

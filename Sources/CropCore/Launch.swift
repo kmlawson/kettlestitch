@@ -1,0 +1,38 @@
+import Foundation
+
+public enum LaunchPolicy {
+    /// The project to open at launch. The app starts empty unless one is asked for explicitly:
+    /// by `--project`, or by a test folder holding a prepared `Recovery.pagecrop`.
+    public static func projectToOpen(arguments: [String], testDirectory: String?) -> URL? {
+        if let flag=arguments.firstIndex(of:"--project"),arguments.count>flag+1 {return URL(fileURLWithPath:arguments[flag+1])}
+        return testDirectory.map{URL(fileURLWithPath:$0).appendingPathComponent("Recovery.pagecrop")}
+    }
+    /// A new name per session, so work that was never given a name is not overwritten by the next launch.
+    public static func untitledName(_ date: Date) -> String {
+        let formatter=DateFormatter();formatter.locale=Locale(identifier:"en_US_POSIX");formatter.dateFormat="yyyy-MM-dd HH.mm.ss"
+        return "Untitled "+formatter.string(from:date)+".pagecrop"
+    }
+    public static func shouldWrite(pageCount: Int, fileExists: Bool) -> Bool {pageCount>0 || fileExists}
+}
+public enum ImportPolicy {
+    public static let extensions: Set<String> = ["jpg","jpeg","png","tif","tiff","heic","heif","bmp"]
+    public static func isPhotograph(_ url: URL) -> Bool {extensions.contains(url.pathExtension.lowercased())}
+    public static func isProject(_ url: URL) -> Bool {url.pathExtension.lowercased() == "pagecrop"}
+    public struct Incoming {
+        public var project: URL?
+        public var photographs: [URL]
+    }
+    /// Sorts files and folders handed to the app into a project to open and photographs to add.
+    /// `contents` lists a folder, or returns nil for anything that is not one; subfolders are not followed.
+    public static func sort(_ urls: [URL], existing: Set<String>, contents: (URL) -> [URL]?) -> Incoming {
+        var seen=existing,photographs:[URL]=[],project:URL?
+        for url in urls {
+            if isProject(url) {if project == nil {project=url};continue}
+            for candidate in contents(url) ?? [url] where isPhotograph(candidate) && !candidate.lastPathComponent.hasPrefix(".") && !seen.contains(candidate.path) {
+                seen.insert(candidate.path);photographs.append(candidate)
+            }
+        }
+        photographs.sort{$0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedAscending}
+        return Incoming(project:project,photographs:photographs)
+    }
+}

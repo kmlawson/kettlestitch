@@ -17,6 +17,51 @@ func fixture(_ index:Int)->CGImage {
 let args=CommandLine.arguments
 if args.count>3 && args[1]=="--collection" {
     do{try collectionCheck(folder:args[2],output:args[3],count:args.count>4 ? Int(args[4]):nil)}catch{print(error);exit(1)}
+} else if args.count>4 && args[1]=="--claude-files" {
+    // Writes what Send to Claude would upload for one project page, without contacting anyone.
+    do{
+        let project=try Project.read(URL(fileURLWithPath:args[2]))
+        guard let index=Int(args[3]),project.pages.indices.contains(index-1) else{print("No such page");exit(1)}
+        let page=project.pages[index-1],directory=URL(fileURLWithPath:args[4])
+        try FileManager.default.createDirectory(at:directory,withIntermediateDirectories:true)
+        try ClaudeReview.prepare(page,in:directory)
+        try ClaudeReview.prompt(quad:page.quad).write(to:directory.appendingPathComponent("prompt.txt"),atomically:true,encoding:.utf8)
+        try ClaudeReview.schema.write(to:directory.appendingPathComponent("schema.json"),atomically:true,encoding:.utf8)
+        print("Wrote \(ClaudeReview.photoName), \(ClaudeReview.overlayName), prompt.txt and schema.json for \(page.path)")
+    }catch{print(error);exit(1)}
+} else if args.count>3 && args[1]=="--split" {
+    // Proposes a split for each of a project's first pages and writes small copies of the two halves to inspect.
+    do{
+        let project=try Project.read(URL(fileURLWithPath:args[2])),directory=URL(fileURLWithPath:args[3])
+        try FileManager.default.createDirectory(at:directory,withIntermediateDirectories:true)
+        var options=ExportOptions();options.format = .jpeg;options.jpegQuality=0.7;options.maxDPI=60
+        let start=Date(),pages=project.pages.prefix(args.count>4 ? Int(args[4]) ?? 12:12)
+        for (i,original) in pages.enumerated() {
+            var page=original
+            let proposal=try SplitDetector.detect(Imaging.load(URL(fileURLWithPath:page.path),maxPixel:1600),quad:page.quad,rotation:page.rotation)
+            page.split=proposal.split
+            try Exporter.writeImages(page,in:directory,name:String(format:"%04d",i+1),options:options)
+            print(String(format:"%04d %@ top=%.3f bottom=%.3f %@",i+1,URL(fileURLWithPath:page.path).lastPathComponent,proposal.split.top,proposal.split.bottom,proposal.confident ? "fold found":"centre fallback"))
+        }
+        print(String(format:"RESULT pages=%d seconds=%.2f",pages.count,Date().timeIntervalSince(start)))
+    }catch{print(error);exit(1)}
+} else if args.count>3 && args[1]=="--deskew" {
+    // Measures the tilt of each of a project's first pages and writes small deskewed copies to inspect.
+    do{
+        let project=try Project.read(URL(fileURLWithPath:args[2])),directory=URL(fileURLWithPath:args[3])
+        try FileManager.default.createDirectory(at:directory,withIntermediateDirectories:true)
+        var options=ExportOptions();options.format = .jpeg;options.jpegQuality=0.7;options.maxDPI=60
+        let start=Date(),pages=project.pages.prefix(args.count>4 ? Int(args[4]) ?? 12:12)
+        for (i,original) in pages.enumerated() {
+            var page=original
+            page.deskew=try SkewDetector.detect(Imaging.load(URL(fileURLWithPath:page.path),maxPixel:1600),page:page)
+            try Exporter.writeImages(page,in:directory,name:String(format:"%04d",i+1),options:options)
+            let source=try Imaging.load(URL(fileURLWithPath:page.path),maxPixel:1600)
+            let measured=try Exporter.quads(for:page,options:ExportOptions()).map{SkewDetector.detect(try Imaging.corrected(source,quad:$0,rotation:page.rotation))}
+            print(String(format:"%04d %@ %@",i+1,URL(fileURLWithPath:page.path).lastPathComponent,measured.map{$0.confident ? String(format:"%.2f°",$0.angle):"unclear"}.joined(separator:" / ")))
+        }
+        print(String(format:"RESULT pages=%d seconds=%.2f",pages.count,Date().timeIntervalSince(start)))
+    }catch{print(error);exit(1)}
 } else if args.count>1 && args[1]=="--benchmark" {
     let count=args.count>2 ? Int(args[2]) ?? 300:300
     let start=Date();var found=0;var errorSum=0.0
@@ -38,4 +83,4 @@ if args.count>3 && args[1]=="--collection" {
     CGImageDestinationAddImage(d,fixture(0),nil);CGImageDestinationFinalize(d)
 } else if args.count>1 {
     for path in args.dropFirst() {do{let image=try Imaging.load(URL(fileURLWithPath:path),maxPixel:1600);let results=try Detector().detect(image);let data=try JSONEncoder().encode(results);print(path);print(String(decoding:data,as:UTF8.self))}catch{print(error)}}
-} else {print("CropCheck --benchmark [300] | --fixture path.jpg | image paths")}
+} else {print("CropCheck --benchmark [300] | --fixture path.jpg | --collection folder output [count] | --claude-files project.pagecrop page-number output-folder | --split project.pagecrop output-folder [count] | --deskew project.pagecrop output-folder [count] | image paths")}
