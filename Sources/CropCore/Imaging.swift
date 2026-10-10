@@ -99,6 +99,8 @@ public enum Imaging {
         return CIImage(cgImage:mask).transformed(by:CGAffineTransform(scaleX:extent.width/CGFloat(mw),y:extent.height/CGFloat(mh)))
             .clampedToExtent().applyingFilter("CIGaussianBlur",parameters:[kCIInputRadiusKey:max(1,radius*Double(longer)*0.25)]).cropped(to:extent)
     }
+    /// How strong the gray grain laid over a smudge is, 0 (none) to 1.
+    public static let smudgeGrain = 0.35
     /// The photograph with its smudges blurred in. The blur follows the photograph's size, so the preview and the
     /// full-resolution export hide the same print equally.
     public static func smudged(_ image: CIImage, _ smudges: [Smudge]) -> CIImage {
@@ -106,7 +108,17 @@ public enum Imaging {
         let extent=image.extent,longer=Double(max(extent.width,extent.height))
         for strength in Set(smudges.map{$0.strength}).sorted() {
             guard let mask=smudgeMask(smudges.filter{$0.strength == strength},extent:extent) else {continue}
-            let blurred=result.clampedToExtent().applyingFilter("CIGaussianBlur",parameters:[kCIInputRadiusKey:longer*(0.002+0.02*strength)]).cropped(to:extent)
+            var blurred=result.clampedToExtent().applyingFilter("CIGaussianBlur",parameters:[kCIInputRadiusKey:longer*(0.002+0.02*strength)]).cropped(to:extent)
+            // A little gray grain over the blur, so the smudge reads as paper texture rather than a smooth patch
+            // and what lay under it is harder still to recover. The grain's size follows the photograph's.
+            if let noise=CIFilter(name:"CIRandomGenerator")?.outputImage {
+                // Noise drawn in towards middle gray leaves the smudge's own tone unchanged on average.
+                let amount=smudgeGrain,grain=max(1,longer/1600)
+                let keep=CIVector(x:amount,y:0,z:0,w:0),offset=0.5-amount/2
+                let gray=noise.applyingFilter("CIColorMatrix",parameters:["inputRVector":keep,"inputGVector":keep,"inputBVector":keep,"inputAVector":CIVector(x:0,y:0,z:0,w:0),"inputBiasVector":CIVector(x:offset,y:offset,z:offset,w:1)])
+                    .transformed(by:CGAffineTransform(scaleX:grain,y:grain)).cropped(to:extent)
+                blurred=gray.applyingFilter("CISoftLightBlendMode",parameters:[kCIInputBackgroundImageKey:blurred]).cropped(to:extent)
+            }
             result=blurred.applyingFilter("CIBlendWithMask",parameters:[kCIInputBackgroundImageKey:result,kCIInputMaskImageKey:mask])
         }
         return result

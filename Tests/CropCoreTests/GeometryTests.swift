@@ -20,7 +20,8 @@ final class GeometryTests:XCTestCase {
         // A stroke across the upper left, from 10% to 40% of the width at a quarter of the height.
         let stroke=[Point(0.1,0.25),Point(0.4,0.25)]
         let light=try Imaging.smudged(striped,[Smudge(points:stroke,radius:0.05,strength:0)]),heavy=try Imaging.smudged(striped,[Smudge(points:stroke,radius:0.05,strength:1)])
-        XCTAssertLessThan(contrast(heavy,x:140,y:100),20,"Under the brush the stripes are gone")
+        XCTAssertLessThan(contrast(heavy,x:140,y:100),90,"Under the brush the stripes are gone")
+        XCTAssertGreaterThan(contrast(heavy,x:140,y:100),4,"A little grain lies over the blur")
         XCTAssertLessThan(contrast(heavy,x:140,y:100),contrast(light,x:140,y:100),"A stronger brush blurs more")
         XCTAssertLessThan(contrast(light,x:140,y:100),contrast(striped,x:140,y:100))
         XCTAssertGreaterThan(contrast(heavy,x:450,y:300),200,"Away from it the print is untouched")
@@ -31,7 +32,7 @@ final class GeometryTests:XCTestCase {
         XCTAssertEqual(page.smudges?[0].radius,0.25);XCTAssertEqual(page.smudges?[0].strength,0)
         XCTAssertEqual(try JSONDecoder().decode(Page.self,from:JSONEncoder().encode(page)).smudges,page.smudges)
         let cropped=try Imaging.corrected(striped,quad:.full,smudges:[Smudge(points:stroke,radius:0.05,strength:1)])
-        XCTAssertLessThan(contrast(cropped,x:140,y:100),20);XCTAssertGreaterThan(contrast(cropped,x:450,y:300),200)
+        XCTAssertLessThan(contrast(cropped,x:140,y:100),90);XCTAssertGreaterThan(contrast(cropped,x:450,y:300),200)
     }
     func testSharpnessIsOffByDefaultAndStrengthensEdges() throws {
         let saved=try JSONEncoder().encode(Adjustments())
