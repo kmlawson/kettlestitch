@@ -5,7 +5,14 @@ import Security
 /// The Anthropic API key lives in the login keychain, never in the project or preferences.
 enum Keychain {
     static let query:[CFString:Any]=[kSecClass:kSecClassGenericPassword,kSecAttrService:"local.kettlestitch.app.anthropic",kSecAttrAccount:"api-key"]
+    /// A test run is a different build from the app that saved the key, so touching the keychain makes macOS ask
+    /// for the login password. Test mode therefore leaves it alone unless `KETTLESTITCH_TEST_KEYCHAIN` asks for it.
+    static let enabled:Bool={
+        let environment=ProcessInfo.processInfo.environment
+        return environment["KETTLESTITCH_TEST_DIR"] == nil || environment["KETTLESTITCH_TEST_KEYCHAIN"] != nil
+    }()
     static func read(_ service:[CFString:Any])->String? {
+        guard enabled else{return nil}
         var request=service;request[kSecReturnData]=true;request[kSecMatchLimit]=kSecMatchLimitOne
         var item:CFTypeRef?
         guard SecItemCopyMatching(request as CFDictionary,&item)==errSecSuccess,let data=item as? Data else{return nil}
@@ -21,11 +28,12 @@ enum Keychain {
         return nil
     }
     @discardableResult static func write(_ key:String)->Bool {
+        guard enabled else{return false}
         SecItemDelete(query as CFDictionary)
         var item=query;item[kSecValueData]=Data(key.utf8)
         return SecItemAdd(item as CFDictionary,nil)==errSecSuccess
     }
-    static func remove(){SecItemDelete(query as CFDictionary)}
+    static func remove(){if enabled{SecItemDelete(query as CFDictionary)}}
 }
 
 final class SettingsController: NSObject {

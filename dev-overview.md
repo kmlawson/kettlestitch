@@ -181,7 +181,7 @@ Native UI smoke mode lives in AppDelegate, runs synthetic mouse/key events after
 KETTLESTITCH_TEST_DIR="$PWD/.qa/<test>" dist/KettleStitch.app/Contents/MacOS/KettleStitch --smoke
 ```
 
-The environment override isolates app support and keeps the test out of Open Recent. The smoke expects at least two valid source images. It restores a captured display image during synchronous navigation checks because asynchronous loading cannot finish inside the same callback. Relevant logs: `.qa/keyboard-only/smoke.txt`, `.qa/side-controls/smoke.txt`, `.qa/material-ui/smoke.txt`. Test mode's assertions are in release too; a failure may exit 133 with little detail, so use a debug build to locate the line.
+The environment override isolates app support and keeps the test out of Open Recent. It also switches the keychain off (`Keychain.enabled`), so a test build never makes macOS ask for the login password; set `KETTLESTITCH_TEST_KEYCHAIN=1` as well only for a run that is specifically testing the stored API key. The smoke expects at least two valid source images. It restores a captured display image during synchronous navigation checks because asynchronous loading cannot finish inside the same callback. Relevant logs: `.qa/keyboard-only/smoke.txt`, `.qa/side-controls/smoke.txt`, `.qa/material-ui/smoke.txt`. Test mode's assertions are in release too; a failure may exit 133 with little detail, so use a debug build to locate the line.
 
 ## Suggested next work and cautions
 
