@@ -26,6 +26,12 @@ final class CropCanvas: NSView {
     var onZoneCommit: ((PictureZone)->Void)?
     var onZoneRemove: ((Int)->Void)?
     static let zoneColor=NSColor.systemBlue
+    /// While on, a drag paints a smudge stroke instead of moving the crop. It stays on until switched off.
+    var smudgeMode=false {didSet{smudgeDraft=[];needsDisplay=true;window?.invalidateCursorRects(for:self)}}
+    /// Half the brush's width, as a fraction of the photograph's longer side.
+    var smudgeRadius=0.02
+    var onSmudgeCommit: (([Point])->Void)?
+    private var smudgeDraft: [Point]=[]
     private var zoneStart: (Double,Double)?
     private var zoneDraft: PictureZone?
     static let splitColor=NSColor.systemPink
@@ -86,6 +92,12 @@ final class CropCanvas: NSView {
         }
         for zone in zones+(zoneDraft.map{[$0]} ?? []) {if let outline=zone.outline(quad:quad,rotation:rotation) {drawZone(outline.map(position),draft:zone==zoneDraft)}}
         if let ends=splitEnds {drawSplit(from:ends.0,to:ends.1,handles:true)}
+        if let first=smudgeDraft.first {
+            // The stroke at its true width, until the blur itself has been rendered.
+            let r=imageRect,stroke=NSBezierPath();stroke.lineCapStyle = .round;stroke.lineJoinStyle = .round;stroke.lineWidth=max(2,2*smudgeRadius*max(r.width,r.height))
+            stroke.move(to:position(first));stroke.line(to:position(first));for p in smudgeDraft.dropFirst() {stroke.line(to:position(p))}
+            NSColor.systemPink.withAlphaComponent(0.45).setStroke();stroke.stroke()
+        }
         if let edge {
             NSColor.white.setStroke();let selected=NSBezierPath()
             selected.move(to:position(quad.points[edge]));selected.line(to:position(quad.points[(edge+1)%4]));selected.lineWidth=3;selected.stroke()
@@ -120,7 +132,7 @@ final class CropCanvas: NSView {
     override func rightMouseDown(with event:NSEvent){
         if let index=zone(at:convert(event.locationInWindow,from:nil)) {onZoneRemove?(index)} else {super.rightMouseDown(with:event)}
     }
-    override func resetCursorRects(){if zoneMode {addCursorRect(bounds,cursor:.crosshair)}}
+    override func resetCursorRects(){if zoneMode || smudgeMode {addCursorRect(bounds,cursor:.crosshair)}}
     /// The split's two ends in view coordinates while the photograph is shown.
     var splitEnds: (CGPoint,CGPoint)? {
         guard image != nil,let split,let line=SplitGeometry.line(split,quad:quad,rotation:rotation) else{return nil}
@@ -148,6 +160,7 @@ final class CropCanvas: NSView {
         keyboardSelection=false;window?.makeFirstResponder(self);start=convert(event.locationInWindow,from:nil);oldPan=pan;before=quad;showMagnifier=false;magnifierOpposite=false;edge=nil;corner=nil;splitGrip=nil;splitBefore=split
         guard !preview else {return}
         if zoneMode {zoneStart=outputPosition(start);zoneDraft=nil;return}
+        if smudgeMode {if image != nil,imageRect.contains(start) {smudgeDraft=[normalized(start)];needsDisplay=true};return}
         corner=(0..<4).min{hypot(position(quad.points[$0]).x-start.x,position(quad.points[$0]).y-start.y)<hypot(position(quad.points[$1]).x-start.x,position(quad.points[$1]).y-start.y)}
         if let c=corner, hypot(position(quad.points[c]).x-start.x,position(quad.points[c]).y-start.y)>24 {corner=nil}
         moving=event.modifierFlags.contains(.option)
@@ -168,6 +181,11 @@ final class CropCanvas: NSView {
     override func mouseDragged(with event: NSEvent) {
         let p=convert(event.locationInWindow,from:nil)
         if zoneMode,!preview {if let a=zoneStart,let b=outputPosition(p){zoneDraft=PictureZone(from:a,to:b);needsDisplay=true};return}
+        if smudgeMode,!preview {
+            // Points closer together than a few pixels add nothing to the stroke.
+            if let last=smudgeDraft.last.map(position),hypot(p.x-last.x,p.y-last.y)>=3 {smudgeDraft.append(normalized(p));needsDisplay=true}
+            return
+        }
         if let corner, !preview {
             if event.modifierFlags.contains(.shift) {
                 if let q=before.movingCornerPreservingAngles(corner,to:normalized(p)){quad=q}
@@ -195,6 +213,11 @@ final class CropCanvas: NSView {
             // One drag draws one zone; a slip of the mouse draws none.
             let drawn=zoneDraft;zoneMode=false;zoneStart=nil;zoneDraft=nil
             if let drawn,drawn.isUsable {onZoneCommit?(drawn)}
+            return
+        }
+        if smudgeMode {
+            let stroke=smudgeDraft;smudgeDraft=[];needsDisplay=true
+            if !stroke.isEmpty,!preview {onSmudgeCommit?(stroke)}
             return
         }
         if splitGrip != nil {splitGrip=nil;if let split,split != splitBefore {onSplitCommit?(split)}}

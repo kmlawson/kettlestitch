@@ -2,6 +2,37 @@ import XCTest
 @testable import CropCore
 import CoreGraphics
 final class GeometryTests:XCTestCase {
+    func testASmudgeBlursOnlyWhereTheBrushWentAndMoreWhenStronger() throws {
+        // Fine vertical stripes, like print: blurred they turn to even gray.
+        let w=600,h=400
+        let c=CGContext(data:nil,width:w,height:h,bitsPerComponent:8,bytesPerRow:0,space:CGColorSpaceCreateDeviceRGB(),bitmapInfo:CGImageAlphaInfo.premultipliedLast.rawValue)!
+        c.setFillColor(CGColor(gray:1,alpha:1));c.fill(CGRect(x:0,y:0,width:w,height:h));c.setFillColor(CGColor(gray:0,alpha:1))
+        for x in stride(from:0,to:w,by:8) {c.fill(CGRect(x:x,y:0,width:4,height:h))}
+        let striped=c.makeImage()!
+        /// How far apart the darkest and lightest pixels are along a short run of a row, top-left origin.
+        func contrast(_ image:CGImage,x:Int,y:Int)->Int {
+            var row=[UInt8](repeating:0,count:32*4)
+            let c=CGContext(data:&row,width:32,height:1,bitsPerComponent:8,bytesPerRow:128,space:CGColorSpaceCreateDeviceRGB(),bitmapInfo:CGImageAlphaInfo.premultipliedLast.rawValue)!
+            c.draw(image,in:CGRect(x:-x,y:-(image.height-1-y),width:image.width,height:image.height))
+            let reds=stride(from:0,to:128,by:4).map{Int(row[$0])};return reds.max()!-reds.min()!
+        }
+        XCTAssertGreaterThan(contrast(striped,x:100,y:100),200)
+        // A stroke across the upper left, from 10% to 40% of the width at a quarter of the height.
+        let stroke=[Point(0.1,0.25),Point(0.4,0.25)]
+        let light=try Imaging.smudged(striped,[Smudge(points:stroke,radius:0.05,strength:0)]),heavy=try Imaging.smudged(striped,[Smudge(points:stroke,radius:0.05,strength:1)])
+        XCTAssertLessThan(contrast(heavy,x:140,y:100),20,"Under the brush the stripes are gone")
+        XCTAssertLessThan(contrast(heavy,x:140,y:100),contrast(light,x:140,y:100),"A stronger brush blurs more")
+        XCTAssertLessThan(contrast(light,x:140,y:100),contrast(striped,x:140,y:100))
+        XCTAssertGreaterThan(contrast(heavy,x:450,y:300),200,"Away from it the print is untouched")
+        XCTAssertEqual(try Imaging.smudged(striped,[]).width,w)
+        // The crop renders the smudge too, and a page saved before smudges existed has none.
+        var page=Page(path:"/photos/a.jpg");XCTAssertNil(try JSONDecoder().decode(Page.self,from:JSONEncoder().encode(page)).smudges)
+        page.smudges=[Smudge(points:stroke,radius:9,strength:-3)]
+        XCTAssertEqual(page.smudges?[0].radius,0.25);XCTAssertEqual(page.smudges?[0].strength,0)
+        XCTAssertEqual(try JSONDecoder().decode(Page.self,from:JSONEncoder().encode(page)).smudges,page.smudges)
+        let cropped=try Imaging.corrected(striped,quad:.full,smudges:[Smudge(points:stroke,radius:0.05,strength:1)])
+        XCTAssertLessThan(contrast(cropped,x:140,y:100),20);XCTAssertGreaterThan(contrast(cropped,x:450,y:300),200)
+    }
     func testSharpnessIsOffByDefaultAndStrengthensEdges() throws {
         let saved=try JSONEncoder().encode(Adjustments())
         XCTAssertFalse(String(decoding:saved,as:UTF8.self).contains("sharpness"),"Older projects have no such key and still decode")

@@ -33,7 +33,17 @@ extension AppDelegate {
         let splits=segments(["Propose","◀","▶","Remove"],#selector(splitSegment(_:)),tips:["Propose a split between facing pages (T)","Move the split left (,)","Move the split right (.)","Remove the split (Shift-T)"])
         let tilt=segments(["Auto","↺","↻","Reset"],#selector(deskewSegment(_:)),tips:["Level the lines of text (Q)","Turn counterclockwise by 0.1° (Option-,)","Turn clockwise by 0.1° (Option-.)","Remove the deskew (Shift-Q)"])
         let pictures=segments(["Add Zone","Clear"],#selector(zoneSegment(_:)),tips:["Draw a picture zone that keeps its gray tones on a black-and-white page (W)","Remove the picture zones (Shift-W)"])
-        let frame=NSGridView(views:[[caption("Proposal:"),candidates],[caption("Frame:"),crop],[caption("Corner:"),corners],[caption("Size:"),size],[caption("Split:"),splits],[caption("Deskew:"),tilt],[caption("Pictures:"),pictures]])
+        smudgeControl.segmentCount=2;smudgeControl.trackingMode = .selectAny;smudgeControl.segmentDistribution = .fillEqually;smudgeControl.target=self;smudgeControl.action=#selector(smudgeSegment(_:))
+        smudgeControl.setLabel("Paint",forSegment:0);smudgeControl.setLabel("Clear",forSegment:1)
+        smudgeControl.setToolTip("Pick up or put down the smudge brush, which blurs print so it cannot be read (Shift-B)",forSegment:0);smudgeControl.setToolTip("Remove the smudges (Option-Shift-B)",forSegment:1)
+        if let size=UserDefaults.standard.object(forKey:"smudgeSize") as? Double {smudgeSizeSlider.doubleValue=size}
+        if let strength=UserDefaults.standard.object(forKey:"smudgeStrength") as? Double {smudgeStrengthSlider.doubleValue=strength}
+        for slider in [smudgeSizeSlider,smudgeStrengthSlider] {slider.isContinuous=true;slider.target=self;slider.action=#selector(smudgeBrushChanged(_:));slider.controlSize = .small}
+        for value in [smudgeSizeValue,smudgeStrengthValue] {value.font = .monospacedDigitSystemFont(ofSize:11,weight:.regular);value.textColor = .secondaryLabelColor;value.alignment = .right;value.widthAnchor.constraint(equalToConstant:26).isActive=true}
+        smudgeSizeSlider.toolTip="Width of the smudge brush";smudgeStrengthSlider.toolTip="How heavily the next strokes blur the print"
+        let brushSize=NSStackView(views:[smudgeSizeSlider,smudgeSizeValue]),brushStrength=NSStackView(views:[smudgeStrengthSlider,smudgeStrengthValue])
+        smudgeBrushChanged(nil)
+        let frame=NSGridView(views:[[caption("Proposal:"),candidates],[caption("Frame:"),crop],[caption("Corner:"),corners],[caption("Size:"),size],[caption("Split:"),splits],[caption("Deskew:"),tilt],[caption("Pictures:"),pictures],[caption("Smudge:"),smudgeControl],[caption("Brush:"),brushSize],[caption("Strength:"),brushStrength]])
         frame.rowSpacing=7;frame.columnSpacing=8;frame.column(at:0).xPlacement = .trailing;frame.column(at:0).width=78;frame.column(at:1).xPlacement = .fill
         add(header("Cropping Frame"));add(detail);add(note);add(frame,after:22)
         // Image adjustments
@@ -72,7 +82,7 @@ extension AppDelegate {
         resolutionLabel.font = .systemFont(ofSize:11);resolutionLabel.textColor = .secondaryLabelColor;resolutionLabel.alignment = .center
         let all=NSButton(title:"Apply Settings to All Pages",target:self,action:#selector(applySettingsToAll));all.bezelStyle = .rounded;all.controlSize = .small;all.toolTip="Copy this page's image adjustments and page format to every page"
         add(header("Page Format"));add(format);add(resolutionLabel);add(all)
-        inspectorControls=[candidates,crop,corners,size,splits,tilt,pictures,reset,cleanupControl,brightnessSlider,contrastSlider,sharpnessSlider,widthField,heightField,fitPopup,all]
+        inspectorControls=[candidates,crop,corners,size,splits,tilt,pictures,reset,smudgeControl,smudgeSizeSlider,smudgeStrengthSlider,cleanupControl,brightnessSlider,contrastSlider,sharpnessSlider,widthField,heightField,fitPopup,all]
         NSLayoutConstraint.activate([
             stack.topAnchor.constraint(equalTo:root.safeAreaLayoutGuide.topAnchor,constant:14),stack.leadingAnchor.constraint(equalTo:root.leadingAnchor,constant:16),stack.trailingAnchor.constraint(equalTo:root.trailingAnchor,constant:-16),
             stack.bottomAnchor.constraint(lessThanOrEqualTo:root.bottomAnchor,constant:-12)])

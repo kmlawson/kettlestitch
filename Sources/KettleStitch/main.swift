@@ -26,6 +26,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
     let brightnessSlider=NSSlider(value:0,minValue:-1,maxValue:1,target:nil,action:nil)
     let contrastSlider=NSSlider(value:0,minValue:-1,maxValue:1,target:nil,action:nil)
     let sharpnessSlider=NSSlider(value:0,minValue:0,maxValue:1,target:nil,action:nil)
+    /// The brush for the next stroke: half its width as a fraction of the photograph's longer side, and how heavily it blurs.
+    let smudgeSizeSlider=NSSlider(value:0.02,minValue:0.005,maxValue:0.08,target:nil,action:nil)
+    let smudgeStrengthSlider=NSSlider(value:0.5,minValue:0,maxValue:1,target:nil,action:nil)
+    let smudgeSizeValue=NSTextField(labelWithString:""),smudgeStrengthValue=NSTextField(labelWithString:"")
+    let smudgeControl=NSSegmentedControl()
     let brightnessValue=NSTextField(labelWithString:"0"),contrastValue=NSTextField(labelWithString:"0"),sharpnessValue=NSTextField(labelWithString:"0")
     let widthField=NSTextField()
     let heightField=NSTextField()
@@ -123,6 +128,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
         canvas.onCommit={[weak self] q in self?.edit{$0.setManualCrop(q)}}
         canvas.onSplitCommit={[weak self] s in self?.edit(geometry:false){$0.split=s}}
         canvas.onZoneCommit={[weak self] z in self?.edit(geometry:false){$0.pictureZones=($0.pictureZones ?? [])+[z]};self?.zoneDrawn()}
+        canvas.onSmudgeCommit={[weak self] points in guard let self else{return};let radius=self.smudgeSizeSlider.doubleValue,strength=self.smudgeStrengthSlider.doubleValue
+            self.edit(geometry:false){$0.smudges=($0.smudges ?? [])+[Smudge(points:points,radius:radius,strength:strength)]}
+            self.status.stringValue="Smudged · keep painting, Command-Z undoes a stroke, Escape puts the brush down"
+        }
         canvas.onZoneRemove={[weak self] i in self?.edit(geometry:false){$0.pictureZones?.remove(at:i);if $0.pictureZones?.isEmpty==true{$0.pictureZones=nil}}}
         canvas.onNavigate={[weak self] delta in self?.navigate(delta)}
         canvas.onAccept={[weak self] in self?.accept()}
@@ -222,7 +231,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
         displayQueue.cancelAllOperations()
         displayQueue.addOperation{[weak self] in
             let result=Result {try Imaging.load(URL(fileURLWithPath:p.path),maxPixel:3200)}
-            DispatchQueue.main.async {guard let self,self.displayToken==token else{return};switch result {case .success(let image):self.original=image;if self.canvas.preview{self.renderPreview()}else{self.canvas.image=image};case .failure(let e):self.canvas.placeholder="Could not load this photograph\nFile ▸ Locate Missing Photographs… finds moved files";self.status.stringValue=e.localizedDescription}}
+            DispatchQueue.main.async {guard let self,self.displayToken==token else{return};switch result {case .success(let image):self.original=image;if self.canvas.preview{self.renderPreview()}else{self.canvas.image=image;self.showPhotograph()};case .failure(let e):self.canvas.placeholder="Could not load this photograph\nFile ▸ Locate Missing Photographs… finds moved files";self.status.stringValue=e.localizedDescription}}
         }
     }
     func outputPixelSize(_ p:Page)->CGSize {
@@ -310,7 +319,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
     }
     func finishEdit(_ indexes:[Int]){
         if let i=current {canvas.quad=project.pages[i].quad}
-        save();refreshDetail();table.reloadData(forRowIndexes:IndexSet(indexes),columnIndexes:IndexSet(integer:0));if canvas.preview{renderPreview()}
+        save();refreshDetail();table.reloadData(forRowIndexes:IndexSet(indexes),columnIndexes:IndexSet(integer:0));if canvas.preview{renderPreview()}else{showPhotograph()}
         deviations?.refresh()
     }
     func invalidateWork(){queue.cancelAllOperations();splitQueue.cancelAllOperations();generation=UUID();thumbnailPending=[];detecting=false;endProgress(.detect);endProgress(.split)}
@@ -459,6 +468,43 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
         let targets=targetIndexes.filter{project.pages[$0].pictureZones != nil};guard !targets.isEmpty else{return}
         edit(targets,geometry:false){$0.pictureZones=nil};status.stringValue="Picture zones removed"
     }
+    // MARK: Smudge brush
+    @objc func toggleSmudge(){setSmudging(!canvas.smudgeMode)}
+    func setSmudging(_ on:Bool){
+        guard on != canvas.smudgeMode else{return}
+        if on {
+            guard current != nil,original != nil else{return}
+            if canvas.preview{setPreview(false)}
+            canvas.zoneMode=false;canvas.smudgeRadius=smudgeSizeSlider.doubleValue;window.makeFirstResponder(canvas)
+            status.stringValue="Smudge brush: drag over the print to blur it · Size and Strength are in the inspector · Escape puts the brush down"
+        } else {status.stringValue="Smudge brush put down"}
+        canvas.smudgeMode=on;smudgeControl.setSelected(on,forSegment:0)
+    }
+    @objc func removeSmudges(){
+        let targets=targetIndexes.filter{project.pages[$0].smudges != nil};guard !targets.isEmpty else{status.stringValue="No smudges to remove";return}
+        edit(targets,geometry:false){$0.smudges=nil};status.stringValue="Smudges removed"
+    }
+    @objc func smudgeSegment(_ sender:NSSegmentedControl){
+        // The first segment shows whether the brush is in hand; the control itself does not keep a selection.
+        let segment=sender.selectedSegment;sender.setSelected(canvas.smudgeMode,forSegment:0);sender.setSelected(false,forSegment:1)
+        segment==0 ? toggleSmudge():removeSmudges()
+    }
+    @objc func smudgeBrushChanged(_ sender:Any?){
+        canvas.smudgeRadius=smudgeSizeSlider.doubleValue
+        smudgeSizeValue.stringValue=String(Int((smudgeSizeSlider.doubleValue/smudgeSizeSlider.maxValue*100).rounded()));smudgeStrengthValue.stringValue=String(Int((smudgeStrengthSlider.doubleValue*100).rounded()))
+        UserDefaults.standard.set(smudgeSizeSlider.doubleValue,forKey:"smudgeSize");UserDefaults.standard.set(smudgeStrengthSlider.doubleValue,forKey:"smudgeStrength")
+    }
+    /// Outside preview the canvas shows the photograph with its smudges blurred in, where they were painted.
+    func showPhotograph(){
+        guard let image=original,let i=current,!canvas.preview else{return}
+        let smudges=project.pages[i].smudges ?? []
+        guard !smudges.isEmpty else{if canvas.image !== image {displayToken=UUID();canvas.image=image};return}
+        let token=UUID();displayToken=token
+        displayQueue.cancelAllOperations()
+        displayQueue.addOperation{[weak self] in let result=try? Imaging.smudged(image,smudges)
+            DispatchQueue.main.async{guard let self,self.displayToken==token,!self.canvas.preview,let result else{return};self.canvas.image=result}
+        }
+    }
     @objc func zoneSegment(_ sender:NSSegmentedControl){sender.selectedSegment==0 ? addZone():removeZones()}
     @objc func showDeviations(){
         if deviations == nil {deviations=DeviationsController(owner:self)}
@@ -513,7 +559,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
         let changed=canvas.preview != on
         canvas.preview=on;previewItem?.setSelected(on,at:0)
         if changed {table.reloadData(forRowIndexes:IndexSet(integersIn:0..<project.pages.count),columnIndexes:IndexSet(integer:0))}
-        if on{renderPreview()}else if original != nil{displayToken=UUID();canvas.image=original;canvas.fit()}
+        if on{canvas.smudgeMode=false;smudgeControl.setSelected(false,forSegment:0);renderPreview()}else if original != nil{displayToken=UUID();canvas.image=original;canvas.fit();showPhotograph()}
     }
     @objc func togglePreview(){setPreview(!canvas.preview)}
     func renderPreview(){guard let image=original,let i=current else{return};let p=project.pages[i],token=UUID();displayToken=token
@@ -877,6 +923,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
             return true
         }
         switch key {
+        case "b" where e.modifierFlags.contains(.shift):e.modifierFlags.contains(.option) ? removeSmudges():toggleSmudge()
         case "g":newProject();case "i":importImages();case "o":openProject();case "s":e.modifierFlags.contains(.shift) ? saveAs():saveProject();case "d":targetIndexes.count>1 ? detectPending():detectCurrent();case "b":detectPending();case "e":exportImages()
         case "p":togglePreview()
         case "r":e.modifierFlags.contains(.shift) ? rotateLeft():rotate()
@@ -892,7 +939,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
         case "5","6","7","8":if canvas.preview{setPreview(false)};canvas.selectEdge([0,3,1,2][Int(key)!-5],keyboard:true);window.makeFirstResponder(canvas)
         case "?","/":help()
         default:
-            if e.keyCode==53 {if canvas.zoneMode{canvas.zoneMode=false;status.stringValue="Picture zone cancelled"}else if canvas.hasSelection{canvas.releaseCorner()}else{stop()}}
+            if e.keyCode==53 {if canvas.smudgeMode{setSmudging(false)}else if canvas.zoneMode{canvas.zoneMode=false;status.stringValue="Picture zone cancelled"}else if canvas.hasSelection{canvas.releaseCorner()}else{stop()}}
             else if e.keyCode==123 {navigate(-1)}else if e.keyCode==124{navigate(1)}else if e.keyCode==36{accept()}
             else if e.keyCode==115 {firstPage()}else if e.keyCode==119{lastPage()}
             else if e.keyCode==116{navigate(-10)}else if e.keyCode==121{navigate(10)}else{return false}

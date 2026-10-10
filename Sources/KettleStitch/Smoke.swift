@@ -224,6 +224,14 @@ extension AppDelegate {
             precondition(self.displayToken==shown && canvas.edgeFlashes==flashes+1 && self.project.selected==self.project.pages.count-1,"The last photograph is not reloaded")
             self.firstPage();self.navigate(-1);precondition(canvas.edgeFlashes==flashes+2 && self.project.selected==0)
             print("END_OF_BOOK passed")
+            // The smudge brush: a stroke is kept on the page, Undo takes it back, and Escape puts the brush down.
+            self.project.selected=0;self.selectCurrent();canvas.image=smokeImage;self.original=smokeImage;let strokes=self.project.pages[0].smudges?.count ?? 0
+            key("b",11,.shift);precondition(canvas.smudgeMode && !canvas.preview,"Shift-B picks up the brush")
+            canvas.onSmudgeCommit?([Point(0.3,0.3),Point(0.5,0.3)])
+            precondition(self.project.pages[0].smudges?.count==strokes+1 && self.project.pages[0].smudges?.last?.strength==self.smudgeStrengthSlider.doubleValue)
+            self.undo();precondition((self.project.pages[0].smudges?.count ?? 0)==strokes)
+            key("\u{1b}",53);precondition(!canvas.smudgeMode)
+            print("SMUDGE passed")
             // A project file is written by Save, not by each edit.
             if self.hasProjectFile {
                 func onDisk()->Project? {try? Project.read(self.projectURL)}

@@ -22,7 +22,7 @@ final class PageTable: NSTableView {
 final class PreviewThumbnail {
     let image:NSImage,look:String
     init(_ image:NSImage,_ look:String){self.image=image;self.look=look}
-    static func look(_ p:Page)->String {"\(p.quad)|\(p.rotation)|\(String(describing:p.adjustments))|\(String(describing:p.split))|\(String(describing:p.deskew))|\(String(describing:p.pictureZones))"}
+    static func look(_ p:Page)->String {"\(p.quad)|\(p.rotation)|\(String(describing:p.adjustments))|\(String(describing:p.split))|\(String(describing:p.deskew))|\(String(describing:p.pictureZones))|\(String(describing:p.smudges))"}
 }
 final class PageCell: NSTableCellView {
     static let identifier=NSUserInterfaceItemIdentifier("page")

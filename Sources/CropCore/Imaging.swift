@@ -77,9 +77,49 @@ public enum Imaging {
     /// Grayscale and black-and-white cleanup produce an 8-bit gray image; everything else RGBA.
     /// `deskew` is the content's clockwise tilt in degrees, which is turned back. `zones` are picture zones as
     /// corners on the photograph; in black-and-white output they keep their tones.
-    public static func corrected(_ image: CGImage, quad: Quad, rotation: Int = 0, adjustments: Adjustments = Adjustments(), scale: Double = 1, deskew: Double = 0, zones: [[Point]] = []) throws -> CGImage {
+    /// The strokes as a mask the size of the photograph: white where the brush went, soft at its edges.
+    static func smudgeMask(_ smudges: [Smudge], extent: CGRect) -> CIImage? {
+        let longer=max(extent.width,extent.height),reduce=min(1,1024/longer)
+        let mw=max(1,Int((extent.width*reduce).rounded())),mh=max(1,Int((extent.height*reduce).rounded()))
+        guard let c=CGContext(data:nil,width:mw,height:mh,bitsPerComponent:8,bytesPerRow:0,space:CGColorSpaceCreateDeviceGray(),bitmapInfo:CGImageAlphaInfo.none.rawValue) else {return nil}
+        c.setFillColor(gray:0,alpha:1);c.fill(CGRect(x:0,y:0,width:mw,height:mh))
+        c.setStrokeColor(gray:1,alpha:1);c.setLineCap(.round);c.setLineJoin(.round)
+        for smudge in smudges where !smudge.points.isEmpty {
+            func place(_ p: Point) -> CGPoint {CGPoint(x:p.x*Double(mw),y:(1-p.y)*Double(mh))}
+            c.setLineWidth(max(1,2*smudge.radius*Double(max(mw,mh))))
+            let first=place(smudge.points[0])
+            c.move(to:first)
+            // A single click still leaves a dot.
+            if smudge.points.count == 1 {c.addLine(to:CGPoint(x:first.x+0.01,y:first.y))}
+            for p in smudge.points.dropFirst() {c.addLine(to:place(p))}
+            c.strokePath()
+        }
+        guard let mask=c.makeImage() else {return nil}
+        let radius=smudges.map{$0.radius}.min() ?? 0.01
+        return CIImage(cgImage:mask).transformed(by:CGAffineTransform(scaleX:extent.width/CGFloat(mw),y:extent.height/CGFloat(mh)))
+            .clampedToExtent().applyingFilter("CIGaussianBlur",parameters:[kCIInputRadiusKey:max(1,radius*Double(longer)*0.25)]).cropped(to:extent)
+    }
+    /// The photograph with its smudges blurred in. The blur follows the photograph's size, so the preview and the
+    /// full-resolution export hide the same print equally.
+    public static func smudged(_ image: CIImage, _ smudges: [Smudge]) -> CIImage {
+        var result=image
+        let extent=image.extent,longer=Double(max(extent.width,extent.height))
+        for strength in Set(smudges.map{$0.strength}).sorted() {
+            guard let mask=smudgeMask(smudges.filter{$0.strength == strength},extent:extent) else {continue}
+            let blurred=result.clampedToExtent().applyingFilter("CIGaussianBlur",parameters:[kCIInputRadiusKey:longer*(0.002+0.02*strength)]).cropped(to:extent)
+            result=blurred.applyingFilter("CIBlendWithMask",parameters:[kCIInputBackgroundImageKey:result,kCIInputMaskImageKey:mask])
+        }
+        return result
+    }
+    public static func smudged(_ image: CGImage, _ smudges: [Smudge]) throws -> CGImage {
+        guard !smudges.isEmpty else {return image}
+        let input=CIImage(cgImage:image)
+        guard let result=context.createCGImage(smudged(input,smudges),from:input.extent) else {throw CropError.message("Could not render smudges")}
+        return result
+    }
+    public static func corrected(_ image: CGImage, quad: Quad, rotation: Int = 0, adjustments: Adjustments = Adjustments(), scale: Double = 1, deskew: Double = 0, zones: [[Point]] = [], smudges: [Smudge] = []) throws -> CGImage {
         guard quad.valid else {throw CropError.message("Invalid crop corners")}
-        let input=CIImage(cgImage:image), w=Double(image.width), h=Double(image.height)
+        let input=smudged(CIImage(cgImage:image),smudges), w=Double(image.width), h=Double(image.height)
         func vector(_ p: Point) -> CIVector {CIVector(x:p.x*w, y:(1-p.y)*h)}
         let p=quad.points
         let output=input.applyingFilter("CIPerspectiveCorrection", parameters:["inputTopLeft":vector(p[0]),"inputTopRight":vector(p[1]),"inputBottomRight":vector(p[2]),"inputBottomLeft":vector(p[3])])

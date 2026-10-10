@@ -97,6 +97,7 @@ extension AppDelegate: NSMenuItemValidation, NSMenuDelegate {
         add(crop,"Turn Counterclockwise by 0.1°",#selector(deskewCounterclockwise),"[",[.command,.control]);add(crop,"Turn Clockwise by 0.1°",#selector(deskewClockwise),"]",[.command,.control])
         crop.addItem(.separator())
         add(crop,"Add Picture Zone",#selector(addZone),"p",[.command,.option]);add(crop,"Remove Picture Zones",#selector(removeZones))
+        crop.addItem(.separator());add(crop,"Smudge Brush",#selector(toggleSmudge),"b");add(crop,"Remove Smudges",#selector(removeSmudges),"b",[.command,.shift])
         crop.addItem(.separator())
         add(crop,"Send to Claude",#selector(sendToClaude),"c",[.command,.option]);add(crop,"Claude Usage Log…",#selector(showUsageLog))
         crop.addItem(.separator())

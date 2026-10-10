@@ -151,6 +151,19 @@ public struct PictureZone: Codable, Equatable {
         return [h.map(minU,minV),h.map(maxU,minV),h.map(maxU,maxV),h.map(minU,maxV)]
     }
 }
+/// One stroke of the smudge brush, which blurs what it passes over so that it cannot be read.
+/// It lies on the photograph, so it stays on the same print when the crop or split changes.
+public struct Smudge: Codable, Equatable {
+    /// The brush's path, in fractions of the photograph's width and height from its top-left corner.
+    public var points: [Point]
+    /// Half the stroke's width, as a fraction of the photograph's longer side.
+    public var radius: Double
+    /// How heavily the print is blurred, 0...1.
+    public var strength: Double
+    public init(points: [Point], radius: Double, strength: Double) {
+        self.points=points;self.radius=min(0.25,max(0.002,radius.isFinite ? radius:0.02));self.strength=min(1,max(0,strength.isFinite ? strength:0.5))
+    }
+}
 public struct DeviationRow: Equatable {
     public let id: UUID
     public let index: Int

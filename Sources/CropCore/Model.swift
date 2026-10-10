@@ -138,6 +138,7 @@ public struct Page: Codable, Identifiable {
     /// Degrees each output part is turned clockwise as seen: one value for the whole crop, or left then right page.
     public var deskew: [Double]?
     public var pictureZones: [PictureZone]?
+    public var smudges: [Smudge]?
     /// Claude's latest comment on this crop.
     public var reviewNote: String?
     public init(path: String) {self.path=path;imageAspectRatio=Imaging.aspectRatio(URL(fileURLWithPath:path))}
