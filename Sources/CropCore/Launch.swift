@@ -44,6 +44,25 @@ public enum ImportPolicy {
         return Incoming(project:project,photographs:photographs)
     }
 }
+/// Finds photographs again after they, or the project, were moved. A project stores each photograph's full path.
+public enum Relink {
+    public static func missing(_ pages: [Page], exists: (String) -> Bool) -> [Int] {pages.indices.filter{!exists(pages[$0].path)}}
+    /// Where a missing photograph might be inside `folder`: under its own name, then inside up to three of
+    /// the folders that used to enclose it, so a parent of several moved folders can be chosen at once.
+    public static func candidates(for path: String, in folder: URL) -> [URL] {
+        let parts=URL(fileURLWithPath:path).pathComponents.filter{$0 != "/"}
+        guard !parts.isEmpty else {return []}
+        return (1...min(4,parts.count)).map{count in parts.suffix(count).reduce(folder){$0.appendingPathComponent($1)}}
+    }
+    /// Points each missing page at its photograph in `folder` when it is there. Returns how many were found.
+    @discardableResult public static func relink(_ pages: inout [Page], in folder: URL, exists: (String) -> Bool) -> Int {
+        var found=0
+        for i in pages.indices where !exists(pages[i].path) {
+            if let match=candidates(for:pages[i].path,in:folder).first(where:{exists($0.path)}) {pages[i].path=match.path;found+=1}
+        }
+        return found
+    }
+}
 /// The app was called PageCrop, then briefly ScanSeamstress, before KettleStitch. Sessions, preferences and the
 /// stored API key saved under an earlier name are carried over once. Each list has the most recent name first.
 public enum LegacyNames {

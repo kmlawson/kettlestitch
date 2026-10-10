@@ -1,7 +1,7 @@
 import Foundation
 
 public enum MenuCommand: CaseIterable {
-    case newProject, openProject, importPhotographs, save, saveAs, export, settings, help
+    case newProject, openProject, importPhotographs, locatePhotographs, save, saveAs, export, settings, help
     case undo, redo, copySettings, pasteSettings, applySettingsToAll, resetAdjustments
     case nextPage, previousPage, firstPage, lastPage, nextUnreviewed, nextFlagged, accept
     case selectAllPages, flag, reversePages, removePages, rotateLeft, rotateRight
@@ -62,7 +62,7 @@ public enum MenuPolicy {
         case .undo:return s.editingText ? s.textCanUndo:s.canUndo
         case .redo:return s.editingText ? s.textCanRedo:s.canRedo
         case .export:return s.pageCount>0 && !s.exporting
-        case .copySettings,.applySettingsToAll,.selectAllPages,.flag,.rotateLeft,.rotateRight,.preview,.proposeSplit:return hasPage
+        case .copySettings,.applySettingsToAll,.selectAllPages,.flag,.rotateLeft,.rotateRight,.preview,.proposeSplit,.locatePhotographs:return hasPage
         case .pasteSettings:return hasPage && s.hasCopiedSettings
         case .resetAdjustments:return hasPage && s.targetsHaveAdjustments
         case .nextPage:return hasPage && s.current!<s.pageCount-1

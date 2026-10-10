@@ -136,7 +136,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
         }
         status.stringValue=project.pages.isEmpty ? "Drop photographs here, or choose File ▸ Import Photographs":"Press ? for keyboard shortcuts"
         window.delegate=self;window.registerForDraggedTypes([.fileURL])
-        let waiting=pendingOpen;pendingOpen=[];if !waiting.isEmpty {receive(waiting)}
+        let waiting=pendingOpen;pendingOpen=[];if !waiting.isEmpty {receive(waiting)} else if !project.pages.isEmpty {DispatchQueue.main.async{self.findMissingPhotographs()}}
         // Test hook for files handed over by the system at launch: report what arrived, then quit.
         if testDirectory != nil,let report=ProcessInfo.processInfo.environment["KETTLESTITCH_REPORT"] {
             DispatchQueue.main.asyncAfter(deadline:.now()+2){
@@ -219,7 +219,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
         displayQueue.cancelAllOperations()
         displayQueue.addOperation{[weak self] in
             let result=Result {try Imaging.load(URL(fileURLWithPath:p.path),maxPixel:3200)}
-            DispatchQueue.main.async {guard let self,self.displayToken==token else{return};switch result {case .success(let image):self.original=image;if self.canvas.preview{self.renderPreview()}else{self.canvas.image=image};case .failure(let e):self.canvas.placeholder="Could not load this photograph";self.status.stringValue=e.localizedDescription}}
+            DispatchQueue.main.async {guard let self,self.displayToken==token else{return};switch result {case .success(let image):self.original=image;if self.canvas.preview{self.renderPreview()}else{self.canvas.image=image};case .failure(let e):self.canvas.placeholder="Could not load this photograph\nFile ▸ Locate Missing Photographs… finds moved files";self.status.stringValue=e.localizedDescription}}
         }
     }
     func outputPixelSize(_ p:Page)->CGSize {
@@ -615,7 +615,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
     @objc func openProject(){let panel=NSOpenPanel();panel.allowedContentTypes=ImportPolicy.projectExtensions.compactMap{UTType(filenameExtension:$0)}+[.json];guard confirmUnsaved(),panel.runModal() == .OK,let url=panel.url else{return};open(url)}
     @objc func openRecent(_ sender:NSMenuItem){if let url=sender.representedObject as? URL,confirmUnsaved(){open(url)}}
     func open(_ url:URL){
-        do{let loaded=try Project.read(url);stop();generation=UUID();project=loaded;project.selected=min(max(0,project.selected),max(0,project.pages.count-1));projectURL=url;unsaved=false;noteRecent();updateTitle();undoStack=[];redoStack=[];thumbs.removeAllObjects();thumbnailPending=[];pixelSizes=[:];reloadPages();selectCurrent();status.stringValue="Opened \(url.lastPathComponent)"}catch{showError(error)}
+        do{let loaded=try Project.read(url);stop();generation=UUID();project=loaded;project.selected=min(max(0,project.selected),max(0,project.pages.count-1));projectURL=url;unsaved=false;noteRecent();updateTitle();undoStack=[];redoStack=[];thumbs.removeAllObjects();thumbnailPending=[];pixelSizes=[:];reloadPages();selectCurrent();status.stringValue="Opened \(url.lastPathComponent)";DispatchQueue.main.async{self.findMissingPhotographs()}}catch{showError(error)}
+    }
+    @objc func locatePhotographs(){findMissingPhotographs();if Relink.missing(project.pages,exists:FileManager.default.fileExists(atPath:)).isEmpty {status.stringValue="Every photograph is where the project expects it"}}
+    /// A project holds each photograph's full path. When some are gone, the project's own folder is tried first;
+    /// then the user is asked for the folder they are in now, until all are found or the user stops.
+    func findMissingPhotographs(){
+        func exists(_ path:String)->Bool {FileManager.default.fileExists(atPath:path)}
+        var missing=Relink.missing(project.pages,exists:exists);guard !missing.isEmpty else{return}
+        var found=hasProjectFile ? Relink.relink(&project.pages,in:projectURL.deletingLastPathComponent(),exists:exists):0
+        missing=Relink.missing(project.pages,exists:exists)
+        // A test run has nobody to answer.
+        while !missing.isEmpty,testDirectory == nil {
+            let first=URL(fileURLWithPath:project.pages[missing[0]].path)
+            let alert=NSAlert();alert.messageText=missing.count==project.pages.count ? "The photographs of this project could not be found":"\(missing.count) of \(project.pages.count) photographs could not be found"
+            alert.informativeText="They may have been moved or renamed, or be on a disk that is not connected. “\(first.lastPathComponent)” was expected in:\n\(first.deletingLastPathComponent().path)\n\nShow KettleStitch the folder the photographs are in now."
+            alert.addButton(withTitle:"Locate Folder…");alert.addButton(withTitle:"Not Now")
+            guard alert.runModal() == .alertFirstButtonReturn else{break}
+            let panel=NSOpenPanel();panel.canChooseDirectories=true;panel.canChooseFiles=false;panel.prompt="Use This Folder"
+            panel.message="Choose the folder that holds “\(first.lastPathComponent)”, or a folder above it."
+            guard panel.runModal() == .OK,let folder=panel.url else{break}
+            let here=Relink.relink(&project.pages,in:folder,exists:exists);found+=here;missing=Relink.missing(project.pages,exists:exists)
+            if here==0 {
+                let none=NSAlert();none.messageText="None of the missing photographs are in “\(folder.lastPathComponent)”";none.informativeText="They are matched by file name, so they must still be called what they were.";none.runModal()
+            }
+        }
+        guard found>0 else{return}
+        thumbnailPending=[];save();reloadPages();selectCurrent()
+        status.stringValue="Found \(found) photograph\(found==1 ? "":"s")"+(missing.isEmpty ? "":" · \(missing.count) still missing — File ▸ Locate Missing Photographs")
     }
     @objc func saveAs(){let panel=NSSavePanel();panel.nameFieldStringValue="Book.kettlestitch";guard panel.runModal() == .OK,let url=panel.url else{return};do{try project.save(url);projectURL=url;write();status.stringValue="Saved \(url.lastPathComponent)"}catch{showError(error)}}
 

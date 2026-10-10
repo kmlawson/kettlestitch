@@ -20,6 +20,16 @@ final class LaunchPolicyTests:XCTestCase {
         XCTAssertFalse(LaunchPolicy.shouldAutosave(enabled:false,hasProjectFile:true,unsaved:true),"The setting is off")
         XCTAssertFalse(LaunchPolicy.shouldAutosave(enabled:true,hasProjectFile:false,unsaved:true));XCTAssertFalse(LaunchPolicy.shouldAutosave(enabled:true,hasProjectFile:true,unsaved:false))
     }
+    func testMovedPhotographsAreFoundInTheFolderShown() {
+        var pages=["/old/book/IMG_1.jpg","/old/book/IMG_2.jpg","/old/book/plates/IMG_3.jpg","/kept/IMG_4.jpg","/old/book/IMG_5.jpg"].map{Page(path:$0)}
+        let onDisk:Set<String>=["/new/place/IMG_1.jpg","/new/place/book/IMG_2.jpg","/new/place/plates/IMG_3.jpg","/kept/IMG_4.jpg","/elsewhere/IMG_1.jpg"]
+        let exists={(path:String) in onDisk.contains(path)}
+        XCTAssertEqual(Relink.missing(pages,exists:exists),[0,1,2,4])
+        XCTAssertEqual(Relink.relink(&pages,in:URL(fileURLWithPath:"/new/place"),exists:exists),3)
+        // By name, inside its old folder's name, and inside a subfolder it used to be in; one is nowhere to be found.
+        XCTAssertEqual(pages.map{$0.path},["/new/place/IMG_1.jpg","/new/place/book/IMG_2.jpg","/new/place/plates/IMG_3.jpg","/kept/IMG_4.jpg","/old/book/IMG_5.jpg"])
+        XCTAssertEqual(Relink.missing(pages,exists:exists),[4]);XCTAssertEqual(Relink.relink(&pages,in:URL(fileURLWithPath:"/elsewhere"),exists:exists),0)
+    }
     func testUntitledNamesAreDistinctAndSortByTime() {
         let first=LaunchPolicy.untitledName(Date(timeIntervalSince1970:1_800_000_000)),later=LaunchPolicy.untitledName(Date(timeIntervalSince1970:1_800_000_061))
         XCTAssertTrue(first.hasPrefix("Untitled ") && first.hasSuffix(".kettlestitch"));XCTAssertNotEqual(first,later);XCTAssertLessThan(first,later)

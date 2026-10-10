@@ -4,7 +4,7 @@ import CropCore
 extension AppDelegate: NSMenuItemValidation, NSMenuDelegate {
     /// The menu commands this delegate handles. Enabling, titles and check marks all come from `MenuPolicy`.
     static let commands: [Selector:MenuCommand] = [
-        #selector(newProject):.newProject,#selector(openProject):.openProject,#selector(importImages):.importPhotographs,#selector(saveProject):.save,#selector(saveAs):.saveAs,#selector(exportImages):.export,#selector(showSettings):.settings,#selector(help):.help,
+        #selector(newProject):.newProject,#selector(openProject):.openProject,#selector(importImages):.importPhotographs,#selector(locatePhotographs):.locatePhotographs,#selector(saveProject):.save,#selector(saveAs):.saveAs,#selector(exportImages):.export,#selector(showSettings):.settings,#selector(help):.help,
         #selector(undo):.undo,#selector(redo):.redo,#selector(copySettings):.copySettings,#selector(pasteSettings):.pasteSettings,#selector(applySettingsToAll):.applySettingsToAll,#selector(resetAdjustments):.resetAdjustments,
         #selector(next):.nextPage,#selector(previous):.previousPage,#selector(firstPage):.firstPage,#selector(lastPage):.lastPage,#selector(nextReview):.nextUnreviewed,#selector(nextFlagged):.nextFlagged,#selector(accept):.accept,
         #selector(selectAllPages):.selectAllPages,#selector(toggleFlag):.flag,#selector(reversePages):.reversePages,#selector(removePages):.removePages,#selector(rotateLeft):.rotateLeft,#selector(rotate):.rotateRight,
@@ -58,7 +58,7 @@ extension AppDelegate: NSMenuItemValidation, NSMenuDelegate {
         let file=menu("File")
         add(file,"New Project…",#selector(newProject),"n");add(file,"Open Project…",#selector(openProject),"o")
         let recent=NSMenu(title:"Open Recent");recent.delegate=self;add(file,"Open Recent",nil,own:false).submenu=recent
-        file.addItem(.separator());add(file,"Import Photographs…",#selector(importImages),"i")
+        file.addItem(.separator());add(file,"Import Photographs…",#selector(importImages),"i");add(file,"Locate Missing Photographs…",#selector(locatePhotographs))
         file.addItem(.separator());add(file,"Close",#selector(NSWindow.performClose(_:)),"w",own:false);add(file,"Save",#selector(saveProject),"s");add(file,"Save Project As…",#selector(saveAs),"s",[.command,.shift])
         file.addItem(.separator());add(file,"Export…",#selector(exportImages),"e")
 
