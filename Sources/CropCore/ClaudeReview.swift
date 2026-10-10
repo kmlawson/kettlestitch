@@ -168,7 +168,7 @@ public enum ClaudeReview {
     }
     /// Blocks until Claude answers. `started` receives the process so the caller can cancel it.
     public static func run(_ page: Page, model: String, apiKey: String, executable: URL, timeout: TimeInterval = 240, started: (Process) -> Void = {_ in}) throws -> CropReview {
-        let directory=FileManager.default.temporaryDirectory.appendingPathComponent("PageCrop-review-"+UUID().uuidString)
+        let directory=FileManager.default.temporaryDirectory.appendingPathComponent("KettleStitch-review-"+UUID().uuidString)
         try FileManager.default.createDirectory(at:directory,withIntermediateDirectories:true)
         defer {try? FileManager.default.removeItem(at:directory)}
         try prepare(page,in:directory)

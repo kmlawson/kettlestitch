@@ -48,12 +48,12 @@ extension AppDelegate: NSMenuItemValidation, NSMenuDelegate {
             return item
         }
         func arrow(_ key:Int)->String {String(UnicodeScalar(key)!)}
-        let app=menu("PageCrop")
-        add(app,"About PageCrop",#selector(NSApplication.orderFrontStandardAboutPanel(_:)),own:false)
+        let app=menu("KettleStitch")
+        add(app,"About KettleStitch",#selector(NSApplication.orderFrontStandardAboutPanel(_:)),own:false)
         app.addItem(.separator());add(app,"Settings…",#selector(showSettings),",")
-        app.addItem(.separator());add(app,"Hide PageCrop",#selector(NSApplication.hide(_:)),"h",own:false)
+        app.addItem(.separator());add(app,"Hide KettleStitch",#selector(NSApplication.hide(_:)),"h",own:false)
         add(app,"Hide Others",#selector(NSApplication.hideOtherApplications(_:)),"h",[.command,.option],own:false);add(app,"Show All",#selector(NSApplication.unhideAllApplications(_:)),own:false)
-        app.addItem(.separator());add(app,"Quit PageCrop",#selector(NSApplication.terminate(_:)),"q",own:false)
+        app.addItem(.separator());add(app,"Quit KettleStitch",#selector(NSApplication.terminate(_:)),"q",own:false)
 
         let file=menu("File")
         add(file,"New Project…",#selector(newProject),"n");add(file,"Open Project…",#selector(openProject),"o")
@@ -112,7 +112,7 @@ extension AppDelegate: NSMenuItemValidation, NSMenuDelegate {
         let windows=menu("Window")
         add(windows,"Minimize",#selector(NSWindow.performMiniaturize(_:)),"m",own:false);add(windows,"Zoom",#selector(NSWindow.performZoom(_:)),own:false)
         windows.addItem(.separator());add(windows,"Bring All to Front",#selector(NSApplication.arrangeInFront(_:)),own:false)
-        let help=menu("Help");add(help,"PageCrop Keyboard Shortcuts",#selector(self.help),"?")
+        let help=menu("Help");add(help,"KettleStitch Keyboard Shortcuts",#selector(self.help),"?")
         NSApp.mainMenu=main;NSApp.windowsMenu=windows;NSApp.helpMenu=help
     }
     /// Rebuilds Open Recent from the system's list each time it opens.
@@ -131,7 +131,7 @@ final class ShortcutsController: NSObject {
     private final class Flipped: NSView {override var isFlipped:Bool{true}}
     override init(){
         super.init()
-        window.title="PageCrop Keyboard Shortcuts";window.isReleasedWhenClosed=false;window.isFloatingPanel=false;window.hidesOnDeactivate=false;window.minSize=NSSize(width:460,height:320)
+        window.title="KettleStitch Keyboard Shortcuts";window.isReleasedWhenClosed=false;window.isFloatingPanel=false;window.hidesOnDeactivate=false;window.minSize=NSSize(width:460,height:320)
         let stack=NSStackView();stack.orientation = .vertical;stack.alignment = .leading;stack.spacing=6;stack.translatesAutoresizingMaskIntoConstraints=false
         for section in ShortcutReference.sections {
             let title=NSTextField(labelWithString:section.title.uppercased());title.font = .systemFont(ofSize:11,weight:.semibold);title.textColor = .secondaryLabelColor

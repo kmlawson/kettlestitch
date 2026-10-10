@@ -47,7 +47,7 @@ func collectionCheck(folder:String,output:String,count:Int?)throws {
         }
         if (i+1)%20==0{print("Processed \(i+1)/\(total)");fflush(stdout)}
     }
-    try project.save(destination.appendingPathComponent("1940.3.pagecrop"))
+    try project.save(destination.appendingPathComponent("1940.3.kettlestitch"))
     seconds.sort()
     let result=String(format:"REAL_COLLECTION unique=%d processed=%d proposed=%d failures=%d total_seconds=%.2f median_seconds=%.3f p95_seconds=%.3f",urls.count,total,found,failures,Date().timeIntervalSince(started),seconds[seconds.count/2],seconds[min(seconds.count-1,Int(Double(seconds.count)*0.95))])
     print(result);try result.write(to:destination.appendingPathComponent("results.txt"),atomically:true,encoding:.utf8)

@@ -4,12 +4,21 @@ import Security
 
 /// The Anthropic API key lives in the login keychain, never in the project or preferences.
 enum Keychain {
-    static let query:[CFString:Any]=[kSecClass:kSecClassGenericPassword,kSecAttrService:"local.pagecrop.app.anthropic",kSecAttrAccount:"api-key"]
-    static func read()->String? {
-        var request=query;request[kSecReturnData]=true;request[kSecMatchLimit]=kSecMatchLimitOne
+    static let query:[CFString:Any]=[kSecClass:kSecClassGenericPassword,kSecAttrService:"local.kettlestitch.app.anthropic",kSecAttrAccount:"api-key"]
+    static func read(_ service:[CFString:Any])->String? {
+        var request=service;request[kSecReturnData]=true;request[kSecMatchLimit]=kSecMatchLimitOne
         var item:CFTypeRef?
         guard SecItemCopyMatching(request as CFDictionary,&item)==errSecSuccess,let data=item as? Data else{return nil}
         return String(data:data,encoding:.utf8)
+    }
+    /// A key saved under one of the app's earlier names is copied to the new one the first time it is needed.
+    static func read()->String? {
+        if let key=read(query) {return key}
+        for service in LegacyNames.keychainServices {
+            var earlier=query;earlier[kSecAttrService]=service
+            if let key=read(earlier),!key.isEmpty {write(key);return key}
+        }
+        return nil
     }
     @discardableResult static func write(_ key:String)->Bool {
         SecItemDelete(query as CFDictionary)
@@ -27,7 +36,7 @@ final class SettingsController: NSObject {
     let message=NSTextField(wrappingLabelWithString:"")
     override init(){
         super.init()
-        window.title="PageCrop Settings";window.isReleasedWhenClosed=false
+        window.title="KettleStitch Settings";window.isReleasedWhenClosed=false
         func label(_ text:String)->NSTextField {let l=NSTextField(labelWithString:text);l.alignment = .right;return l}
         func help(_ text:String)->NSTextField {let l=NSTextField(wrappingLabelWithString:text);l.font = .systemFont(ofSize:11);l.textColor = .secondaryLabelColor;l.preferredMaxLayoutWidth=330;return l}
         key.placeholderString="sk-ant-…";key.widthAnchor.constraint(equalToConstant:330).isActive=true;key.target=self;key.action=#selector(saveKey)

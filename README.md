@@ -1,21 +1,23 @@
-# PageCrop
+# KettleStitch
 
-A native macOS cropper for large collections of photographed book pages and spreads. Version 0.2 adds image cleanup, physical page sizes, PDF and image export with searchable text, a standard Mac window with toolbar, sidebar, inspector and full menus, and an optional second opinion on crops from Claude. Outer-boundary detection, fast correction and safe, non-destructive editing remain the core.
+A native macOS cropper for large collections of photographed book pages and spreads. It detects the outer boundary of each page or spread, lets you correct it quickly, and exports perspective-corrected pages as a PDF or images, with optional page splitting, deskew, cleanup and searchable text. Editing is non-destructive and the original photographs are never changed.
+
+The app was called PageCrop until version 0.3, and briefly ScanSeamstress. Projects saved as `.pagecrop` or `.scanseamstress` still open; new projects are saved as `.kettlestitch`. On first launch, sessions, preferences and the API key saved under an earlier name are carried over.
 
 ## Start
 
-Open `dist/PageCrop.app`. It opens empty: nothing is reopened on its own. Give it something to work on in any of these ways:
+Open `dist/KettleStitch.app`. It opens empty: nothing is reopened on its own. Give it something to work on in any of these ways:
 
-- drop photographs, a folder of photographs or a `.pagecrop` project onto the app's icon;
+- drop photographs, a folder of photographs or a `.kettlestitch` project onto the app's icon;
 - drop them anywhere on the app's window;
 - choose **File ▸ Import Photographs…** (**I**) or **File ▸ Open Project…** (**O**);
-- double-click a `.pagecrop` project, or pick one from **File ▸ Open Recent**.
+- double-click a `.kettlestitch` project, or pick one from **File ▸ Open Recent**.
 
 Photographs are added to the project that is open, skipping any already in it; a project file replaces it. Subfolders are not followed. Then press **B** to detect all pending pages. Inspect each crop, adjust the four corners, and press **Return** to mark it reviewed and move on. Press **P** to see the perspective-corrected, adjusted result. **E** opens the export sheet.
 
-Every completed edit is autosaved. Until you name a project with **G** (new project at a chosen path) or **S** (save as), the work is kept in `~/Library/Application Support/PageCrop/` as `Untitled <date and time>.pagecrop`, a new file for each session, and it appears under Open Recent. A session nothing was added to leaves no file. Source photographs are referenced by absolute path and never modified. Keep them in place, and save a named project for each book.
+Every completed edit is autosaved. Until you name a project with **G** (new project at a chosen path) or **S** (save as), the work is kept in `~/Library/Application Support/KettleStitch/` as `Untitled <date and time>.kettlestitch`, a new file for each session, and it appears under Open Recent. A session nothing was added to leaves no file. Source photographs are referenced by absolute path and never modified. Keep them in place, and save a named project for each book.
 
-Every command is in the menus with a Command-key shortcut, and the common ones are in the toolbar. The sidebar lists the photographs; the inspector on the right holds the cropping, image-adjustment and page-format controls. Either side can be hidden from the View menu. The **Page** menu covers moving between photographs, selection, flags, rotation and the page list; the **Crop** menu covers detection, proposals, the page split and Send to Claude. **Help ▸ PageCrop Keyboard Shortcuts** (or **?**) opens the full key reference. Menu commands that edit a page are unavailable while you type in a field or while a sheet or the Settings window is in front. Drag a corner independently, or drag anywhere on a green edge to move both its endpoints together; drag elsewhere to pan. Option-drag moves the whole crop. The corner magnifier appears during mouse adjustment and disappears on mouse release. Keyboard-selected corners keep it visible for nudging. Crossed or collapsed crops are rejected.
+Every command is in the menus with a Command-key shortcut, and the common ones are in the toolbar. The sidebar lists the photographs; the inspector on the right holds the cropping, image-adjustment and page-format controls. Either side can be hidden from the View menu. The **Page** menu covers moving between photographs, selection, flags, rotation and the page list; the **Crop** menu covers detection, proposals, the page split and Send to Claude. **Help ▸ KettleStitch Keyboard Shortcuts** (or **?**) opens the full key reference. Menu commands that edit a page are unavailable while you type in a field or while a sheet or the Settings window is in front. Drag a corner independently, or drag anywhere on a green edge to move both its endpoints together; drag elsewhere to pan. Option-drag moves the whole crop. The corner magnifier appears during mouse adjustment and disappears on mouse release. Keyboard-selected corners keep it visible for nudging. Crossed or collapsed crops are rejected.
 
 ## Keyboard reference
 
@@ -145,9 +147,9 @@ The other choices are remembered between exports. A PDF is written to a temporar
 
 **A**, **Page ▸ Send to Claude** (Option-Command-C) or the toolbar button asks Claude to check the crop of the photograph on screen, or of every selected photograph in turn.
 
-Set it up once in **PageCrop ▸ Settings…**: paste an Anthropic API key and choose **Haiku 5.5** or **Sonnet 5.5**. The key is stored in the login keychain. The feature runs the `claude` command-line tool (Claude Code), which must be installed.
+Set it up once in **KettleStitch ▸ Settings…**: paste an Anthropic API key and choose **Haiku 5.5** or **Sonnet 5.5**. The key is stored in the login keychain. The feature runs the `claude` command-line tool (Claude Code), which must be installed.
 
-For each page PageCrop writes two reduced JPEGs (longest side 1568 pixels) to a temporary folder: the photograph, and the photograph with the current crop, corner labels and a coordinate grid drawn on it. It runs `claude -p` in that folder with the key in the environment and the crop coordinates in the prompt, and asks for a verdict, a short comment and four corner coordinates. The temporary files are deleted afterwards.
+For each page KettleStitch writes two reduced JPEGs (longest side 1568 pixels) to a temporary folder: the photograph, and the photograph with the current crop, corner labels and a coordinate grid drawn on it. It runs `claude -p` in that folder with the key in the environment and the crop coordinates in the prompt, and asks for a verdict, a short comment and four corner coordinates. The temporary files are deleted afterwards.
 
 - While you wait, the status bar names the page Claude is looking at and counts the seconds, with a progress bar beside it. In the sidebar that page dims under a spinner and reads "Waiting for Claude…"; the rest of a batch read "Queued for Claude".
 - Claude's comment appears in the inspector under the file name. It is dropped if you then change the crop by hand, and an answer about a crop you edited while Claude was looking is not kept.
@@ -188,9 +190,9 @@ Requires a macOS Swift toolchain; built here with Xcode 16.4 / Swift 6.1.2. Depl
 swift test --disable-sandbox
 .build/release/CropCheck --benchmark 300
 .build/release/CropCheck --collection /path/to/photos /path/to/diagnostics 300
-.build/release/CropCheck --claude-files project.pagecrop 5 /path/to/folder
-.build/release/CropCheck --split project.pagecrop /path/to/folder 12
-.build/release/CropCheck --deskew project.pagecrop /path/to/folder 12
+.build/release/CropCheck --claude-files project.kettlestitch 5 /path/to/folder
+.build/release/CropCheck --split project.kettlestitch /path/to/folder 12
+.build/release/CropCheck --deskew project.kettlestitch /path/to/folder 12
 ```
 
 `--deskew` prints the measured tilt of each page (or "unclear") and writes small deskewed copies, again without changing the project.
@@ -201,7 +203,7 @@ swift test --disable-sandbox
 
 The collection check cycles through the source files if the requested count exceeds their number. It saves a project containing each unique source and contact sheets showing the **complete source photograph plus the proposed boundary**. A generated proposal is not a verified correct crop.
 
-The build script replaces the app's executable by rename, so it is safe to run while PageCrop is open; quit and reopen the app to get the new build. Each build is ad-hoc signed afresh, so macOS may ask once more for permission to read the saved API key.
+The build script replaces the app's executable by rename, so it is safe to run while KettleStitch is open; quit and reopen the app to get the new build. Each build is ad-hoc signed afresh, so macOS may ask once more for permission to read the saved API key.
 
 Tests requiring Vision/Core Image need access to the macOS graphics services; a restrictive command sandbox can prevent those services from working even though the app works normally.
 
@@ -223,4 +225,4 @@ The corner magnifier switches between the top-right and bottom-left of the canva
 
 ## License
 
-PageCrop is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version. This is the same license as ScanTailor. PageCrop is distributed in the hope that it will be useful, but without any warranty; see [LICENSE](LICENSE) for the full text.
+KettleStitch is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version. This is the same license as ScanTailor. KettleStitch is distributed in the hope that it will be useful, but without any warranty; see [LICENSE](LICENSE) for the full text.

@@ -3,18 +3,18 @@ import XCTest
 
 final class LaunchPolicyTests:XCTestCase {
     func testOrdinaryLaunchOpensNothing() {
-        XCTAssertNil(LaunchPolicy.projectToOpen(arguments:["/Applications/PageCrop.app/Contents/MacOS/PageCrop"],testDirectory:nil),"No project is reopened on its own")
-        XCTAssertNil(LaunchPolicy.projectToOpen(arguments:["PageCrop","-NSDocumentRevisionsDebugMode","YES"],testDirectory:nil))
+        XCTAssertNil(LaunchPolicy.projectToOpen(arguments:["/Applications/KettleStitch.app/Contents/MacOS/KettleStitch"],testDirectory:nil),"No project is reopened on its own")
+        XCTAssertNil(LaunchPolicy.projectToOpen(arguments:["KettleStitch","-NSDocumentRevisionsDebugMode","YES"],testDirectory:nil))
     }
     func testAProjectNamedOnTheCommandLineOrATestFolderIsOpened() {
-        XCTAssertEqual(LaunchPolicy.projectToOpen(arguments:["PageCrop","--project","/books/a.pagecrop"],testDirectory:nil)?.path,"/books/a.pagecrop")
-        XCTAssertNil(LaunchPolicy.projectToOpen(arguments:["PageCrop","--project"],testDirectory:nil),"A flag without a path is ignored")
-        XCTAssertEqual(LaunchPolicy.projectToOpen(arguments:["PageCrop","--smoke"],testDirectory:"/tmp/t")?.path,"/tmp/t/Recovery.pagecrop")
-        XCTAssertEqual(LaunchPolicy.projectToOpen(arguments:["PageCrop","--project","/books/a.pagecrop"],testDirectory:"/tmp/t")?.path,"/books/a.pagecrop","The explicit path wins")
+        XCTAssertEqual(LaunchPolicy.projectToOpen(arguments:["KettleStitch","--project","/books/a.kettlestitch"],testDirectory:nil)?.path,"/books/a.kettlestitch")
+        XCTAssertNil(LaunchPolicy.projectToOpen(arguments:["KettleStitch","--project"],testDirectory:nil),"A flag without a path is ignored")
+        XCTAssertEqual(LaunchPolicy.projectToOpen(arguments:["KettleStitch","--smoke"],testDirectory:"/tmp/t")?.path,"/tmp/t/Recovery.kettlestitch")
+        XCTAssertEqual(LaunchPolicy.projectToOpen(arguments:["KettleStitch","--project","/books/a.kettlestitch"],testDirectory:"/tmp/t")?.path,"/books/a.kettlestitch","The explicit path wins")
     }
     func testUntitledNamesAreDistinctAndSortByTime() {
         let first=LaunchPolicy.untitledName(Date(timeIntervalSince1970:1_800_000_000)),later=LaunchPolicy.untitledName(Date(timeIntervalSince1970:1_800_000_061))
-        XCTAssertTrue(first.hasPrefix("Untitled ") && first.hasSuffix(".pagecrop"));XCTAssertNotEqual(first,later);XCTAssertLessThan(first,later)
+        XCTAssertTrue(first.hasPrefix("Untitled ") && first.hasSuffix(".kettlestitch"));XCTAssertNotEqual(first,later);XCTAssertLessThan(first,later)
         XCTAssertFalse(first.contains(":") || first.contains("/"),"Safe as a file name")
     }
 }
@@ -33,9 +33,22 @@ final class ImportPolicyTests:XCTestCase {
         XCTAssertEqual(incoming.photographs.map{$0.path},["/shots/a.jpg"])
     }
     func testAProjectFileIsOpenedRatherThanImported() {
-        let incoming=ImportPolicy.sort([url("/shots/a.jpg"),url("/books/One.pagecrop"),url("/books/Two.pagecrop")],existing:[],contents:contents)
-        XCTAssertEqual(incoming.project?.lastPathComponent,"One.pagecrop","The first project wins");XCTAssertEqual(incoming.photographs.count,1)
-        XCTAssertTrue(ImportPolicy.isProject(url("/x/Y.PAGECROP")));XCTAssertFalse(ImportPolicy.isProject(url("/x/y.json")))
+        let incoming=ImportPolicy.sort([url("/shots/a.jpg"),url("/books/One.kettlestitch"),url("/books/Two.kettlestitch")],existing:[],contents:contents)
+        XCTAssertEqual(incoming.project?.lastPathComponent,"One.kettlestitch","The first project wins");XCTAssertEqual(incoming.photographs.count,1)
+        XCTAssertTrue(ImportPolicy.isProject(url("/x/Y.KETTLESTITCH")));XCTAssertFalse(ImportPolicy.isProject(url("/x/y.json")))
+        XCTAssertTrue(ImportPolicy.isProject(url("/x/old.pagecrop")),"Projects saved under the app's earlier names still open")
+        XCTAssertTrue(ImportPolicy.isProject(url("/x/old.scanseamstress")))
+        XCTAssertEqual(ImportPolicy.projectExtension,"kettlestitch");XCTAssertEqual(ImportPolicy.projectExtensions,["kettlestitch","scanseamstress","pagecrop"])
+    }
+    func testWorkFromEarlierNamesIsCarriedOverOnceNewestFirst() {
+        XCTAssertEqual(LegacyNames.supportFolders,["ScanSeamstress","PageCrop"])
+        XCTAssertEqual(LegacyNames.keychainServices,["local.scanseamstress.app.anthropic","local.pagecrop.app.anthropic"])
+        XCTAssertEqual(LegacyNames.preferencesDomains,["local.scanseamstress.app","local.pagecrop.app"])
+        XCTAssertTrue(LegacyNames.shouldCarryOver(oldExists:true,newExists:false))
+        XCTAssertFalse(LegacyNames.shouldCarryOver(oldExists:true,newExists:true),"Never over anything already saved under the new name")
+        XCTAssertFalse(LegacyNames.shouldCarryOver(oldExists:false,newExists:false))
+        // The most recent earlier name that has anything is the one carried over.
+        XCTAssertEqual(LegacyNames.firstExisting(["a","b","c"]){$0 != "a"},"b");XCTAssertNil(LegacyNames.firstExisting(["a","b"]){_ in false})
     }
     func testEveryFormatTheAppReadsIsAccepted() {
         for ext in ["jpg","jpeg","png","tif","tiff","heic","heif","bmp"] {XCTAssertTrue(ImportPolicy.isPhotograph(url("/a/b."+ext)),ext)}

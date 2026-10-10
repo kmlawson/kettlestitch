@@ -1,6 +1,6 @@
 // swift-tools-version: 5.9
 import PackageDescription
-let package = Package(name: "PageCrop", platforms: [.macOS(.v13)], products: [
-    .executable(name: "PageCrop", targets: ["PageCrop"]),
+let package = Package(name: "KettleStitch", platforms: [.macOS(.v13)], products: [
+    .executable(name: "KettleStitch", targets: ["KettleStitch"]),
     .executable(name: "CropCheck", targets: ["CropCheck"])
-], targets: [.target(name: "CropCore"), .executableTarget(name: "PageCrop", dependencies: ["CropCore"]), .executableTarget(name: "CropCheck", dependencies: ["CropCore"]), .testTarget(name: "CropCoreTests", dependencies: ["CropCore"])])
+], targets: [.target(name: "CropCore"), .executableTarget(name: "KettleStitch", dependencies: ["CropCore"]), .executableTarget(name: "CropCheck", dependencies: ["CropCore"]), .testTarget(name: "CropCoreTests", dependencies: ["CropCore"])])

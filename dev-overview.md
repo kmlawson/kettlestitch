@@ -1,6 +1,10 @@
-# PageCrop developer handoff
+# KettleStitch developer handoff
 
 Updated 2026-10-10 after version 0.2.0: Mac-style window and menus, image adjustments, page format, PDF/image export and Send to Claude. This document describes the current implementation, not a proposed redesign. Read the actual source before modifying it; older docs and validation logs may describe superseded shortcuts.
+
+## Name
+
+The app was PageCrop, was renamed ScanSeamstress and then KettleStitch, all on 2026-10-10 (app, executable target, bundle identifier `local.kettlestitch.app`, project extension, environment variables, GitHub repository, and the working folder, now `kettlestitch`). `LegacyNames` and `ImportPolicy.projectExtensions` hold the only remaining references to the earlier names, for opening `.pagecrop` and `.scanseamstress` projects and carrying over old sessions, preferences and the keychain item. The library and diagnostic targets keep the names `CropCore` and `CropCheck`.
 
 ## Purpose and user priorities
 
@@ -10,9 +14,9 @@ The original request includes eventually adding further imaging capabilities: br
 
 ## Workspace and important data
 
-- Repository/workspace: `~/shell/projects/cropper`.
-- Built app: `dist/PageCrop.app`; executable: `dist/PageCrop.app/Contents/MacOS/PageCrop`.
-- **User's live edited project:** `examples/1940.3-review/1940.3.pagecrop`. Never regenerate or replace it with benchmark output. It contains actual manual edits and review decisions.
+- Repository/workspace: `~/shell/projects/kettlestitch`.
+- Built app: `dist/KettleStitch.app`; executable: `dist/KettleStitch.app/Contents/MacOS/KettleStitch`.
+- **User's live edited project:** `examples/1940.3-review/1940.3.kettlestitch`. Never regenerate or replace it with benchmark output. It contains actual manual edits and review decisions.
 - Workspace photographs: `sample-images/1940.3/`. On 2026-10-10 the user deleted most of them to save space; 23 remain. The live project still lists 148 pages, so 125 of them show "Could not load this photograph". Build test fixtures only from pages whose photograph exists.
 - `.qa/` holds disposable evaluations, test-project copies, screenshots, logs, and backups. `examples/1940.3-review/contact-*.jpg` shows old initial proposals, not current detector output.
 - `.gitignore` excludes `.build/`, `dist/`, `.qa/`, `sample-images/`, `.DS_Store`, and the local research notes in `docs/`.
@@ -22,21 +26,21 @@ The original request includes eventually adding further imaging capabilities: br
 Swift Package Manager, tools version 5.9, macOS deployment target 13. No external package dependencies. Uses AppKit, Vision, CoreImage, ImageIO, CoreGraphics and CoreText. Built on Apple Silicon using Xcode 16.4 / Swift 6.1.2; current executable is **arm64 only**. macOS 13 is the declared minimum, not a tested OS matrix.
 
 ```sh
-cd ~/shell/projects/cropper
+cd ~/shell/projects/kettlestitch
 ./scripts/build-app.sh
 swift test --disable-sandbox
-open -n "$PWD/dist/PageCrop.app"
+open -n "$PWD/dist/KettleStitch.app"
 ```
 
-The build script sets module cache locations under TMPDIR, makes a release build, writes the app bundle and ad-hoc signs it. Bundle identifier is `local.pagecrop.app`. Version is 0.3.0/build 4, set by hand in the build script, which also declares the document types (project files, images, folders) that let files be dropped on the app's icon. The script replaces the executable by rename, so it can run while the app is open. Licensed GPL-3.0-or-later (`LICENSE`), matching ScanTailor. This is not Developer ID signed or notarized. Another Apple Silicon Mac can run the bundle without Xcode; first launch may require macOS Privacy & Security → Open Anyway. Intel needs a separate or universal build.
+The build script sets module cache locations under TMPDIR, makes a release build, writes the app bundle and ad-hoc signs it. Bundle identifier is `local.kettlestitch.app`. Version is 0.3.0/build 4, set by hand in the build script, which also declares the document types (project files, images, folders) that let files be dropped on the app's icon. The script replaces the executable by rename, so it can run while the app is open. Licensed GPL-3.0-or-later (`LICENSE`), matching ScanTailor. This is not Developer ID signed or notarized. Another Apple Silicon Mac can run the bundle without Xcode; first launch may require macOS Privacy & Security → Open Anyway. Intel needs a separate or universal build.
 
 Under the agent's restricted execution environment, Vision/CoreImage tests can need an approved unrestricted tool execution because CVPixelBuffer/graphics access fails in the restricted sandbox. `--disable-sandbox` concerns SwiftPM, not that outer restriction. Test files already live in the writable workspace; do not ask for Desktop access repeatedly.
 
 Before restarting the user's app, quit normally so it saves:
 
 ```sh
-osascript -e 'if application id "local.pagecrop.app" is running then tell application id "local.pagecrop.app" to quit'
-open -n ~/shell/projects/cropper/dist/PageCrop.app
+osascript -e 'if application id "local.kettlestitch.app" is running then tell application id "local.kettlestitch.app" to quit'
+open -n ~/shell/projects/kettlestitch/dist/KettleStitch.app
 ```
 
 Do not kill the app or run smoke tests against its live project. Avoid multiple normal instances writing the same project.
@@ -58,14 +62,14 @@ Do not kill the app or run smoke tests against its live project. Avoid multiple 
 | `Sources/CropCore/BackgroundBoundary.swift` | Corner-colour clusters, foreground rays, robust line fits and intersections |
 | `Sources/CropCore/BackgroundMaterial.swift` | Per-photo colour/texture matching and border-connected background mask |
 | `Sources/CropCore/ProposalPolicy.swift` | Hard automatic-candidate constraints and soft unequal-perspective penalty |
-| `Sources/PageCrop/main.swift` | AppDelegate: state, project lifecycle, queues, actions, single-key routing, undo/redo |
-| `Sources/PageCrop/Interface.swift` | Window, split view, sidebar cell, status bar, toolbar |
-| `Sources/PageCrop/Inspector.swift` | Inspector controls |
-| `Sources/PageCrop/Menus.swift` | Menu bar, state gathering for `MenuPolicy`, Open Recent, shortcuts window |
-| `Sources/PageCrop/ExportSheet.swift` | Export options sheet |
-| `Sources/PageCrop/Settings.swift` | Settings window and keychain storage of the API key |
-| `Sources/PageCrop/Smoke.swift` | Native UI smoke test |
-| `Sources/PageCrop/Canvas.swift` | Drawing, crop overlay, magnifier, mouse editing, pan/zoom, keyboard selection state |
+| `Sources/KettleStitch/main.swift` | AppDelegate: state, project lifecycle, queues, actions, single-key routing, undo/redo |
+| `Sources/KettleStitch/Interface.swift` | Window, split view, sidebar cell, status bar, toolbar |
+| `Sources/KettleStitch/Inspector.swift` | Inspector controls |
+| `Sources/KettleStitch/Menus.swift` | Menu bar, state gathering for `MenuPolicy`, Open Recent, shortcuts window |
+| `Sources/KettleStitch/ExportSheet.swift` | Export options sheet |
+| `Sources/KettleStitch/Settings.swift` | Settings window and keychain storage of the API key |
+| `Sources/KettleStitch/Smoke.swift` | Native UI smoke test |
+| `Sources/KettleStitch/Canvas.swift` | Drawing, crop overlay, magnifier, mouse editing, pan/zoom, keyboard selection state |
 | `Sources/CropCheck/main.swift` | Diagnostic CLI: single-image candidate JSON, fixtures, synthetic benchmark, `--claude-files` |
 | `Sources/CropCheck/CollectionCheck.swift` | Collection evaluation, contact sheets, diagnostic project and timing output |
 | `Tests/CropCoreTests/GeometryTests.swift` | Geometry, detector and policy test classes, despite the narrow filename |
@@ -88,9 +92,9 @@ Project files reference photographs by **absolute path**, without embedding them
 
 ## UI, persistence and concurrency
 
-The app opens empty (`LaunchPolicy`): no project is reopened unless `--project` or `PAGECROP_TEST_DIR` asks for one. Each session autosaves to its own `Untitled <timestamp>.pagecrop` in Application Support, written only once it has pages. Files arrive through one route, `receive(_:)`, from the Import panel, a drop on the window (the delegate is the window's dragging destination) or `application(_:open:)` for the app's icon and double-clicked projects. A second smoke mode checks this: set `PAGECROP_SMOKE_FOLDER` and `PAGECROP_SMOKE_PROJECT` with an empty `PAGECROP_TEST_DIR`. `PAGECROP_REPORT=<file>` in test mode writes the page count after launch and quits, for testing launches through `open`.
+The app opens empty (`LaunchPolicy`): no project is reopened unless `--project` or `KETTLESTITCH_TEST_DIR` asks for one. Each session autosaves to its own `Untitled <timestamp>.kettlestitch` in Application Support, written only once it has pages. Files arrive through one route, `receive(_:)`, from the Import panel, a drop on the window (the delegate is the window's dragging destination) or `application(_:open:)` for the app's icon and double-clicked projects. A second smoke mode checks this: set `KETTLESTITCH_SMOKE_FOLDER` and `KETTLESTITCH_SMOKE_PROJECT` with an empty `KETTLESTITCH_TEST_DIR`. `KETTLESTITCH_REPORT=<file>` in test mode writes the page count after launch and quits, for testing launches through `open`.
 
-AppDelegate owns project state on the main thread. `edit` snapshots the affected Pages for undo, clears redo, increments revision for geometry changes only, saves, and refreshes views. Undo entries are either page snapshots (matched by UUID, one entry per multi-page change) or a page-list snapshot for import, reordering and removal. Restoring a list snapshot takes only membership and order from it (`Project.restoringStructure`); each page keeps its current data. Manual crops go through `Page.setManualCrop`, proposals through `Page.selectProposal`, Claude verdicts through `Page.record`. Settings edits apply to `targetIndexes`: the sidebar selection when it contains the photograph on screen. `reloadPages()` must wrap every full table reload, because NSTableView resets its selection and would otherwise change the current photograph. Autosave also occurs for navigation and detection results, and at normal termination. Unnamed work goes to the session's untitled file in `~/Library/Application Support/PageCrop/`; nothing is reopened at launch. Save failures appear in the title/status.
+AppDelegate owns project state on the main thread. `edit` snapshots the affected Pages for undo, clears redo, increments revision for geometry changes only, saves, and refreshes views. Undo entries are either page snapshots (matched by UUID, one entry per multi-page change) or a page-list snapshot for import, reordering and removal. Restoring a list snapshot takes only membership and order from it (`Project.restoringStructure`); each page keeps its current data. Manual crops go through `Page.setManualCrop`, proposals through `Page.selectProposal`, Claude verdicts through `Page.record`. Settings edits apply to `targetIndexes`: the sidebar selection when it contains the photograph on screen. `reloadPages()` must wrap every full table reload, because NSTableView resets its selection and would otherwise change the current photograph. Autosave also occurs for navigation and detection results, and at normal termination. Unnamed work goes to the session's untitled file in `~/Library/Application Support/KettleStitch/`; nothing is reopened at launch. Save failures appear in the title/status.
 
 Separate serial OperationQueues handle display, thumbnails, detection, export and Claude review. Display uses a UUID token to discard stale results; project/generation tokens and page revisions prevent detection overwriting intervening edits. Thumbnail cache is bounded at 24 MiB. Display images are capped at 3200 pixels on the longest side; detection uses 1600. Full originals are decoded sequentially for export, not held for the entire collection.
 
@@ -169,12 +173,12 @@ Latest full detector evaluation: 148 images, zero processing errors, 18.83 s, me
 .build/release/CropCheck sample-images/1940.3/IMG_6802.HEIC
 ```
 
-Collection evaluation writes a diagnostic `1940.3.pagecrop`, timing results and contact sheets. **Always use a fresh .qa output folder**, never the live project directory. Visually inspect changed top proposals; passing geometry constraints is not proof the page boundary is correct.
+Collection evaluation writes a diagnostic `1940.3.kettlestitch`, timing results and contact sheets. **Always use a fresh .qa output folder**, never the live project directory. Visually inspect changed top proposals; passing geometry constraints is not proof the page boundary is correct.
 
-Native UI smoke mode lives in AppDelegate, runs synthetic mouse/key events after loading, renders `ui.png`, checks edits/undo/redo/review and exports a full-resolution JPEG. It mutates its test project and terminates itself. Always create a **copy** of a project as `.qa/<test>/Recovery.pagecrop` with selected=0, then run:
+Native UI smoke mode lives in AppDelegate, runs synthetic mouse/key events after loading, renders `ui.png`, checks edits/undo/redo/review and exports a full-resolution JPEG. It mutates its test project and terminates itself. Always create a **copy** of a project as `.qa/<test>/Recovery.kettlestitch` with selected=0, then run:
 
 ```sh
-PAGECROP_TEST_DIR="$PWD/.qa/<test>" dist/PageCrop.app/Contents/MacOS/PageCrop --smoke
+KETTLESTITCH_TEST_DIR="$PWD/.qa/<test>" dist/KettleStitch.app/Contents/MacOS/KettleStitch --smoke
 ```
 
 The environment override isolates app support and keeps the test out of Open Recent. The smoke expects at least two valid source images. It restores a captured display image during synchronous navigation checks because asynchronous loading cannot finish inside the same callback. Relevant logs: `.qa/keyboard-only/smoke.txt`, `.qa/side-controls/smoke.txt`, `.qa/material-ui/smoke.txt`. Test mode's assertions are in release too; a failure may exit 133 with little detail, so use a debug build to locate the line.

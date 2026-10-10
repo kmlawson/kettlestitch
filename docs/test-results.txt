@@ -14,19 +14,19 @@ Building for debugging...
 [13/26] Write Objects.LinkFileList
 [15/26] Emitting module CropCoreTests
 [16/26] Compiling CropCoreTests GeometryTests.swift
-[17/26] Compiling PageCrop Canvas.swift
+[17/26] Compiling KettleStitch Canvas.swift
 [17/26] Write Objects.LinkFileList
-[19/26] Emitting module PageCrop
-[20/26] Compiling PageCrop main.swift
+[19/26] Emitting module KettleStitch
+[20/26] Compiling KettleStitch main.swift
 [20/26] Write Objects.LinkFileList
 [21/26] Linking CropCheck
 [22/26] Applying CropCheck
-[23/26] Linking PageCropPackageTests
-[24/26] Linking PageCrop
-[25/26] Applying PageCrop
+[23/26] Linking KettleStitchPackageTests
+[24/26] Linking KettleStitch
+[25/26] Applying KettleStitch
 Build complete! (3.17s)
 Test Suite 'All tests' started at 2026-10-10 10:20:51.589.
-Test Suite 'PageCropPackageTests.xctest' started at 2026-10-10 10:20:51.591.
+Test Suite 'KettleStitchPackageTests.xctest' started at 2026-10-10 10:20:51.591.
 Test Suite 'DetectorTests' started at 2026-10-10 10:20:51.591.
 Test Case '-[CropCoreTests.DetectorTests testIllustrationDoesNotReplaceWholeSpread]' started.
 Test Case '-[CropCoreTests.DetectorTests testIllustrationDoesNotReplaceWholeSpread]' passed (0.340 seconds).
@@ -55,7 +55,7 @@ Test Case '-[CropCoreTests.ProposalPolicyTests testSavedProposalsFilteredWithout
 Test Case '-[CropCoreTests.ProposalPolicyTests testSavedProposalsFilteredWithoutChangingManualOrReviewedCrops]' passed (0.000 seconds).
 Test Suite 'ProposalPolicyTests' passed at 2026-10-10 10:20:51.953.
 	 Executed 3 tests, with 0 failures (0 unexpected) in 0.000 (0.000) seconds
-Test Suite 'PageCropPackageTests.xctest' passed at 2026-10-10 10:20:51.953.
+Test Suite 'KettleStitchPackageTests.xctest' passed at 2026-10-10 10:20:51.953.
 	 Executed 8 tests, with 0 failures (0 unexpected) in 0.361 (0.361) seconds
 Test Suite 'All tests' passed at 2026-10-10 10:20:51.953.
 	 Executed 8 tests, with 0 failures (0 unexpected) in 0.361 (0.363) seconds

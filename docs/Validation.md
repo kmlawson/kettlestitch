@@ -1,4 +1,4 @@
-# PageCrop validation
+# KettleStitch validation
 
 Validated on 10 October 2026 on this Apple Silicon Mac running macOS 26.6.2, built with Xcode 16.4 and Swift 6.1.2.
 
@@ -26,8 +26,8 @@ Inspect all proposals at useful zoom before accepting them. The thumbnail contac
 
 ## Deliverables
 
-- `dist/PageCrop.app`: native local build, ad-hoc signed.
-- `examples/1940.3-review/1940.3.pagecrop`: 148 original paths and editable proposals, all unreviewed.
+- `dist/KettleStitch.app`: native local build, ad-hoc signed.
+- `examples/1940.3-review/1940.3.kettlestitch`: 148 original paths and editable proposals, all unreviewed.
 - `examples/1940.3-review/contact-01.jpg` through `contact-10.jpg`: complete source photographs with crop overlays.
 - `README.md`: workflow, full shortcut table, build instructions and current limitations.
 

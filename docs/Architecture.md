@@ -1,6 +1,6 @@
-# PageCrop architecture
+# KettleStitch architecture
 
-`CropCore` owns normalized geometry, project persistence, EXIF-aware image decoding, boundary proposals and perspective export. `PageCrop` owns application state, bounded work queues, revision checks, AppKit controls and the custom canvas. `CropCheck` provides reproducible detector evaluation and complete-source contact sheets. Geometry and persistence have XCTest coverage.
+`CropCore` owns normalized geometry, project persistence, EXIF-aware image decoding, boundary proposals and perspective export. `KettleStitch` owns application state, bounded work queues, revision checks, AppKit controls and the custom canvas. `CropCheck` provides reproducible detector evaluation and complete-source contact sheets. Geometry and persistence have XCTest coverage.
 
 The source coordinate system is upright EXIF-normalized image space with a top-left origin. Vision's bottom-left coordinates are converted at the boundary. Core Image coordinates are converted only inside the renderer. The project stores a quadrilateral and a separate output rotation, leaving room for a future distortion recipe.
 

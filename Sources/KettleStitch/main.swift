@@ -45,7 +45,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
     var deviationCache: [DeviationRow]?
     /// How each page's crop compares with the rest; recomputed after any change.
     var deviationRows: [DeviationRow] {if deviationCache==nil {deviationCache=Deviation.report(project.pages)};return deviationCache!}
-    let testDirectory=ProcessInfo.processInfo.environment["PAGECROP_TEST_DIR"]
+    let testDirectory=ProcessInfo.processInfo.environment["KETTLESTITCH_TEST_DIR"]
     var project=Project()
     var projectURL: URL!
     var generation=UUID()
@@ -98,7 +98,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
         splitQueue.maxConcurrentOperationCount=1;splitQueue.qualityOfService = .userInitiated
         thumbnailQueue.maxConcurrentOperationCount=1;thumbnailQueue.qualityOfService = .utility
         thumbs.totalCostLimit=24*1024*1024
-        let support=testDirectory.map{URL(fileURLWithPath:$0)} ?? FileManager.default.urls(for:.applicationSupportDirectory,in:.userDomainMask)[0].appendingPathComponent("PageCrop")
+        let library=FileManager.default.urls(for:.applicationSupportDirectory,in:.userDomainMask)[0]
+        let support=testDirectory.map{URL(fileURLWithPath:$0)} ?? library.appendingPathComponent("KettleStitch")
+        if testDirectory == nil {carryOverLegacyData(in:library,to:support)}
         do {try FileManager.default.createDirectory(at:support,withIntermediateDirectories:true)} catch {showError(error)}
         // The app opens empty. Each session gets its own untitled file, so unnamed work from an earlier
         // session is never overwritten; it stays reachable under File ▸ Open Recent.
@@ -124,13 +126,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
         window.delegate=self;window.registerForDraggedTypes([.fileURL])
         let waiting=pendingOpen;pendingOpen=[];if !waiting.isEmpty {receive(waiting)}
         // Test hook for files handed over by the system at launch: report what arrived, then quit.
-        if testDirectory != nil,let report=ProcessInfo.processInfo.environment["PAGECROP_REPORT"] {
+        if testDirectory != nil,let report=ProcessInfo.processInfo.environment["KETTLESTITCH_REPORT"] {
             DispatchQueue.main.asyncAfter(deadline:.now()+2){
                 try? "pages=\(self.project.pages.count) title=\(self.window.title)\n".write(toFile:report,atomically:true,encoding:.utf8);NSApp.terminate(nil)
             }
         }
-        if let folder=ProcessInfo.processInfo.environment["PAGECROP_SMOKE_FOLDER"],let other=ProcessInfo.processInfo.environment["PAGECROP_SMOKE_PROJECT"],let dir=testDirectory {runEmptySmoke(dir,folder:URL(fileURLWithPath:folder),project:URL(fileURLWithPath:other))}
+        if let folder=ProcessInfo.processInfo.environment["KETTLESTITCH_SMOKE_FOLDER"],let other=ProcessInfo.processInfo.environment["KETTLESTITCH_SMOKE_PROJECT"],let dir=testDirectory {runEmptySmoke(dir,folder:URL(fileURLWithPath:folder),project:URL(fileURLWithPath:other))}
         if CommandLine.arguments.contains("--smoke"),let dir=testDirectory {runSmoke(dir)}
+    }
+    /// Moves sessions saved under an earlier name into place and copies its preferences, unless this name already has its own.
+    func carryOverLegacyData(in library:URL,to new:URL){
+        let files=FileManager.default
+        if let folder=LegacyNames.firstExisting(LegacyNames.supportFolders,where:{files.fileExists(atPath:library.appendingPathComponent($0).path)}),
+           LegacyNames.shouldCarryOver(oldExists:true,newExists:files.fileExists(atPath:new.path)) {try? files.moveItem(at:library.appendingPathComponent(folder),to:new)}
+        let defaults=UserDefaults.standard
+        if let domain=LegacyNames.firstExisting(LegacyNames.preferencesDomains,where:{!(defaults.persistentDomain(forName:$0) ?? [:]).isEmpty}),
+           LegacyNames.shouldCarryOver(oldExists:true,newExists:defaults.object(forKey:"legacyPreferencesCopied") != nil) {
+            let earlier=defaults.persistentDomain(forName:domain) ?? [:]
+            for key in ["exportOptions","claudeModel"] {if let value=earlier[key],defaults.object(forKey:key)==nil {defaults.set(value,forKey:key)}}
+            defaults.set(true,forKey:"legacyPreferencesCopied")
+        }
     }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication)->Bool {true}
     func applicationWillTerminate(_ notification: Notification){queue.cancelAllOperations();reviewProcess?.terminate();save()}
@@ -492,7 +507,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
     // MARK: Projects
     @objc func newProject(){
         save()
-        let panel=NSSavePanel();panel.nameFieldStringValue="Book.pagecrop";panel.message="Choose where the new collection will autosave."
+        let panel=NSSavePanel();panel.nameFieldStringValue="Book.kettlestitch";panel.message="Choose where the new collection will autosave."
         guard panel.runModal() == .OK,let url=panel.url else{return}
         do{let fresh=Project();try fresh.save(url);stop();project=fresh;projectURL=url;undoStack=[];redoStack=[];save();reloadPages();selectCurrent()}catch{showError(error)}
     }
@@ -516,12 +531,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
         restructure{project.pages += added;if wasEmpty{project.selected=0}}
         status.stringValue="Imported \(added.count) photograph\(added.count==1 ? "":"s") · B detects pending pages"
     }
-    @objc func openProject(){let panel=NSOpenPanel();panel.allowedContentTypes=[UTType(filenameExtension:"pagecrop") ?? .json,.json];guard panel.runModal() == .OK,let url=panel.url else{return};open(url)}
+    @objc func openProject(){let panel=NSOpenPanel();panel.allowedContentTypes=ImportPolicy.projectExtensions.compactMap{UTType(filenameExtension:$0)}+[.json];guard panel.runModal() == .OK,let url=panel.url else{return};open(url)}
     @objc func openRecent(_ sender:NSMenuItem){if let url=sender.representedObject as? URL{save();open(url)}}
     func open(_ url:URL){
         do{let loaded=try Project.read(url);stop();generation=UUID();project=loaded;project.selected=min(max(0,project.selected),max(0,project.pages.count-1));projectURL=url;save();undoStack=[];redoStack=[];thumbs.removeAllObjects();thumbnailPending=[];pixelSizes=[:];reloadPages();selectCurrent();status.stringValue="Opened \(url.lastPathComponent)"}catch{showError(error)}
     }
-    @objc func saveAs(){let panel=NSSavePanel();panel.nameFieldStringValue="Book.pagecrop";guard panel.runModal() == .OK,let url=panel.url else{return};do{try project.save(url);projectURL=url;save();status.stringValue="Saved \(url.lastPathComponent)"}catch{showError(error)}}
+    @objc func saveAs(){let panel=NSSavePanel();panel.nameFieldStringValue="Book.kettlestitch";guard panel.runModal() == .OK,let url=panel.url else{return};do{try project.save(url);projectURL=url;save();status.stringValue="Saved \(url.lastPathComponent)"}catch{showError(error)}}
 
     // MARK: Background work
     func beginProgress(_ kind:ProgressTracker.Kind,_ total:Int){tracker.begin(kind,total:total);showProgress()}
@@ -583,7 +598,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
             panel.message="Choose a destination. A new dated subfolder will hold the corrected \(options.format.title) files."
             panel.beginSheetModal(for:window){[weak self] response in
                 guard let self,response == .OK,let parent=panel.url else{return}
-                let folder=parent.appendingPathComponent("PageCrop-"+ISO8601DateFormatter().string(from:Date()).replacingOccurrences(of:":",with:"-")+"-"+UUID().uuidString.prefix(6))
+                let folder=parent.appendingPathComponent("KettleStitch-"+ISO8601DateFormatter().string(from:Date()).replacingOccurrences(of:":",with:"-")+"-"+UUID().uuidString.prefix(6))
                 do{try FileManager.default.createDirectory(at:folder,withIntermediateDirectories:true);self.runExport(pages,options,folder)}catch{self.showError(error)}
             }
         }

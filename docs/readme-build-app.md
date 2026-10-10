@@ -1,6 +1,6 @@
 # build-app.sh
 
-`scripts/build-app.sh` builds PageCrop in release mode and assembles `dist/PageCrop.app`.
+`scripts/build-app.sh` builds KettleStitch in release mode and assembles `dist/KettleStitch.app`.
 
 ```sh
 ./scripts/build-app.sh
@@ -9,7 +9,7 @@
 What it does, in order:
 
 1. Runs `swift build --disable-sandbox -c release`, with the Clang and SwiftPM module caches under `$TMPDIR`.
-2. Creates the bundle folders and copies the `PageCrop` executable in under a temporary name, then renames it into place. A copy of PageCrop that is already running keeps its own file, so the script is safe to run while the app is open; quit and reopen the app to use the new build.
+2. Creates the bundle folders and copies the `KettleStitch` executable in under a temporary name, then renames it into place. A copy of KettleStitch that is already running keeps its own file, so the script is safe to run while the app is open; quit and reopen the app to use the new build.
 3. Writes `Contents/Info.plist`. The version (`CFBundleShortVersionString`) and build number (`CFBundleVersion`) are set by hand in the script.
 4. Ad-hoc signs the bundle with `codesign --force --sign -`.
 

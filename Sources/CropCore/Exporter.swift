@@ -164,7 +164,7 @@ public final class PDFWriter {
     private let context: CGContext
     private var closed=false
     public init(url: URL, password: String? = nil) throws {
-        var info:[CFString:Any]=[kCGPDFContextCreator:"PageCrop"]
+        var info:[CFString:Any]=[kCGPDFContextCreator:"KettleStitch"]
         if let password,!password.isEmpty {info[kCGPDFContextUserPassword]=password;info[kCGPDFContextOwnerPassword]=password}
         guard let context=CGContext(url as CFURL,mediaBox:nil,info as CFDictionary) else {throw CropError.message("Cannot create PDF: \(url.lastPathComponent)")}
         self.context=context

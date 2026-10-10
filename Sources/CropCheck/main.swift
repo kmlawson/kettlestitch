@@ -83,4 +83,4 @@ if args.count>3 && args[1]=="--collection" {
     CGImageDestinationAddImage(d,fixture(0),nil);CGImageDestinationFinalize(d)
 } else if args.count>1 {
     for path in args.dropFirst() {do{let image=try Imaging.load(URL(fileURLWithPath:path),maxPixel:1600);let results=try Detector().detect(image);let data=try JSONEncoder().encode(results);print(path);print(String(decoding:data,as:UTF8.self))}catch{print(error)}}
-} else {print("CropCheck --benchmark [300] | --fixture path.jpg | --collection folder output [count] | --claude-files project.pagecrop page-number output-folder | --split project.pagecrop output-folder [count] | --deskew project.pagecrop output-folder [count] | image paths")}
+} else {print("CropCheck --benchmark [300] | --fixture path.jpg | --collection folder output [count] | --claude-files project.kettlestitch page-number output-folder | --split project.kettlestitch output-folder [count] | --deskew project.kettlestitch output-folder [count] | image paths")}

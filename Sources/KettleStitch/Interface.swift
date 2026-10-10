@@ -87,8 +87,8 @@ extension AppDelegate: NSToolbarDelegate {
         inspectorItem=NSSplitViewItem(viewController:inspector);inspectorItem.minimumThickness=304;inspectorItem.maximumThickness=304;inspectorItem.canCollapse=true;inspectorItem.holdingPriority=NSLayoutConstraint.Priority(260)
         for item in [sidebarItem!,main,inspectorItem!] {split.addSplitViewItem(item)}
         window.contentViewController=split;window.setContentSize(NSSize(width:1360,height:860));window.center()
-        if testDirectory == nil {split.splitView.autosaveName="PageCropSplit";window.setFrameAutosaveName("PageCropWindow")}
-        let toolbar=NSToolbar(identifier:"PageCropToolbar");toolbar.delegate=self;toolbar.displayMode = .iconOnly
+        if testDirectory == nil {split.splitView.autosaveName="KettleStitchSplit";window.setFrameAutosaveName("KettleStitchWindow")}
+        let toolbar=NSToolbar(identifier:"KettleStitchToolbar");toolbar.delegate=self;toolbar.displayMode = .iconOnly
         toolbar.allowsUserCustomization=true;toolbar.autosavesConfiguration=testDirectory == nil
         window.toolbar=toolbar
     }
