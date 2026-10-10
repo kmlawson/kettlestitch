@@ -139,14 +139,14 @@ final class PreviewTests:XCTestCase {
         XCTAssertEqual(whole.width,800,accuracy:2);XCTAssertEqual(SkewDetector.detect(whole).angle,0,accuracy:0.25,"The preview shows the deskewed result")
         p.split=PageSplit(top:0.25,bottom:0.25);p.deskew=[2,2]
         let both=try Exporter.preview(source,page:p)
-        XCTAssertEqual(both.width,800+Exporter.previewGap,accuracy:3,"Two pages with a gap between them");XCTAssertEqual(both.height,300,accuracy:2)
+        XCTAssertEqual(both.width,800+Exporter.previewGap(between:[800]),accuracy:3,"Two pages with a gap between them");XCTAssertEqual(both.height,300,accuracy:2)
         let row=Array(pixels(both)[150*both.width..<151*both.width])
-        let gap=row[200+Exporter.previewGap/2]
+        let gap=row[200+Exporter.previewGap(between:[800])/2]
         let all=pixels(both)
-        XCTAssertTrue(gap>55 && gap<115,"A dark band sits where the split is: \(gap)")
-        for y in [10,150,290] {XCTAssertEqual(all[y*both.width+200+Exporter.previewGap/2],gap,accuracy:2,"and runs the full height")}
+        XCTAssertLessThan(gap,10,"A black band sits where the split is")
+        for y in [10,150,290] {XCTAssertEqual(all[y*both.width+200+Exporter.previewGap(between:[800])/2],gap,accuracy:2,"and runs the full height")}
         // Each page is judged on its own; the band between them is not print.
-        let right=try XCTUnwrap(both.cropping(to:CGRect(x:200+Exporter.previewGap,y:0,width:both.width-200-Exporter.previewGap,height:both.height)))
+        let right=try XCTUnwrap(both.cropping(to:CGRect(x:200+Exporter.previewGap(between:[800]),y:0,width:both.width-200-Exporter.previewGap(between:[800]),height:both.height)))
         XCTAssertEqual(SkewDetector.detect(right).angle,0,accuracy:0.3)
         XCTAssertEqual(Exporter.previewParts(p),2);p.split=nil;XCTAssertEqual(Exporter.previewParts(p),1)
     }

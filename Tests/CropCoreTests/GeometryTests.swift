@@ -2,6 +2,25 @@ import XCTest
 @testable import CropCore
 import CoreGraphics
 final class GeometryTests:XCTestCase {
+    func testSharpnessIsOffByDefaultAndStrengthensEdges() throws {
+        let saved=try JSONEncoder().encode(Adjustments())
+        XCTAssertFalse(String(decoding:saved,as:UTF8.self).contains("sharpness"),"Older projects have no such key and still decode")
+        XCTAssertTrue(try JSONDecoder().decode(Adjustments.self,from:saved).isIdentity)
+        // A soft grey step in a photograph-sized image: sharpening pushes the two sides further apart next to the edge.
+        let extent=CGRect(x:0,y:0,width:3000,height:100)
+        let step=CIImage(color:CIColor(red:0.6,green:0.6,blue:0.6)).cropped(to:CGRect(x:0,y:0,width:1500,height:100))
+            .composited(over:CIImage(color:CIColor(red:0.4,green:0.4,blue:0.4)).cropped(to:extent))
+            .applyingFilter("CIGaussianBlur",parameters:[kCIInputRadiusKey:2.0]).cropped(to:extent)
+        func range(_ image:CIImage)->(UInt8,UInt8) {
+            var row=[UInt8](repeating:0,count:200*4)
+            CIContext(options:[.workingColorSpace:NSNull()]).render(image,toBitmap:&row,rowBytes:800,bounds:CGRect(x:1400,y:50,width:200,height:1),format:.RGBA8,colorSpace:nil)
+            let reds=stride(from:40,to:640,by:4).map{row[$0]};return (reds.min()!,reds.max()!)
+        }
+        var a=Adjustments();XCTAssertEqual(range(Imaging.process(step,a)).0,range(step).0)
+        a.sharpness=1;XCTAssertFalse(a.isIdentity)
+        let plain=range(step),sharp=range(Imaging.process(step,a))
+        XCTAssertLessThan(sharp.0,plain.0);XCTAssertGreaterThan(sharp.1,plain.1)
+    }
     func testCropScaling() throws {
         let q=Quad([Point(0.1,0.1),Point(0.9,0.1),Point(0.9,0.9),Point(0.1,0.9)])
         let grown=try XCTUnwrap(q.scaled(by:1.02))
@@ -10,6 +29,10 @@ final class GeometryTests:XCTestCase {
         XCTAssertEqual(Quad.full.scaled(by:1.02),Quad.full)
         XCTAssertTrue(try XCTUnwrap(q.scaled(by:10)).valid)
         XCTAssertNil(q.scaled(by:0))
+        // The left and top sides are already at the boundary; the right and bottom still grow.
+        let corner=Quad([Point(0,0),Point(0.5,0),Point(0.5,0.5),Point(0,0.5)]),larger=try XCTUnwrap(corner.scaled(by:1.02))
+        XCTAssertEqual(larger.points[0],Point(0,0));XCTAssertEqual(larger.points[2].x,0.505,accuracy:1e-9);XCTAssertEqual(larger.points[2].y,0.505,accuracy:1e-9)
+        XCTAssertEqual(larger.points[1].y,0);XCTAssertEqual(larger.points[3].x,0)
     }
     func testRejectCrossedDegenerateAndOutside(){
         XCTAssertTrue(Quad.full.valid)

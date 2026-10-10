@@ -12,6 +12,14 @@ final class LaunchPolicyTests:XCTestCase {
         XCTAssertEqual(LaunchPolicy.projectToOpen(arguments:["KettleStitch","--smoke"],testDirectory:"/tmp/t")?.path,"/tmp/t/Recovery.kettlestitch")
         XCTAssertEqual(LaunchPolicy.projectToOpen(arguments:["KettleStitch","--project","/books/a.kettlestitch"],testDirectory:"/tmp/t")?.path,"/books/a.kettlestitch","The explicit path wins")
     }
+    func testOnlyANamedProjectWithChangesIsAutosaved() {
+        let untitled=URL(fileURLWithPath:"/support/"+LaunchPolicy.untitledName(Date(timeIntervalSince1970:1_800_000_000)))
+        XCTAssertTrue(LaunchPolicy.isUntitled(untitled));XCTAssertFalse(LaunchPolicy.isUntitled(URL(fileURLWithPath:"/books/Untitled.kettlestitch")),"A file the user called Untitled is still theirs")
+        XCTAssertFalse(LaunchPolicy.isUntitled(URL(fileURLWithPath:"/books/a.kettlestitch")))
+        XCTAssertTrue(LaunchPolicy.shouldAutosave(enabled:true,hasProjectFile:true,unsaved:true));XCTAssertEqual(LaunchPolicy.autosaveInterval,300)
+        XCTAssertFalse(LaunchPolicy.shouldAutosave(enabled:false,hasProjectFile:true,unsaved:true),"The setting is off")
+        XCTAssertFalse(LaunchPolicy.shouldAutosave(enabled:true,hasProjectFile:false,unsaved:true));XCTAssertFalse(LaunchPolicy.shouldAutosave(enabled:true,hasProjectFile:true,unsaved:false))
+    }
     func testUntitledNamesAreDistinctAndSortByTime() {
         let first=LaunchPolicy.untitledName(Date(timeIntervalSince1970:1_800_000_000)),later=LaunchPolicy.untitledName(Date(timeIntervalSince1970:1_800_000_061))
         XCTAssertTrue(first.hasPrefix("Untitled ") && first.hasSuffix(".kettlestitch"));XCTAssertNotEqual(first,later);XCTAssertLessThan(first,later)

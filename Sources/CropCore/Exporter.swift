@@ -101,8 +101,10 @@ public enum Exporter {
             return RenderedPage(image:image,layout:layout)
         }
     }
-    public static let previewGap = 16
-    public static let previewGapGray = 0.3
+    /// The black band between the two pages of a split spread in the preview: a fiftieth of their width,
+    /// so it shows as clearly in a sidebar picture as on the canvas.
+    public static let previewGapGray = 0.0
+    public static func previewGap(between widths: [Int]) -> Int {max(2,widths.reduce(0,+)/50)}
     /// How many pages the preview of `page` shows.
     public static func previewParts(_ page: Page) -> Int {quads(for:page,options:ExportOptions()).count}
     /// What export will produce from an already decoded photograph: the corrected crop, or for a split spread
@@ -115,11 +117,12 @@ public enum Exporter {
             try Imaging.corrected(source,quad:quad,rotation:page.rotation,adjustments:settings,deskew:page.deskewAngle(part:part,of:crops.count),zones:zones)
         }
         guard parts.count>1 else {return parts[0]}
-        let width=parts.reduce(0){$0+$1.width}+previewGap*(parts.count-1),height=parts.map{$0.height}.max()!
+        let gap=previewGap(between:parts.map{$0.width})
+        let width=parts.reduce(0){$0+$1.width}+gap*(parts.count-1),height=parts.map{$0.height}.max()!
         guard let c=CGContext(data:nil,width:width,height:height,bitsPerComponent:8,bytesPerRow:0,space:CGColorSpaceCreateDeviceRGB(),bitmapInfo:CGImageAlphaInfo.premultipliedLast.rawValue) else {throw CropError.message("Could not render preview")}
         c.setFillColor(CGColor(gray:previewGapGray,alpha:1));c.fill(CGRect(x:0,y:0,width:width,height:height))
         var x=0
-        for part in parts {c.draw(part,in:CGRect(x:x,y:height-part.height,width:part.width,height:part.height));x+=part.width+previewGap}
+        for part in parts {c.draw(part,in:CGRect(x:x,y:height-part.height,width:part.width,height:part.height));x+=part.width+gap}
         guard let result=c.makeImage() else {throw CropError.message("Could not render preview")}
         return result
     }
@@ -159,17 +162,59 @@ public enum Exporter {
         }
     }
 }
+/// Removes the document information (Producer, Creator, dates) from a finished PDF by blanking the dictionary
+/// in place, so no offset in the file moves. It works the same on a password-protected file.
+public enum PDFInfo {
+    public static func strip(_ url: URL) throws {
+        let failure=CropError.message("Could not remove the document information from \(url.lastPathComponent)")
+        let file=try FileHandle(forUpdating:url);defer {try? file.close()}
+        let size=try file.seekToEnd()
+        func read(_ offset: UInt64, _ count: Int) throws -> [UInt8] {
+            try file.seek(toOffset:offset);return [UInt8](try file.read(upToCount:count) ?? Data())
+        }
+        func text(_ bytes: [UInt8]) -> String {String(decoding:bytes,as:UTF8.self)}
+        func number(after key: String, in s: String) -> UInt64? {
+            guard let found=s.range(of:key,options:.backwards) else {return nil}
+            return UInt64(s[found.upperBound...].drop{$0.isWhitespace}.prefix{$0.isNumber})
+        }
+        let tail=text(try read(size>2048 ? size-2048:0,2048))
+        // A file without an information dictionary has nothing to remove.
+        guard let object=number(after:"/Info",in:tail) else {return}
+        guard let table=number(after:"startxref",in:tail) else {throw failure}
+        // A classic cross-reference table: a header line, then one 20-byte entry per object from zero.
+        let header=try read(table,64)
+        guard text(header).hasPrefix("xref"),let lines=Optional(header.split(separator:10,maxSplits:2,omittingEmptySubsequences:false)),lines.count==3,
+              text(Array(lines[1])).trimmingCharacters(in:.whitespaces).hasPrefix("0 ") else {throw failure}
+        let entries=table+UInt64(lines[0].count+lines[1].count+2)
+        guard let offset=UInt64(text(try read(entries+object*20,10))) else {throw failure}
+        let body=try read(offset,8192)
+        guard text(body).hasPrefix("\(object) 0 obj"),let open=body.indices.dropLast().first(where:{body[$0]==60 && body[$0+1]==60}) else {throw failure}
+        // Find the closing >> of the dictionary, stepping over strings, which may hold any bytes.
+        var i=open+2,depth=0,close:Int?
+        while i<body.count-1 {
+            let byte=body[i]
+            if depth>0 {if byte==92 {i+=1} else if byte==40 {depth+=1} else if byte==41 {depth-=1}}
+            else if byte==40 {depth=1}
+            else if byte==62,body[i+1]==62 {close=i;break}
+            i+=1
+        }
+        guard let close else {throw failure}
+        try file.seek(toOffset:offset+UInt64(open+2));try file.write(contentsOf:Data(repeating:32,count:close-open-2))
+    }
+}
 /// Writes pages one at a time so a long book never holds more than one decoded photograph.
 public final class PDFWriter {
     private let context: CGContext
     private var closed=false
+    private let url: URL
     public init(url: URL, password: String? = nil) throws {
-        var info:[CFString:Any]=[kCGPDFContextCreator:"KettleStitch"]
+        self.url=url
+        var info:[CFString:Any]=[:]
         if let password,!password.isEmpty {info[kCGPDFContextUserPassword]=password;info[kCGPDFContextOwnerPassword]=password}
         guard let context=CGContext(url as CFURL,mediaBox:nil,info as CFDictionary) else {throw CropError.message("Cannot create PDF: \(url.lastPathComponent)")}
         self.context=context
     }
-    deinit {close()}
+    deinit {try? close()}
     /// Adds one PDF page, or two for a split spread.
     public func add(_ page: Page, options: ExportOptions) throws {for part in try Exporter.renderAll(page,options:options) {try add(part,options:options)}}
     public func add(_ rendered: RenderedPage, options: ExportOptions) throws {
@@ -188,7 +233,9 @@ public final class PDFWriter {
         draw(lines,in:rendered.layout.imageRect)
         context.endPDFPage()
     }
-    public func close() {if !closed {closed=true;context.closePDF()}}
+    /// Finishes the file, then empties its information dictionary: Quartz always writes the macOS version and
+    /// build as Producer, and the creation and modification dates.
+    public func close() throws {if !closed {closed=true;context.closePDF();try PDFInfo.strip(url)}}
     /// Invisible text placed over each recognized line so the PDF can be searched and copied.
     private func draw(_ lines: [TextLine], in rect: CGRect) {
         for line in lines {

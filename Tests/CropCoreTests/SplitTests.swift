@@ -6,7 +6,8 @@ import PDFKit
 private let inset=Quad([Point(0.1,0.1),Point(0.9,0.1),Point(0.9,0.9),Point(0.1,0.9)])
 
 /// A spread on a dark table: two pages of ruled "print" with a fold at `fold` (fraction of the width).
-private func spread(width:Int=1200,height:Int=800,fold:Double,lean:Double=0,shadow:Bool=true,print:Bool=true)->CGImage {
+/// `rule` adds the heavy border of a printed frame at that fraction across: darker than the fold, but stopping short of the top and bottom.
+private func spread(width:Int=1200,height:Int=800,fold:Double,lean:Double=0,shadow:Bool=true,print:Bool=true,rule:Double?=nil,second:Double?=nil)->CGImage {
     let c=CGContext(data:nil,width:width,height:height,bitsPerComponent:8,bytesPerRow:0,space:CGColorSpaceCreateDeviceRGB(),bitmapInfo:CGImageAlphaInfo.premultipliedLast.rawValue)!
     let w=CGFloat(width),h=CGFloat(height)
     c.setFillColor(CGColor(gray:0.88,alpha:1));c.fill(CGRect(x:0,y:0,width:w,height:h))
@@ -14,10 +15,17 @@ private func spread(width:Int=1200,height:Int=800,fold:Double,lean:Double=0,shad
     if print {
         c.setFillColor(CGColor(gray:0.15,alpha:1))
         // Vertical strokes with gaps between them, like columns of vertical text, leaving a blank gutter.
-        for x in stride(from:CGFloat(0.06)*w,to:CGFloat(0.94)*w,by:14) where abs(x-CGFloat(fold)*w)>0.05*w {c.fill(CGRect(x:x,y:0.1*h,width:5,height:0.8*h))}
+        for x in stride(from:CGFloat(0.06)*w,to:CGFloat(0.94)*w,by:14) where abs(x-CGFloat(fold)*w)>(rule == nil && second == nil ? 0.05:0.11)*w {c.fill(CGRect(x:x,y:0.1*h,width:5,height:0.8*h))}
+    }
+    if let second {
+        // A second line right across the page, darker than the fold.
+        c.setFillColor(CGColor(gray:0.1,alpha:1));c.fill(CGRect(x:CGFloat(second)*w-3,y:0,width:6,height:h))
+    }
+    if let rule {
+        c.setFillColor(CGColor(gray:0.1,alpha:1));c.fill(CGRect(x:CGFloat(rule)*w-3,y:0.08*h,width:6,height:0.87*h))
     }
     if shadow {
-        c.setStrokeColor(CGColor(gray:0.35,alpha:1));c.setLineWidth(6)
+        c.setStrokeColor(CGColor(gray:rule == nil && second == nil ? 0.35:0.6,alpha:1));c.setLineWidth(6)
         // Bitmap contexts have a bottom-left origin, so the line's top end is at y = height.
         c.move(to:CGPoint(x:top,y:h));c.addLine(to:CGPoint(x:bottom,y:0));c.strokePath()
     }
@@ -114,6 +122,36 @@ final class SplitDetectorTests:XCTestCase {
         XCTAssertTrue(proposal.confident)
         XCTAssertEqual((proposal.split.top+proposal.split.bottom)/2,0.56,accuracy:0.03)
     }
+    func testAFrameBorderThatStopsShortIsNotTheFold() throws {
+        // A fold runs the whole way across the page; a printed border, however dark, does not.
+        let proposal=try SplitDetector.detect(spread(fold:0.5,rule:0.46),quad:.full,rotation:0)
+        XCTAssertTrue(proposal.confident)
+        XCTAssertEqual(proposal.split.top,0.5,accuracy:0.012);XCTAssertEqual(proposal.split.bottom,0.5,accuracy:0.012)
+    }
+    func testThePageBeforeGuidesTheSplit() throws {
+        let before=PageSplit(top:0.38,bottom:0.4)
+        // Nothing to see: the split goes where the page before has it, as a fraction of this crop.
+        let blank=try SplitDetector.detect(spread(fold:0.5,shadow:false,print:false),quad:.full,rotation:0,guide:before)
+        XCTAssertFalse(blank.confident);XCTAssertEqual(blank.split,before)
+        // A fold far from the centre is out of reach on its own and found with the guide.
+        let far=spread(fold:0.2)
+        XCTAssertNotEqual((try SplitDetector.detect(far,quad:.full,rotation:0)).split.top,0.2,accuracy:0.03)
+        let guided=try SplitDetector.detect(far,quad:.full,rotation:0,guide:PageSplit(top:0.21,bottom:0.21))
+        XCTAssertTrue(guided.confident);XCTAssertEqual((guided.split.top+guided.split.bottom)/2,0.2,accuracy:0.015)
+        // A clear fold still wins over a guide that is a little off.
+        let near=try SplitDetector.detect(spread(fold:0.45,lean:0.03),quad:.full,rotation:0,guide:PageSplit(top:0.5,bottom:0.5))
+        XCTAssertTrue(near.confident);XCTAssertEqual((near.split.top+near.split.bottom)/2,0.45,accuracy:0.012)
+        // Of two lines that both cross the page, the one nearer the guide is taken, though the other is darker.
+        let two=spread(fold:0.5,second:0.44)
+        XCTAssertEqual((try SplitDetector.detect(two,quad:.full,rotation:0,guide:PageSplit(top:0.49,bottom:0.49))).split.top,0.5,accuracy:0.012)
+        XCTAssertEqual((try SplitDetector.detect(two,quad:.full,rotation:0,guide:PageSplit(top:0.45,bottom:0.45))).split.top,0.44,accuracy:0.012)
+        // A frame border beside the guide is still not a fold.
+        XCTAssertEqual((try SplitDetector.detect(spread(fold:0.5,rule:0.46),quad:.full,rotation:0,guide:PageSplit(top:0.47,bottom:0.47))).split.top,0.5,accuracy:0.012)
+        // The guide is the nearest earlier page with a split, turned the same way.
+        var pages=(0..<4).map{Page(path:"/photos/\($0).jpg")};pages[0].split=before;pages[1].split = .centre;pages[1].rotation=2
+        XCTAssertEqual(SplitDetector.guide(for:3,in:pages),before);XCTAssertNil(SplitDetector.guide(for:0,in:pages))
+        pages[2].split=PageSplit(top:0.6,bottom:0.6);XCTAssertEqual(SplitDetector.guide(for:3,in:pages),pages[2].split)
+    }
     func testBlankSheetFallsBackToCentre() throws {
         let proposal=try SplitDetector.detect(spread(fold:0.5,shadow:false,print:false),quad:.full,rotation:0)
         XCTAssertFalse(proposal.confident);XCTAssertEqual(proposal.split,.centre)
@@ -158,7 +196,7 @@ final class SplitExportTests:XCTestCase {
         let pdf=FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString+".pdf")
         defer{try? FileManager.default.removeItem(at:photo);try? FileManager.default.removeItem(at:pdf)}
         var page=Page(path:photo.path);page.split = .centre;page.format=PageFormat(widthCM:30)
-        let writer=try PDFWriter(url:pdf);try writer.add(page,options:ExportOptions());try writer.add(Page(path:photo.path),options:ExportOptions());writer.close()
+        let writer=try PDFWriter(url:pdf);try writer.add(page,options:ExportOptions());try writer.add(Page(path:photo.path),options:ExportOptions());try writer.close()
         let document=try XCTUnwrap(PDFDocument(url:pdf))
         XCTAssertEqual(document.pageCount,3)
         XCTAssertEqual(try XCTUnwrap(document.page(at:0)).bounds(for:.mediaBox).width,15/2.54*72,accuracy:1.5,"Half of a 30 cm spread is 15 cm wide")

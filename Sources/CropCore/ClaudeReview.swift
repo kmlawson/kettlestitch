@@ -8,6 +8,8 @@ public struct CropReview: Equatable {
     public var comment: String
     /// A corrected crop, or nil when the current one should stand.
     public var quad: Quad?
+    /// A corrected line between the facing pages, or nil when there is none or the current one should stand.
+    public var split: PageSplit? = nil
 }
 /// What the interface shows while pages are with Claude.
 public enum ReviewProgress {
@@ -33,20 +35,32 @@ public enum ClaudeReview {
     public static let photoName = "photo.jpg"
     public static let overlayName = "overlay.jpg"
     static let cornerKeys = ["top_left","top_right","bottom_right","bottom_left"]
-    public static var schema: String {
+    static let splitKeys = ["s1","s2"]
+    /// `split` adds the two ends of the dividing line between facing pages to the answer.
+    public static func schema(split: Bool = false) -> String {
         let corner="{\"type\":\"object\",\"properties\":{\"x\":{\"type\":\"number\"},\"y\":{\"type\":\"number\"}},\"required\":[\"x\",\"y\"]}"
         let corners=cornerKeys.map{"\"\($0)\":\(corner)"}.joined(separator:",")
         let required=cornerKeys.map{"\"\($0)\""}.joined(separator:",")
-        return "{\"type\":\"object\",\"properties\":{\"verdict\":{\"type\":\"string\",\"enum\":[\"good\",\"adjust\"]},\"comment\":{\"type\":\"string\"},\"corners\":{\"type\":\"object\",\"properties\":{\(corners)},\"required\":[\(required)]}},\"required\":[\"verdict\",\"comment\",\"corners\"]}"
+        let line=split ? ",\"split\":{\"type\":\"object\",\"properties\":{\(splitKeys.map{"\"\($0)\":\(corner)"}.joined(separator:","))},\"required\":[\(splitKeys.map{"\"\($0)\""}.joined(separator:","))]}":""
+        return "{\"type\":\"object\",\"properties\":{\"verdict\":{\"type\":\"string\",\"enum\":[\"good\",\"adjust\"]},\"comment\":{\"type\":\"string\"},\"corners\":{\"type\":\"object\",\"properties\":{\(corners)},\"required\":[\(required)]}\(line)},\"required\":[\"verdict\",\"comment\",\"corners\"\(split ? ",\"split\"":"")]}"
     }
-    public static func prompt(quad: Quad) -> String {
+    /// `split` is the dividing line's two ends on the photograph, when the page has one.
+    public static func prompt(quad: Quad, split: (Point, Point)? = nil) -> String {
+        let outline=split == nil ? "":" The line dividing the spread into its two pages is drawn in cyan, its ends labelled S1 and S2."
+        let dividing=split.map{ends in """
+
+
+        The spread will be divided into its two pages along a line. Current line: s1 (x \(String(format:"%.4f",ends.0.x)), y \(String(format:"%.4f",ends.0.y))), s2 (x \(String(format:"%.4f",ends.1.x)), y \(String(format:"%.4f",ends.1.y))).
+
+        A correct line runs along the fold between the two facing pages, the whole way across the spread from one edge of the crop to the opposite edge. A printed rule, the border of a printed frame or the edge of a column of text is not the fold, even where it is darker than the fold. If the line is within about half a percent of the fold along its whole length, return s1 and s2 unchanged in "split". Otherwise return corrected coordinates for them, each on the edge of the crop it is on now, and say so in "comment". The verdict is about the crop's corners only.
+        """} ?? ""
         let current=zip(cornerKeys,quad.points).map{String(format:"%@ (x %.4f, y %.4f)",$0,$1.x,$1.y)}.joined(separator:", ")
         return """
         You are checking the crop of a photograph of a printed book page or two-page spread.
 
         Use the Read tool on two files in the current directory:
         - \(photoName): the photograph.
-        - \(overlayName): the same photograph with the current crop drawn as a magenta outline, its corners labelled TL, TR, BR and BL, and a faint grid whose lines are labelled in the coordinate system below.
+        - \(overlayName): the same photograph with the current crop drawn as a magenta outline, its corners labelled TL, TR, BR and BL, and a faint grid whose lines are labelled in the coordinate system below.\(outline)
 
         Coordinates are fractions of the image width and height from 0 to 1. The origin is the top-left corner, x increases to the right and y increases downward.
 
@@ -54,14 +68,15 @@ public enum ClaudeReview {
 
         A correct crop follows the outer boundary of the whole book or spread, including every visible page, as tightly as possible. It leaves out the table or background and never cuts into the paper. Do not split the spread into separate pages. Fingers holding the book may overlap the boundary; place the corner where the paper corner is or would be.
 
-        Judge each corner separately. If every corner is within about one percent of the right place, answer with verdict "good" and return the corners unchanged. Otherwise answer with verdict "adjust", give corrected coordinates for only the corners that are wrong, and return the others exactly as given. In "comment", say in one or two sentences which corners you moved and why, or why the crop is already right.
+        Judge each corner separately. If every corner is within about one percent of the right place, answer with verdict "good" and return the corners unchanged. Otherwise answer with verdict "adjust", give corrected coordinates for only the corners that are wrong, and return the others exactly as given. In "comment", say in one or two sentences which corners you moved and why, or why the crop is already right.\(dividing)
         """
     }
-    public static func arguments(model: String, prompt: String) -> [String] {
-        ["-p",prompt,"--bare","--model",model,"--tools","Read","--output-format","json","--json-schema",schema,"--no-session-persistence"]
+    public static func arguments(model: String, prompt: String, split: Bool = false) -> [String] {
+        ["-p",prompt,"--bare","--model",model,"--tools","Read","--output-format","json","--json-schema",schema(split:split),"--no-session-persistence"]
     }
     /// Reads the tool's JSON result. Unchanged or invalid coordinates produce no proposal.
-    public static func parse(_ output: Data, current: Quad) throws -> CropReview {
+    /// With `split` and `rotation`, a moved dividing line is read too and expressed across the current crop.
+    public static func parse(_ output: Data, current: Quad, split: PageSplit? = nil, rotation: Int = 0) throws -> CropReview {
         guard let root=try? JSONSerialization.jsonObject(with:output) as? [String:Any] else {
             throw CropError.message("Claude returned an unreadable reply: "+String(decoding:output.prefix(300),as:UTF8.self))
         }
@@ -82,10 +97,23 @@ public enum ClaudeReview {
             if points.count == 4 {let proposed=Quad(points);if proposed.valid,proposed.distance(current)>0.002 {quad=proposed}}
         }
         let good=verdict == "good"
-        return CropReview(good:good,comment:comment,quad:good ? nil:quad)
+        var moved:PageSplit?
+        if let split,let line=answer["split"] as? [String:Any] {
+            let ends=splitKeys.compactMap{key->(u:Double,v:Double)? in
+                guard let end=line[key] as? [String:Any],let x=(end["x"] as? NSNumber)?.doubleValue,let y=(end["y"] as? NSNumber)?.doubleValue else {return nil}
+                return SplitGeometry.position(of:Point(x,y),quad:current,rotation:rotation)
+            }
+            // The ends need not lie exactly on the crop's edges; the line through them is carried to both.
+            if ends.count == 2,abs(ends[1].v-ends[0].v)>0.2 {
+                let slope=(ends[1].u-ends[0].u)/(ends[1].v-ends[0].v)
+                let line=PageSplit(top:ends[0].u-slope*ends[0].v,bottom:ends[0].u+slope*(1-ends[0].v))
+                if line.top.isFinite,line.bottom.isFinite,max(abs(line.top-split.top),abs(line.bottom-split.bottom))>0.003 {moved=line.clamped}
+            }
+        }
+        return CropReview(good:good,comment:comment,quad:good ? nil:quad,split:moved)
     }
     /// The photograph with the crop outline, corner labels and a labelled coordinate grid.
-    public static func overlay(_ image: CGImage, quad: Quad) throws -> CGImage {
+    public static func overlay(_ image: CGImage, quad: Quad, split: (Point, Point)? = nil) throws -> CGImage {
         let w=image.width,h=image.height
         guard let c=CGContext(data:nil,width:w,height:h,bitsPerComponent:8,bytesPerRow:0,space:CGColorSpaceCreateDeviceRGB(),bitmapInfo:CGImageAlphaInfo.premultipliedLast.rawValue) else {throw CropError.message("Could not draw crop overlay")}
         let width=CGFloat(w),height=CGFloat(h),unit=max(width,height)
@@ -123,14 +151,22 @@ public enum ClaudeReview {
             // Labels sit inside the crop so they never hide the boundary being judged.
             label(name,at:CGPoint(x:p.x+(i == 0 || i == 3 ? inset:-inset*4),y:p.y+(i < 2 ? -inset*3:inset)),color:magenta)
         }
+        if let split {
+            let cyan=CGColor(red:0,green:0.9,blue:1,alpha:1),a=place(split.0),b=place(split.1)
+            c.setStrokeColor(cyan);c.setLineWidth(max(2,unit*0.002));c.move(to:a);c.addLine(to:b);c.strokePath()
+            // Beside the line, so the fold under it stays visible.
+            for (name,p) in [("S1",a),("S2",b)] {label(name,at:CGPoint(x:p.x+inset,y:p.y+(p.y>height/2 ? -inset*3:inset)),color:cyan)}
+        }
         guard let result=c.makeImage() else {throw CropError.message("Could not draw crop overlay")}
         return result
     }
+    /// The page's dividing line on the photograph, if it has one.
+    public static func splitEnds(_ page: Page) -> (Point, Point)? {page.split.flatMap{SplitGeometry.line($0,quad:page.quad,rotation:page.rotation)}}
     /// Writes the two reduced images Claude reads. The original photograph is not altered or sent at full size.
     public static func prepare(_ page: Page, in directory: URL) throws {
         let photo=try Imaging.load(URL(fileURLWithPath:page.path),maxPixel:1568)
         try Exporter.encode(photo,as:.jpeg,quality:0.82,dpi:nil).write(to:directory.appendingPathComponent(photoName))
-        try Exporter.encode(overlay(photo,quad:page.quad),as:.jpeg,quality:0.82,dpi:nil).write(to:directory.appendingPathComponent(overlayName))
+        try Exporter.encode(overlay(photo,quad:page.quad,split:splitEnds(page)),as:.jpeg,quality:0.82,dpi:nil).write(to:directory.appendingPathComponent(overlayName))
     }
     /// The tool is often a script whose interpreter sits beside it or in a package manager's folder, and an app
     /// opened from Finder has only the system's bare search path.
@@ -173,7 +209,7 @@ public enum ClaudeReview {
         defer {try? FileManager.default.removeItem(at:directory)}
         try prepare(page,in:directory)
         let process=Process(),output=Pipe(),errors=Pipe()
-        process.executableURL=executable;process.arguments=arguments(model:model,prompt:prompt(quad:page.quad));process.currentDirectoryURL=directory
+        process.executableURL=executable;let ends=splitEnds(page);process.arguments=arguments(model:model,prompt:prompt(quad:page.quad,split:ends),split:ends != nil);process.currentDirectoryURL=directory
         process.environment=environment(base:ProcessInfo.processInfo.environment,apiKey:apiKey,executable:executable,home:FileManager.default.homeDirectoryForCurrentUser.path)
         process.standardInput=FileHandle.nullDevice;process.standardOutput=output;process.standardError=errors
         try process.run();started(process)
@@ -188,6 +224,6 @@ public enum ClaudeReview {
         if stopped || data.isEmpty {
             throw CropError.message(failureMessage(timedOut:timedOut.value,timeout:timeout,stopped:stopped,status:process.terminationStatus,detail:String(decoding:errorData.suffix(400),as:UTF8.self)))
         }
-        return try parse(data,current:page.quad)
+        return try parse(data,current:page.quad,split:ends == nil ? nil:page.split,rotation:page.rotation)
     }
 }

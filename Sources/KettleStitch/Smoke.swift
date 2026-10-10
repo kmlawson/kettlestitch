@@ -151,12 +151,13 @@ extension AppDelegate {
             key("v",9,.shift);precondition(self.project.pages[1].split==nil && canvas.split==nil)
             self.undo();precondition(self.project.pages[1].split != nil)
             key("v",9,.shift)
+            self.project.pages[1].split = .centre;key("t",17,.shift);precondition(self.project.pages[1].split==nil,"Shift-T removes the split, as Shift-Command-T does")
             print("PAGE_SPLIT_KEYS_DRAG_ROTATE_REMOVE passed")
             // Deskew, despeckle, picture zones and deviations as the real window drives them.
             self.project.pages[1].deskew=nil;self.project.pages[1].split=nil;self.refreshDetail()
             key(".",47,.option);precondition(self.project.pages[1].deskew==[0.1] && canvas.preview,"Option-. turns the page and shows the result")
             key(",",43,.option);precondition(self.project.pages[1].deskew==nil)
-            self.project.pages[1].deskew=[1.5];key("t",17,.shift);precondition(self.project.pages[1].deskew==nil)
+            self.project.pages[1].deskew=[1.5];key("q",12,.shift);precondition(self.project.pages[1].deskew==nil)
             self.undo();precondition(self.project.pages[1].deskew==[1.5]);self.project.pages[1].deskew=nil
             key("p",35);if canvas.preview {key("p",35)}
             canvas.image=smokeImage;self.original=smokeImage
@@ -210,12 +211,31 @@ extension AppDelegate {
                 var options=ExportOptions();options.searchableText=true
                 var styled=self.project.pages[1];var clean=Adjustments();clean.cleanup = .blackAndWhite;styled.adjustments=clean
                 let writer=try PDFWriter(url:URL(fileURLWithPath:dir).appendingPathComponent("export-check.pdf"))
-                try writer.add(self.project.pages[0],options:options);try writer.add(styled,options:options);writer.close()
+                try writer.add(self.project.pages[0],options:options);try writer.add(styled,options:options);try writer.close()
                 print("EDIT_UNDO_REDO_REVIEW_EXPORT passed")
             }catch{print("SMOKE_ERROR \(error)")}
             print("UI_SMOKE pages=\(self.project.pages.count) loaded=\(didLoad) canvas=\(self.canvas.bounds)")
+            // Preview stays on from one photograph to the next.
+            self.project.selected=0;self.selectCurrent();self.setPreview(true);self.navigate(1)
+            precondition(canvas.preview && self.project.selected==1,"Moving to another photograph keeps the preview");self.setPreview(false)
+            print("PREVIEW_KEPT passed")
+            // At the last photograph, asking for the next one reloads nothing and flashes the canvas.
+            self.lastPage();let shown=self.displayToken,flashes=canvas.edgeFlashes;self.navigate(1)
+            precondition(self.displayToken==shown && canvas.edgeFlashes==flashes+1 && self.project.selected==self.project.pages.count-1,"The last photograph is not reloaded")
+            self.firstPage();self.navigate(-1);precondition(canvas.edgeFlashes==flashes+2 && self.project.selected==0)
+            print("END_OF_BOOK passed")
+            // A project file is written by Save, not by each edit.
+            if self.hasProjectFile {
+                func onDisk()->Project? {try? Project.read(self.projectURL)}
+                self.saveProject();precondition(!self.unsaved && !self.window.isDocumentEdited)
+                self.edit{$0.flagged = $0.flagged==true ? nil:true}
+                precondition(self.unsaved && self.window.isDocumentEdited && onDisk()?.pages[self.project.selected].flagged != self.project.pages[self.project.selected].flagged,"An edit waits for Save")
+                self.saveProject()
+                precondition(!self.unsaved && !self.window.isDocumentEdited && onDisk()?.pages[self.project.selected].flagged==self.project.pages[self.project.selected].flagged,"Save updates the current file")
+                print("SAVE passed")
+            }
             // terminate normally never returns; if the quit is refused, say so instead of hanging.
-            DispatchQueue.main.asyncAfter(deadline:.now()+5){print("TERMINATE_REFUSED");self.save();exit(3)}
+            DispatchQueue.main.asyncAfter(deadline:.now()+5){print("TERMINATE_REFUSED");self.write();exit(3)}
             NSApp.terminate(nil)
         }
     }
@@ -248,9 +268,10 @@ extension AppDelegate {
             self.undo();precondition(self.project.pages.isEmpty);self.redo();precondition(self.project.pages.count==count)
             let started=Date()
             Timer.scheduledTimer(withTimeInterval:0.25,repeats:true){timer in
-                guard self.canvas.image != nil || Date().timeIntervalSince(started)>30 else{return}
+                guard (self.canvas.image != nil && !self.detecting) || Date().timeIntervalSince(started)>60 else{return}
                 timer.invalidate()
                 precondition(self.canvas.image != nil,"The first dropped photograph is shown")
+                precondition(!self.project.pages.contains{$0.status=="Pending"},"Crops are proposed for imported photographs without being asked")
                 print("DROP_PHOTOGRAPHS passed")
                 self.receive([other])
                 precondition(self.projectURL==other && self.project.pages.count != count && self.window.title==other.deletingPathExtension().lastPathComponent,"A dropped project file is opened")

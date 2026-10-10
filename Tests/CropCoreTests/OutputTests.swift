@@ -129,10 +129,11 @@ final class ExportTests:XCTestCase {
         var bw=Adjustments();bw.cleanup = .blackAndWhite;second.adjustments=bw
         var options=ExportOptions();options.password="open sesame"
         let writer=try PDFWriter(url:pdf,password:options.password)
-        try writer.add(first,options:options);try writer.add(second,options:options);writer.close()
+        try writer.add(first,options:options);try writer.add(second,options:options);try writer.close()
         let document=try XCTUnwrap(PDFDocument(url:pdf))
         XCTAssertTrue(document.isEncrypted);XCTAssertTrue(document.isLocked)
         XCTAssertTrue(document.unlock(withPassword:"open sesame"))
+        XCTAssertTrue((document.documentAttributes ?? [:]).isEmpty,"No producer, creator or dates in a protected file: \(document.documentAttributes ?? [:])")
         XCTAssertEqual(document.pageCount,2)
         let a4=try XCTUnwrap(document.page(at:0)).bounds(for:.mediaBox)
         XCTAssertEqual(a4.width,29.7/2.54*72,accuracy:0.5);XCTAssertEqual(a4.height,21.0/2.54*72,accuracy:0.5)
@@ -175,16 +176,48 @@ final class ExportTests:XCTestCase {
         defer{try? FileManager.default.removeItem(at:photo);try? FileManager.default.removeItem(at:pdf)}
         var options=ExportOptions();options.searchableText=true;options.textLanguage="en-US"
         let writer=try PDFWriter(url:pdf)
-        try writer.add(Page(path:photo.path),options:options);writer.close()
+        try writer.add(Page(path:photo.path),options:options);try writer.close()
         let text=try XCTUnwrap(PDFDocument(url:pdf)?.string)
         XCTAssertTrue(text.contains("HELLO"),"Found: \(text)");XCTAssertTrue(text.contains("1940"),"Found: \(text)")
         options.searchableText=false
-        let plain=try PDFWriter(url:pdf);try plain.add(Page(path:photo.path),options:options);plain.close()
+        let plain=try PDFWriter(url:pdf);try plain.add(Page(path:photo.path),options:options);try plain.close()
         XCTAssertEqual((PDFDocument(url:pdf)?.string ?? "").trimmingCharacters(in:.whitespacesAndNewlines),"")
+        // Quartz writes the macOS version and build, and the time of export; none of it is left in the file.
+        let bytes=String(decoding:try Data(contentsOf:pdf),as:UTF8.self)
+        for word in ["Producer","Creator","CreationDate","ModDate","Quartz","macOS"] {XCTAssertFalse(bytes.contains(word),word)}
+        XCTAssertTrue((PDFDocument(url:pdf)?.documentAttributes ?? [:]).isEmpty)
     }
 }
 
 final class ClaudeReviewTests:XCTestCase {
+    func testAVisibleSplitIsSentAndAMovedOneComesBack() throws {
+        var page=Page(path:"/photos/a.jpg");page.quad=current;page.split=PageSplit(top:0.47,bottom:0.47)
+        let ends=try XCTUnwrap(ClaudeReview.splitEnds(page))
+        // 47% across a crop from 0.1 to 0.9 is x 0.476 on the photograph, from its top edge to its bottom edge.
+        XCTAssertEqual(ends.0.x,0.476,accuracy:1e-9);XCTAssertEqual(ends.0.y,0.1,accuracy:1e-9);XCTAssertEqual(ends.1.y,0.9,accuracy:1e-9)
+        let prompt=ClaudeReview.prompt(quad:current,split:ends)
+        XCTAssertTrue(prompt.contains("s1 (x 0.4760, y 0.1000)"));XCTAssertTrue(prompt.contains("s2 (x 0.4760, y 0.9000)"));XCTAssertTrue(prompt.contains("S1 and S2"))
+        XCTAssertFalse(ClaudeReview.prompt(quad:current).contains("s1"),"A page without a split is asked about its crop only")
+        XCTAssertFalse(ClaudeReview.schema().contains("split"))
+        let schema=try XCTUnwrap(JSONSerialization.jsonObject(with:Data(ClaudeReview.schema(split:true).utf8)) as? [String:Any])
+        XCTAssertEqual(schema["required"] as? [String],["verdict","comment","corners","split"])
+        let arguments=ClaudeReview.arguments(model:"m",prompt:prompt,split:true)
+        XCTAssertTrue(arguments[arguments.firstIndex(of:"--json-schema")!+1].contains("\"s2\""))
+        let same=#""corners":{"top_left":{"x":0.1,"y":0.1},"top_right":{"x":0.9,"y":0.1},"bottom_right":{"x":0.9,"y":0.9},"bottom_left":{"x":0.1,"y":0.9}}"#
+        // Claude puts the line on the fold at x 0.5, with ends a little inside the crop's edges.
+        let moved=try ClaudeReview.parse(reply("{\"verdict\":\"good\",\"comment\":\"Crop fine; the line was on a frame border.\",\(same),\"split\":{\"s1\":{\"x\":0.5,\"y\":0.12},\"s2\":{\"x\":0.5,\"y\":0.88}}}"),current:current,split:page.split,rotation:0)
+        XCTAssertTrue(moved.good);XCTAssertNil(moved.quad)
+        XCTAssertEqual(try XCTUnwrap(moved.split).top,0.5,accuracy:1e-9);XCTAssertEqual(try XCTUnwrap(moved.split).bottom,0.5,accuracy:1e-9)
+        let kept=try ClaudeReview.parse(reply("{\"verdict\":\"good\",\"comment\":\"\",\(same),\"split\":{\"s1\":{\"x\":0.476,\"y\":0.1},\"s2\":{\"x\":0.476,\"y\":0.9}}}"),current:current,split:page.split,rotation:0)
+        XCTAssertNil(kept.split,"An unchanged line is no fix")
+        XCTAssertNil(try ClaudeReview.parse(reply("{\"verdict\":\"good\",\"comment\":\"\",\(same),\"split\":{\"s1\":{\"x\":0.5,\"y\":0.12},\"s2\":{\"x\":0.5,\"y\":0.88}}}"),current:current).split,"Nothing was asked about a split")
+        // The moved line is applied to the page, unless the line was changed while Claude was looking.
+        var edited=page;edited.split=PageSplit(top:0.4,bottom:0.4)
+        XCTAssertTrue(edited.record(moved,sentQuad:current,sentSplit:page.split));XCTAssertEqual(edited.split,PageSplit(top:0.4,bottom:0.4))
+        XCTAssertTrue(page.record(moved,sentQuad:current,sentSplit:page.split))
+        XCTAssertEqual(try XCTUnwrap(page.split).top,0.5,accuracy:1e-9);XCTAssertEqual(page.quad,current)
+        XCTAssertEqual(page.reviewNote,"Claude: crop looks right; split line moved — Crop fine; the line was on a frame border.")
+    }
     let current=Quad([Point(0.1,0.1),Point(0.9,0.1),Point(0.9,0.9),Point(0.1,0.9)])
     func reply(_ body:String,error:Bool=false)->Data {Data("{\"type\":\"result\",\"is_error\":\(error),\"result\":\"\",\"structured_output\":\(body)}".utf8)}
     func testAdjustedCornerBecomesProposal() throws {
@@ -217,7 +250,7 @@ final class ClaudeReviewTests:XCTestCase {
         XCTAssertEqual(Array(arguments.prefix(2)),["-p",prompt])
         XCTAssertEqual(arguments[arguments.firstIndex(of:"--model")!+1],"claude-haiku-5-5")
         XCTAssertFalse(arguments.joined().contains("sk-"),"The key travels in the environment, never the arguments")
-        XCTAssertNotNil(try JSONSerialization.jsonObject(with:Data(ClaudeReview.schema.utf8)))
+        XCTAssertNotNil(try JSONSerialization.jsonObject(with:Data(ClaudeReview.schema().utf8)))
         XCTAssertEqual(ClaudeReview.models.map{$0.id},["claude-haiku-5-5","claude-sonnet-5-5"])
     }
     func testWaitingStatesAndStatusLine() {

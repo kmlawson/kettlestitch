@@ -12,6 +12,10 @@ public enum LaunchPolicy {
         let formatter=DateFormatter();formatter.locale=Locale(identifier:"en_US_POSIX");formatter.dateFormat="yyyy-MM-dd HH.mm.ss"
         return "Untitled "+formatter.string(from:date)+".kettlestitch"
     }
+    /// A session file that was never given a name. It is a recovery copy, not a project file the user saves to.
+    public static func isUntitled(_ url: URL) -> Bool {url.deletingPathExtension().lastPathComponent.hasPrefix("Untitled ")}
+    public static let autosaveInterval: TimeInterval = 300
+    public static func shouldAutosave(enabled: Bool, hasProjectFile: Bool, unsaved: Bool) -> Bool {enabled && hasProjectFile && unsaved}
     public static func shouldWrite(pageCount: Int, fileExists: Bool) -> Bool {pageCount>0 || fileExists}
 }
 public enum ImportPolicy {

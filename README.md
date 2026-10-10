@@ -13,9 +13,9 @@ Open `dist/KettleStitch.app`. It opens empty: nothing is reopened on its own. Gi
 - choose **File ▸ Import Photographs…** (**I**) or **File ▸ Open Project…** (**O**);
 - double-click a `.kettlestitch` project, or pick one from **File ▸ Open Recent**.
 
-Photographs are added to the project that is open, skipping any already in it; a project file replaces it. Subfolders are not followed. Then press **B** to detect all pending pages. Inspect each crop, adjust the four corners, and press **Return** to mark it reviewed and move on. Press **P** to see the perspective-corrected, adjusted result. **E** opens the export sheet.
+Photographs are added to the project that is open, skipping any already in it; a project file replaces it. Subfolders are not followed. Crops are proposed for the new photographs as they arrive; **B** detects any that are still pending. Inspect each crop, adjust the four corners, and press **Return** to mark it reviewed and move on. Press **P** to see the perspective-corrected, adjusted result; preview stays on as you move between photographs, and the sidebar pictures show the corrected pages while it is on. **E** opens the export sheet.
 
-Every completed edit is autosaved. Until you name a project with **G** (new project at a chosen path) or **S** (save as), the work is kept in `~/Library/Application Support/KettleStitch/` as `Untitled <date and time>.kettlestitch`, a new file for each session, and it appears under Open Recent. A session nothing was added to leaves no file. Source photographs are referenced by absolute path and never modified. Keep them in place, and save a named project for each book.
+A project file is written when you save it: **S** or File ▸ Save (⌘S) updates the current file, and **Shift-S** saves it under a new name. With "Save changes automatically every 5 minutes" on in Settings (the default), a project file with unsaved changes is also written every five minutes. A dot in the window's close button marks unsaved changes, and quitting, closing or opening another project saves them if automatic saving is on and otherwise asks before discarding them. Exports carry no metadata from the photographs (no location, camera or owner), and an exported PDF has no producer, creator or dates. Until you name a project with **G** (new project at a chosen path) or **S**, every completed edit is kept in `~/Library/Application Support/KettleStitch/` as `Untitled <date and time>.kettlestitch`, a new file for each session, and it appears under Open Recent. A session nothing was added to leaves no file. Source photographs are referenced by absolute path and never modified. Keep them in place, and save a named project for each book.
 
 Every command is in the menus with a Command-key shortcut, and the common ones are in the toolbar. The sidebar lists the photographs; the inspector on the right holds the cropping, image-adjustment and page-format controls. Either side can be hidden from the View menu. The **Page** menu covers moving between photographs, selection, flags, rotation and the page list; the **Crop** menu covers detection, proposals, the page split and Send to Claude. **Help ▸ KettleStitch Keyboard Shortcuts** (or **?**) opens the full key reference. Menu commands that edit a page are unavailable while you type in a field or while a sheet or the Settings window is in front. Drag a corner independently, or drag anywhere on a green edge to move both its endpoints together; drag elsewhere to pan. Option-drag moves the whole crop. The corner magnifier appears during mouse adjustment and disappears on mouse release. Keyboard-selected corners keep it visible for nudging. Crossed or collapsed crops are rejected.
 
@@ -27,7 +27,7 @@ Single-key commands are suspended in text-entry fields and file dialogs.
 
 | Action | Shortcut |
 |---|---|
-| New / import / open / save as | G / I / O / S |
+| New / import / open / save / save as | G / I / O / S / Shift-S |
 | Detect current / detect pending | D / B |
 | Stop background detection and export | Escape, when no corner is selected |
 | Previous / next | Left / Right |
@@ -48,10 +48,10 @@ Single-key commands are suspended in text-entry fields and file dialogs.
 | Rotate output clockwise / counterclockwise | R / Shift + R |
 | Add or remove a flag | M |
 | Send to Claude | A |
-| Propose page split / remove it | V / Shift + V |
+| Propose page split / remove it | T / Shift + T (also V / Shift + V; ⌘T / ⇧⌘T) |
 | Move split left / right | , / . |
 | Larger split movement | Add Shift |
-| Deskew / remove deskew | T / Shift + T |
+| Deskew / remove deskew | Q / Shift + Q (⌘K / ⇧⌘K) |
 | Turn the page by 0.1° | Option + , / Option + . |
 | Draw a picture zone / remove the zones | W / Shift + W |
 | Next unusual page | U |
@@ -86,7 +86,7 @@ On export, a page whose split is still in place becomes two pages: two PDF pages
 
 The split is measured across the rotated output. Turning the output a half turn mirrors it; a quarter turn drops it and looks for the fold again.
 
-The proposal follows the two cues ScanTailor's page-split stage uses, rewritten for this app rather than copied: a near-vertical dark line or shadow in the middle of the spread, and a column free of print between two bodies of content. A dark line with print right beside it is taken for a rule or a stroke of text rather than the fold. When neither cue stands out, the line goes at the centre and the status bar says so. Every proposal needs a visual check; on the sample collection most land on the fold and a few are off by a strip of the neighbouring page.
+When an earlier page already has a split, the proposal goes by the nearest one: the fold is expected at the same fraction across the crop, whatever the crop's size, the line nearest that position that looks like a fold is taken, even if another is darker, and that position is used when no fold stands out. A fold runs the whole way across the page: a dark line that stops short of the top or bottom, such as the border of a printed frame, is not taken for one. When the page has a split, **Send to Claude** also shows Claude the line and asks whether it is on the fold; a corrected line is applied directly (Undo puts it back), while a crop fix still waits as a proposal. Proposing splits on several selected pages works down the list, each page going by the one before. The proposal follows the two cues ScanTailor's page-split stage uses, rewritten for this app rather than copied: a near-vertical dark line or shadow in the middle of the spread, and a column free of print between two bodies of content. A dark line with print right beside it is taken for a rule or a stroke of text rather than the fold. When neither cue stands out, the line goes at the centre and the status bar says so. Every proposal needs a visual check; on the sample collection most land on the fold and a few are off by a strip of the neighbouring page.
 
 ## Deskew
 
@@ -120,7 +120,7 @@ The inspector's **Image Adjustments** apply to the corrected output, not the sou
 
 - **Cleanup** has four modes. *None* leaves the photograph as it is. *Color* evens out lighting and whitens the paper. *Grayscale* does the same and removes colour. *Black & White* then reduces the page to pure black and white.
 - **Despeckle** (Off, 1, 2, 3) removes specks from Black & White output: 1 takes only the smallest, 3 larger ones too, scaled to the page's resolution. A small mark beside print, such as a dot or a voicing mark, is kept. It has no effect in the other modes or inside picture zones.
-- **Brightness** and **Contrast** apply in every mode. In Black & White, brightness moves the black/white cut-off.
+- **Brightness** and **Contrast** apply in every mode; each slider is neutral in the middle and shows its value, from −100 to +100, beside it. **Sharpness** runs from 0 to 100 and strengthens edges. In Black & White, brightness moves the black/white cut-off.
 - The arrow beside the heading resets all three.
 
 Cleanup estimates the paper tone from each neighbourhood's brightest area, so large dark illustrations and photographs lighten around their edges. Use *None* for pages where that matters.
@@ -167,7 +167,7 @@ The pipeline combines Apple Vision document segmentation, rectangle detection on
 
 The background estimate fits robust lines to foreground transitions relative to the dominant color in the photograph's corners. It helps with dark illustrations that mislead the document detector. It is still a heuristic: cluttered backgrounds, tight framing, strong shadows, fingers, bent pages and unusual photographs can require correction.
 
-Every automatic crop remains unreviewed. No score is presented as a calibrated accuracy percentage. Proposals are listed with the highest-scoring one first and the rest from largest to smallest. Running D on a manually edited or already processed photograph refreshes its proposal list; it does not replace that crop, and it keeps Claude's proposal if there is one. Choose an alternative explicitly with the menu or brackets. B only processes pending photographs. Stop cancels queued jobs; the currently executing Vision request may finish, but its result is discarded.
+Every automatic crop remains unreviewed. No score is presented as a calibrated accuracy percentage. Proposals are listed with the highest-scoring one first and the rest from largest to smallest. Running D on a manually edited or already processed photograph refreshes its proposal list; it does not replace that crop, and it keeps Claude's proposal if there is one. Choose an alternative explicitly with the menu or brackets. B only processes pending photographs, as does D when several photographs are selected. Stop cancels queued jobs; the currently executing Vision request may finish, but its result is discarded.
 
 ## Foundations and limits
 

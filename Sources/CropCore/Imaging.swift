@@ -38,6 +38,11 @@ public enum Imaging {
         if mono || adjustments.brightness != 0 || adjustments.contrast != 0 {
             image=image.applyingFilter("CIColorControls",parameters:[kCIInputBrightnessKey:adjustments.brightness*0.5,kCIInputContrastKey:exp2(adjustments.contrast),kCIInputSaturationKey:mono ? 0.0:1.0])
         }
+        if let sharpness=adjustments.sharpness,sharpness>0 {
+            // The radius follows the image size, so the preview and the full-resolution export look alike.
+            let extent=image.extent
+            image=image.clampedToExtent().applyingFilter("CIUnsharpMask",parameters:[kCIInputRadiusKey:max(extent.width,extent.height)/1500,kCIInputIntensityKey:min(1,sharpness)*2]).cropped(to:extent)
+        }
         if adjustments.cleanup == .blackAndWhite {image=image.applyingFilter("CIColorThreshold",parameters:["inputThreshold":0.5])}
         return image
     }

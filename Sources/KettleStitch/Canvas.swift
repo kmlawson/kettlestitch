@@ -2,6 +2,15 @@ import AppKit
 import CropCore
 
 final class CropCanvas: NSView {
+    private(set) var edgeFlashes=0
+    /// A brief red frame around the canvas: the first or last photograph has been reached.
+    func flashEdges(){
+        edgeFlashes+=1;wantsLayer=true
+        let frame=CALayer();frame.frame=visibleRect;frame.borderColor=NSColor.systemRed.cgColor;frame.borderWidth=6;frame.opacity=0
+        layer?.addSublayer(frame)
+        let fade=CABasicAnimation(keyPath:"opacity");fade.fromValue=1;fade.toValue=0;fade.duration=0.5
+        CATransaction.begin();CATransaction.setCompletionBlock{frame.removeFromSuperlayer()};frame.add(fade,forKey:nil);CATransaction.commit()
+    }
     static let emptyProjectMessage="Drop photographs or a folder here\nor choose File ▸ Import Photographs.\n\nYour originals stay untouched."
     var placeholder=CropCanvas.emptyProjectMessage {didSet{needsDisplay=true}}
     var image: CGImage? {didSet {needsDisplay=true}}

@@ -18,6 +18,12 @@ final class PageTable: NSTableView {
     }
 }
 
+/// A sidebar picture of a page as export will render it, with the settings it was made from.
+final class PreviewThumbnail {
+    let image:NSImage,look:String
+    init(_ image:NSImage,_ look:String){self.image=image;self.look=look}
+    static func look(_ p:Page)->String {"\(p.quad)|\(p.rotation)|\(String(describing:p.adjustments))|\(String(describing:p.split))|\(String(describing:p.deskew))|\(String(describing:p.pictureZones))"}
+}
 final class PageCell: NSTableCellView {
     static let identifier=NSUserInterfaceItemIdentifier("page")
     let thumb=NSImageView()
@@ -61,6 +67,7 @@ extension NSToolbarItem.Identifier {
 }
 
 extension AppDelegate: NSWindowDelegate, NSDraggingDestination {
+    func windowShouldClose(_ sender:NSWindow)->Bool {confirmUnsaved()}
     func droppedFiles(_ sender:NSDraggingInfo)->[URL] {
         (sender.draggingPasteboard.readObjects(forClasses:[NSURL.self],options:[.urlReadingFileURLsOnly:true]) as? [URL]) ?? []
     }
@@ -113,9 +120,9 @@ extension AppDelegate: NSToolbarDelegate {
             canvas.topAnchor.constraint(equalTo:root.safeAreaLayoutGuide.topAnchor),canvas.leadingAnchor.constraint(equalTo:root.leadingAnchor),canvas.trailingAnchor.constraint(equalTo:root.trailingAnchor),canvas.bottomAnchor.constraint(equalTo:bar.topAnchor),
             bar.leadingAnchor.constraint(equalTo:root.leadingAnchor),bar.trailingAnchor.constraint(equalTo:root.trailingAnchor),bar.bottomAnchor.constraint(equalTo:root.bottomAnchor),bar.heightAnchor.constraint(equalToConstant:28),
             line.topAnchor.constraint(equalTo:bar.topAnchor),line.leadingAnchor.constraint(equalTo:bar.leadingAnchor),line.trailingAnchor.constraint(equalTo:bar.trailingAnchor),
-            status.leadingAnchor.constraint(equalTo:bar.leadingAnchor,constant:12),status.centerYAnchor.constraint(equalTo:bar.centerYAnchor),status.trailingAnchor.constraint(lessThanOrEqualTo:progress.leadingAnchor,constant:-12),
-            progress.widthAnchor.constraint(equalToConstant:140),progress.centerYAnchor.constraint(equalTo:bar.centerYAnchor),progress.trailingAnchor.constraint(equalTo:stopButton.leadingAnchor,constant:-6),
-            stopButton.centerYAnchor.constraint(equalTo:bar.centerYAnchor),stopButton.trailingAnchor.constraint(equalTo:counter.leadingAnchor,constant:-12),
+            status.leadingAnchor.constraint(equalTo:bar.leadingAnchor,constant:12),status.centerYAnchor.constraint(equalTo:bar.centerYAnchor),progress.leadingAnchor.constraint(equalTo:status.trailingAnchor,constant:10),
+            progress.widthAnchor.constraint(equalToConstant:140),progress.centerYAnchor.constraint(equalTo:bar.centerYAnchor),stopButton.leadingAnchor.constraint(equalTo:progress.trailingAnchor,constant:6),
+            stopButton.centerYAnchor.constraint(equalTo:bar.centerYAnchor),stopButton.trailingAnchor.constraint(lessThanOrEqualTo:counter.leadingAnchor,constant:-12),
             counter.trailingAnchor.constraint(equalTo:bar.trailingAnchor,constant:-12),counter.centerYAnchor.constraint(equalTo:bar.centerYAnchor)])
         return root
     }
@@ -136,7 +143,7 @@ extension AppDelegate: NSToolbarDelegate {
         case .detectPending:return toolbarItem(id,"Detect Pending",symbol("wand.and.rays","sparkles"),#selector(detectPending),"Detect every pending photograph (B)")
         case .rotateLeft:return toolbarItem(id,"Rotate Left",symbol("rotate.left"),#selector(rotateLeft),"Rotate the output counterclockwise (Shift-R)")
         case .rotateRight:return toolbarItem(id,"Rotate Right",symbol("rotate.right"),#selector(rotate),"Rotate the output clockwise (R)")
-        case .split:return toolbarItem(id,"Split",symbol("rectangle.split.2x1","square.split.2x1"),#selector(proposeSplit),"Propose a split between facing pages (V)")
+        case .split:return toolbarItem(id,"Split",symbol("rectangle.split.2x1","square.split.2x1"),#selector(proposeSplit),"Propose a split between facing pages (T)")
         case .flag:return toolbarItem(id,"Flag",symbol("flag"),#selector(toggleFlag),"Add or remove a flag (M)")
         case .claude:return toolbarItem(id,"Send to Claude",symbol("sparkles","bubble.left"),#selector(sendToClaude),"Ask Claude to check the crop of the selected pages (A)")
         case .accept:return toolbarItem(id,"Accept",symbol("checkmark.circle"),#selector(accept),"Mark reviewed and go to the next photograph (Return)")

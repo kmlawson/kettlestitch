@@ -7,7 +7,7 @@ final class MenuPolicyTests:XCTestCase {
     }
     func testEmptyProjectOnlyAllowsProjectCommands() {
         let empty=MenuState()
-        for command in [MenuCommand.newProject,.openProject,.importPhotographs,.saveAs,.settings,.help,.zoomIn,.zoomOut,.zoomToFit,.toggleSidebar,.toggleInspector] {XCTAssertTrue(MenuPolicy.isEnabled(command,empty),"\(command)")}
+        for command in [MenuCommand.newProject,.openProject,.importPhotographs,.save,.saveAs,.settings,.help,.zoomIn,.zoomOut,.zoomToFit,.toggleSidebar,.toggleInspector] {XCTAssertTrue(MenuPolicy.isEnabled(command,empty),"\(command)")}
         for command in [MenuCommand.export,.detect,.detectPending,.accept,.rotateLeft,.proposeSplit,.sendToClaude,.removePages,.preview,.nextPage,.flag,.copySettings,.selectAllPages] {XCTAssertFalse(MenuPolicy.isEnabled(command,empty),"\(command)")}
     }
     func testUndoAndRedoFollowTheStacksOrTheTextBeingEdited() {
@@ -81,6 +81,6 @@ final class ShortcutReferenceTests:XCTestCase {
     }
     func testCoversTheCommandsAddedSinceTheFirstVersion() {
         let all=ShortcutReference.sections.flatMap{$0.entries}
-        for expected in ["V","Shift V",", / .","A","M","Shift R","E","[ / ]","1 2 3 4","5 6 7 8"] {XCTAssertTrue(all.contains{$0.keys==expected},"Missing \(expected)")}
+        for expected in ["T","Shift T","Q","Shift Q",", / .","A","M","Shift R","E","[ / ]","1 2 3 4","5 6 7 8"] {XCTAssertTrue(all.contains{$0.keys==expected},"Missing \(expected)")}
     }
 }

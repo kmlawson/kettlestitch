@@ -25,8 +25,9 @@ if args.count>3 && args[1]=="--collection" {
         let page=project.pages[index-1],directory=URL(fileURLWithPath:args[4])
         try FileManager.default.createDirectory(at:directory,withIntermediateDirectories:true)
         try ClaudeReview.prepare(page,in:directory)
-        try ClaudeReview.prompt(quad:page.quad).write(to:directory.appendingPathComponent("prompt.txt"),atomically:true,encoding:.utf8)
-        try ClaudeReview.schema.write(to:directory.appendingPathComponent("schema.json"),atomically:true,encoding:.utf8)
+        let ends=ClaudeReview.splitEnds(page)
+        try ClaudeReview.prompt(quad:page.quad,split:ends).write(to:directory.appendingPathComponent("prompt.txt"),atomically:true,encoding:.utf8)
+        try ClaudeReview.schema(split:ends != nil).write(to:directory.appendingPathComponent("schema.json"),atomically:true,encoding:.utf8)
         print("Wrote \(ClaudeReview.photoName), \(ClaudeReview.overlayName), prompt.txt and schema.json for \(page.path)")
     }catch{print(error);exit(1)}
 } else if args.count>3 && args[1]=="--split" {

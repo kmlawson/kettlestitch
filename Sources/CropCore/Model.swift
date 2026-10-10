@@ -24,19 +24,10 @@ public struct Quad: Codable, Equatable {
             return (b.x-a.x)*(c.y-b.y)-(b.y-a.y)*(c.x-b.x) > 0.00001
         }
     }
-    /// Uniform scaling about the corner centroid, limited by the image boundary.
-    public func scaled(by factor: Double) -> Quad? {
-        guard valid, factor.isFinite, factor > 0 else { return nil }
+    /// Scaling about the corner centroid. A side that reaches the image boundary stops there; the others keep growing.
+    public func scaled(by scale: Double) -> Quad? {
+        guard valid, scale.isFinite, scale > 0 else { return nil }
         let center=Point(points.map{$0.x}.reduce(0,+)/4,points.map{$0.y}.reduce(0,+)/4)
-        var scale=factor
-        if factor > 1 {
-            for p in points {
-                for (c,d) in [(center.x,p.x-center.x),(center.y,p.y-center.y)] {
-                    if d > 0 { scale=min(scale,(1-c)/d) }
-                    else if d < 0 { scale=min(scale,-c/d) }
-                }
-            }
-        }
         let result=Quad(points.map{Point(min(1,max(0,center.x+($0.x-center.x)*scale)),min(1,max(0,center.y+($0.y-center.y)*scale)))})
         return result.valid ? result:nil
     }
@@ -101,13 +92,15 @@ public enum Cleanup: String, Codable, CaseIterable {
     /// Modes whose output has no colour.
     public var isMonochrome: Bool {self == .grayscale || self == .blackAndWhite}
 }
-/// Brightness and contrast are -1...1 with 0 neutral.
+/// Brightness and contrast are -1...1 with 0 neutral. Sharpness is 0...1.
 public struct Adjustments: Codable, Equatable {
     public var cleanup = Cleanup.none
     public var brightness = 0.0
     public var contrast = 0.0
     /// Speck removal for black-and-white output: 1 cautious, 2 normal, 3 aggressive; nil is off.
     public var despeckle: Int?
+    /// Optional so that projects written before it existed still decode; nil is off.
+    public var sharpness: Double?
     public init() {}
     public var isIdentity: Bool {self == Adjustments()}
 }
@@ -162,11 +155,14 @@ public struct Page: Codable, Identifiable {
     public mutating func setManualCrop(_ q: Quad) {quad=q;status="Manual";reviewed=false;reviewNote=nil}
     public mutating func selectProposal(_ q: Quad) {quad=q;status="Proposal selected";reviewed=false}
     /// Stores Claude's verdict on the crop that was sent. Returns false, changing nothing, if the crop has been edited since.
-    @discardableResult public mutating func record(_ review: CropReview, sentQuad: Quad) -> Bool {
+    /// A moved split line is applied, provided the line is still the one that was sent.
+    @discardableResult public mutating func record(_ review: CropReview, sentQuad: Quad, sentSplit: PageSplit? = nil) -> Bool {
         guard quad == sentQuad else {return false}
+        let moved=review.split != nil && split != nil && split == sentSplit
+        if moved {split=review.split}
         candidates.removeAll{$0.source == Candidate.claudeSource}
         if let fix=review.quad {candidates=Candidate.ordered(candidates+[Candidate(quad:fix,score:0,source:Candidate.claudeSource)])}
-        let verdict=review.quad != nil ? "Claude proposes a fix":review.good ? "Claude: crop looks right":"Claude: no usable fix"
+        let verdict=(review.quad != nil ? "Claude proposes a fix":review.good ? "Claude: crop looks right":"Claude: no usable fix")+(moved ? "; split line moved":"")
         reviewNote=review.comment.isEmpty ? verdict:verdict+" — "+review.comment
         return true
     }

@@ -95,8 +95,17 @@ public struct SplitProposal: Equatable {
 /// Two cues are combined, following ScanTailor's page-split stage: a near-vertical dark line or shadow
 /// (its fold-line finder), and a column with no print between two bodies of content (its whitespace cut).
 /// The search is limited to the middle of the spread and falls back to the centre, as ScanTailor does.
+///
+/// A `guide` is the split of the page before, most likely the same book: the fold is expected at the same
+/// fraction across the crop, whatever the crop's size. The search then centres on the guide, and the guide
+/// is the fallback when no fold stands out.
 public enum SplitDetector {
-    public static func detect(_ image: CGImage, quad: Quad, rotation: Int) throws -> SplitProposal {
+    /// The split to go by for the page at `index`: that of the nearest earlier page that has one and is turned the same way.
+    public static func guide(for index: Int, in pages: [Page]) -> PageSplit? {
+        guard pages.indices.contains(index) else {return nil}
+        return pages[..<index].last{$0.split != nil && $0.rotation == pages[index].rotation}?.split
+    }
+    public static func detect(_ image: CGImage, quad: Quad, rotation: Int, guide: PageSplit? = nil) throws -> SplitProposal {
         let corrected=try Imaging.corrected(image,quad:quad,rotation:rotation)
         let w=min(640,corrected.width),h=max(8,Int((Double(corrected.height)*Double(w)/Double(corrected.width)).rounded()))
         var bytes=[UInt8](repeating:0,count:w*h)
@@ -105,11 +114,17 @@ public enum SplitDetector {
                 c.interpolationQuality = .medium;c.draw(corrected,in:CGRect(x:0,y:0,width:w,height:h))
             }
         }
-        return analyse(bytes.map{Double($0)/255},width:w,height:h)
+        return analyse(bytes.map{Double($0)/255},width:w,height:h,guide:guide)
     }
     /// `gray` is row-major from the top, 0 black to 1 white.
-    public static func analyse(_ gray: [Double], width w: Int, height h: Int) -> SplitProposal {
-        guard w>=40,h>=20,gray.count == w*h else {return SplitProposal(split:.centre,confident:false)}
+    public static func analyse(_ gray: [Double], width w: Int, height h: Int, guide: PageSplit? = nil) -> SplitProposal {
+        let guide=guide?.clamped,fallback=SplitProposal(split:guide ?? .centre,confident:false)
+        guard w>=40,h>=20,gray.count == w*h else {return fallback}
+        // Where the fold is expected, and how far from it the search reaches.
+        let expected=guide.map{($0.top+$0.bottom)/2} ?? 0.5,expectedShift=guide.map{Int((($0.bottom-$0.top)*Double(w)).rounded())} ?? 0
+        let edge=max(2,Int((PageSplit.margin*Double(w)).rounded(.up)))
+        let low=guide == nil ? w/5:max(edge,min(w/5,Int(expected*Double(w))-w/5)),high=guide == nil ? w-w/5:min(w-edge,max(w-w/5,Int(expected*Double(w))+w/5))
+        let first=guide == nil ? w/4:max(low,min(w/4,Int(expected*Double(w))-w/8)),last=guide == nil ? 3*w/4:min(high-1,max(3*w/4,Int(expected*Double(w))+w/8))
         // Rows near the top and bottom often show the table or the book's edge.
         let rows=Array(stride(from:h/16,to:h-h/16,by:max(1,h/240)))
         let narrow=max(2,w/90),broad=max(6,w/24)
@@ -126,8 +141,10 @@ public enum SplitDetector {
             return min(1,max(0,(sides-centre)/max(0.08,sides))/0.3)
         }
         // Valley strength at the sampled rows, computed once so every candidate line is a sum of lookups.
-        var folds=[Double](repeating:0,count:rows.count*w)
-        for (r,y) in rows.enumerated() {for x in w/5..<w-w/5 {folds[r*w+x]=max(valley(y,x,narrow),0.8*valley(y,x,broad))}}
+        // These rows reach almost to the top and bottom: a fold crosses the whole page, a printed rule or frame does not.
+        let across=Array(stride(from:h/50,to:h-h/50,by:max(1,h/240))),bands=20
+        var folds=[Double](repeating:0,count:across.count*w)
+        for (r,y) in across.enumerated() {for x in low..<high {folds[r*w+x]=max(valley(y,x,narrow),0.8*valley(y,x,broad))}}
         // Print shows as horizontal contrast; a fold's shadow or an empty gutter does not.
         var contrast=[Double](repeating:0,count:w+1)
         for x in 1..<w-1 {var total=0.0;for y in rows {total+=abs(gray[y*w+x+1]-gray[y*w+x-1])};contrast[x+1]=contrast[x]+total/Double(rows.count)}
@@ -144,22 +161,46 @@ public enum SplitDetector {
         func margin(_ x: Int) -> Double {0.6*quiet(x,narrow+1,2*narrow+2)+0.4*quiet(x,2*narrow+3,4*narrow)}
 
         var best=(score:-Double.infinity,top:w/2,bottom:w/2,fold:0.0,gap:0.0)
+        // With a guide: the clearest line through each column, to find the one nearest the guide afterwards.
+        var lines=[(fold:Double,bottom:Int)](repeating:(0,0),count:guide == nil ? 0:w)
         let lean=max(1,w/20)
-        for top in stride(from:w/4,through:3*w/4,by:1) {
+        for top in stride(from:first,through:last,by:1) {
             for shift in stride(from:-lean,through:lean,by:2) {
                 let bottom=top+shift
-                guard bottom>=w/5,bottom<w-w/5 else {continue}
-                var fold=0.0
-                for (r,y) in rows.enumerated() {fold+=folds[r*w+top+shift*y/(h-1)]}
-                fold/=Double(rows.count)
+                guard bottom>=low,bottom<high else {continue}
+                var fold=0.0,stretch=[Double](repeating:0,count:bands),counts=[Double](repeating:0,count:bands)
+                for (r,y) in across.enumerated() {
+                    let strength=folds[r*w+top+shift*y/(h-1)],band=r*bands/across.count
+                    fold+=strength;stretch[band]+=strength;counts[band]+=1
+                }
+                fold/=Double(across.count)
+                // The two weakest stretches of the line. Where they fall well below the rest, it stops short and is no fold.
+                let weakest=zip(stretch,counts).map{$1>0 ? $0/$1:0}.sorted().prefix(2).reduce(0,+)/2
+                if fold>0 {let whole=min(1,weakest/(0.5*fold));fold*=whole*whole}
                 let middle=(top+bottom)/2,gap=margin(middle)
-                let off=abs(Double(middle)/Double(w)-0.5)
-                let score=gap*(0.45+0.8*fold)+0.2*fold-0.9*max(0,off-0.03)-0.25*Double(abs(shift))/Double(w)
+                let off=abs(Double(middle)/Double(w)-expected)
+                // The page before says more about where the fold is than the centre of the crop does.
+                // It weighs heavily: evidence a few percent of the width away from it counts for less than half.
+                let drift=guide == nil ? 0.9*max(0,off-0.03):1.4*max(0,off-0.015)
+                let trust=guide == nil ? 1:0.3+0.7*exp(-(off/0.025)*(off/0.025))
+                let score=(gap*(0.45+0.8*fold)+0.2*fold)*trust-drift-0.25*Double(abs(shift-expectedShift))/Double(w)
                 if score>best.score {best=(score,top,bottom,fold,gap)}
+                // A line with print right beside it is a rule or a stroke of text.
+                if guide != nil,gap>0.3,fold>lines[top].fold {lines[top]=(fold,bottom)}
+            }
+        }
+        if guide != nil {
+            // Every line that looks like a fold is a peak among its neighbours; the one nearest the guide is taken,
+            // not the darkest. Only when there is none does the weighted search above decide.
+            let reach=2*narrow
+            let peaks=(first...last).filter{x in lines[x].fold>0.22 && !(max(first,x-reach)...min(last,x+reach)).contains{lines[$0].fold>lines[x].fold}}
+            func distance(_ x: Int) -> Double {abs((Double(x+lines[x].bottom)/2+0.5)/Double(w)-expected)}
+            if let x=peaks.min(by:{distance($0)<distance($1)}) {
+                return SplitProposal(split:PageSplit(top:(Double(x)+0.5)/Double(w),bottom:(Double(lines[x].bottom)+0.5)/Double(w)).clamped,confident:true)
             }
         }
         let confident=best.fold>0.22 || (printed && best.gap>0.75)
-        guard confident else {return SplitProposal(split:.centre,confident:false)}
+        guard confident else {return fallback}
         return SplitProposal(split:PageSplit(top:(Double(best.top)+0.5)/Double(w),bottom:(Double(best.bottom)+0.5)/Double(w)).clamped,confident:true)
     }
 }

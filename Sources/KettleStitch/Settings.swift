@@ -34,6 +34,8 @@ final class SettingsController: NSObject {
     let model=NSPopUpButton()
     let state=NSTextField(labelWithString:"")
     let message=NSTextField(wrappingLabelWithString:"")
+    static let autosaveKey="autosaveProject"
+    let autosave=NSButton(checkboxWithTitle:"Save changes automatically every 5 minutes",target:nil,action:nil)
     override init(){
         super.init()
         window.title="KettleStitch Settings";window.isReleasedWhenClosed=false
@@ -48,7 +50,10 @@ final class SettingsController: NSObject {
         message.font = .systemFont(ofSize:12);message.textColor = .systemOrange;message.isHidden=true;message.preferredMaxLayoutWidth=460
         let tool=ClaudeReview.locateExecutable()?.path
         let empty=NSGridCell.emptyContentView
+        autosave.target=self;autosave.action=#selector(autosaveChanged);autosave.state=UserDefaults.standard.bool(forKey:Self.autosaveKey) ? .on:.off
         let grid=NSGridView(views:[
+            [label("Project:"),autosave],
+            [empty,help("Applies once the project has been saved to a file; File ▸ Save writes it at any time. An untitled session is always kept as you work.")],
             [label("Anthropic API Key:"),key],
             [empty,buttons],
             [empty,help("Stored in your login keychain. It is passed to the claude command-line tool only when you choose Send to Claude.")],
@@ -62,13 +67,23 @@ final class SettingsController: NSObject {
         window.contentView=content;window.setContentSize(content.fittingSize);window.center()
         refresh()
     }
-    func refresh(){state.stringValue=Keychain.read()?.isEmpty==false ? "A key is saved":"No key saved"}
+    /// The field never shows a saved key, so the line beside the buttons and the placeholder have to say there is one.
+    func refresh(justSaved:Bool=false){
+        let saved=Keychain.read()?.isEmpty==false
+        state.stringValue=saved ? (justSaved ? "✓ Key saved in your keychain":"✓ A key is saved"):"No key saved"
+        state.textColor=saved ? .systemGreen:.secondaryLabelColor
+        key.placeholderString=saved ? "A key is saved — paste another to replace it":"sk-ant-…"
+    }
     func explain(_ text:String){message.stringValue=text;message.isHidden=false;window.setContentSize(window.contentView!.fittingSize)}
     func show(){refresh();window.makeKeyAndOrderFront(nil);window.makeFirstResponder(key)}
     @objc func saveKey(){
         let value=key.stringValue.trimmingCharacters(in:.whitespacesAndNewlines);guard !value.isEmpty else{return}
-        if Keychain.write(value){key.stringValue="";message.isHidden=true;refresh()}else{state.stringValue="The keychain refused the key"}
+        guard Keychain.write(value) else{state.stringValue="The keychain refused the key";state.textColor = .systemRed;return}
+        key.stringValue="";message.isHidden=true;refresh(justSaved:true)
+        // Written but not readable back would fail later, at Send to Claude; say so now.
+        if Keychain.read() != value {state.stringValue="The key was saved but cannot be read back from the keychain";state.textColor = .systemRed}
     }
     @objc func removeKey(){Keychain.remove();key.stringValue="";refresh()}
+    @objc func autosaveChanged(){UserDefaults.standard.set(autosave.state == .on,forKey:Self.autosaveKey)}
     @objc func modelChanged(){UserDefaults.standard.set(ClaudeReview.models[model.indexOfSelectedItem].id,forKey:"claudeModel")}
 }

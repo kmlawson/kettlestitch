@@ -1,7 +1,7 @@
 import Foundation
 
 public enum MenuCommand: CaseIterable {
-    case newProject, openProject, importPhotographs, saveAs, export, settings, help
+    case newProject, openProject, importPhotographs, save, saveAs, export, settings, help
     case undo, redo, copySettings, pasteSettings, applySettingsToAll, resetAdjustments
     case nextPage, previousPage, firstPage, lastPage, nextUnreviewed, nextFlagged, accept
     case selectAllPages, flag, reversePages, removePages, rotateLeft, rotateRight
@@ -58,7 +58,7 @@ public enum MenuPolicy {
             }
         }
         switch command {
-        case .newProject,.openProject,.importPhotographs,.saveAs,.settings,.help,.zoomIn,.zoomOut,.zoomToFit,.toggleSidebar,.toggleInspector:return true
+        case .newProject,.openProject,.importPhotographs,.save,.saveAs,.settings,.help,.zoomIn,.zoomOut,.zoomToFit,.toggleSidebar,.toggleInspector:return true
         case .undo:return s.editingText ? s.textCanUndo:s.canUndo
         case .redo:return s.editingText ? s.textCanRedo:s.canRedo
         case .export:return s.pageCount>0 && !s.exporting
@@ -113,12 +113,12 @@ public enum ShortcutReference {
     public struct Section {public let title: String;public let entries: [Entry]}
     private static func section(_ title: String, _ pairs: [(String,String)]) -> Section {Section(title:title,entries:pairs.map{Entry(keys:$0.0,action:$0.1)})}
     public static let sections: [Section] = [
-        section("Project",[("G","New project"),("O","Open project"),("I","Import photographs or a folder"),("S","Save project as"),("E","Export"),("Esc","Stop background work, or release a corner or edge")]),
+        section("Project",[("G","New project"),("O","Open project"),("I","Import photographs or a folder"),("S","Save the project"),("Shift S","Save project as"),("E","Export"),("Esc","Stop background work, or release a corner or edge")]),
         section("Moving between photographs",[("← / →","Previous / next"),("Home / End","First / last"),("Page Up / Page Down","Back / forward ten"),("Return","Accept the crop and go to the next"),("N","Next unreviewed"),("U","Next unusual page"),("M","Add or remove a flag")]),
-        section("Cropping frame",[("D","Detect this photograph"),("B","Detect all pending photographs"),("[ / ]","Previous / next proposal"),("C","Copy the previous photograph's crop"),("X","Full image"),("; / '","Shrink / expand the whole crop"),("H J K L","Expand the left, bottom, top, right side"),("Shift H J K L","Contract that side"),("Option H J K L","Move the whole crop; add Shift to move farther")]),
+        section("Cropping frame",[("D","Detect this photograph; with several selected, all pending photographs"),("B","Detect all pending photographs"),("[ / ]","Previous / next proposal"),("C","Copy the previous photograph's crop"),("X","Full image"),("; / '","Shrink / expand the whole crop"),("H J K L","Expand the left, bottom, top, right side"),("Shift H J K L","Contract that side"),("Option H J K L","Move the whole crop; add Shift to move farther")]),
         section("Corners and edges",[("1 2 3 4","Select the top-left, top-right, bottom-left, bottom-right corner"),("5 6 7 8","Select the top, left, right, bottom edge"),("Arrow keys","Nudge the selected corner or edge; add Shift for larger steps")]),
-        section("Page split",[("V","Propose a split between facing pages"),("Shift V","Remove the split"),(", / .","Move the split left / right; add Shift to move farther")]),
-        section("Deskew and picture zones",[("T","Deskew: level the lines of text"),("Shift T","Remove the deskew"),("Option , / .","Turn the page counterclockwise / clockwise by 0.1°"),("W","Draw a picture zone, kept in gray on a black-and-white page"),("Shift W","Remove the picture zones")]),
+        section("Page split",[("T","Propose a split between facing pages"),("Shift T","Remove the split"),(", / .","Move the split left / right; add Shift to move farther")]),
+        section("Deskew and picture zones",[("Q","Deskew: level the lines of text"),("Shift Q","Remove the deskew"),("Option , / .","Turn the page counterclockwise / clockwise by 0.1°"),("W","Draw a picture zone, kept in gray on a black-and-white page"),("Shift W","Remove the picture zones")]),
         section("Output and view",[("P","Corrected preview"),("R","Rotate the output clockwise"),("Shift R","Rotate the output counterclockwise"),("+ / −","Zoom in / out"),("F or 0","Zoom to fit"),("A","Send to Claude"),("Z / Y","Undo / redo"),("?","Show this reference")]),
     ]
     public static let notes = "Single keys are off while you type in a field. Only 1–8 hand the arrow keys to a corner or edge; Escape gives them back. Drag a corner, any green edge, or the pink split line. Shift-drag a corner keeps the crop's angles; Option-drag moves the whole crop. Every command is also in the menus with a Command-key shortcut. Originals are never modified."

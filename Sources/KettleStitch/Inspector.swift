@@ -30,8 +30,8 @@ extension AppDelegate {
         let crop=segments(["Detect","Full","Previous"],#selector(cropSegment(_:)),tips:["Detect the cropping frame (D)","Set the cropping frame to the full image (X)","Copy the previous photograph's crop (C)"])
         let corners=segments(["↖","↗","↙","↘"],#selector(cornerSegment(_:)),tips:["Select the top-left corner (1)","Select the top-right corner (2)","Select the bottom-left corner (3)","Select the bottom-right corner (4)"])
         let size=segments(["Shrink","Expand"],#selector(sizeSegment(_:)),tips:["Shrink the crop (;)","Expand the crop (')"])
-        let splits=segments(["Propose","◀","▶","Remove"],#selector(splitSegment(_:)),tips:["Propose a split between facing pages (V)","Move the split left (,)","Move the split right (.)","Remove the split (Shift-V)"])
-        let tilt=segments(["Auto","↺","↻","Reset"],#selector(deskewSegment(_:)),tips:["Level the lines of text (T)","Turn counterclockwise by 0.1° (Option-,)","Turn clockwise by 0.1° (Option-.)","Remove the deskew (Shift-T)"])
+        let splits=segments(["Propose","◀","▶","Remove"],#selector(splitSegment(_:)),tips:["Propose a split between facing pages (T)","Move the split left (,)","Move the split right (.)","Remove the split (Shift-T)"])
+        let tilt=segments(["Auto","↺","↻","Reset"],#selector(deskewSegment(_:)),tips:["Level the lines of text (Q)","Turn counterclockwise by 0.1° (Option-,)","Turn clockwise by 0.1° (Option-.)","Remove the deskew (Shift-Q)"])
         let pictures=segments(["Add Zone","Clear"],#selector(zoneSegment(_:)),tips:["Draw a picture zone that keeps its gray tones on a black-and-white page (W)","Remove the picture zones (Shift-W)"])
         let frame=NSGridView(views:[[caption("Proposal:"),candidates],[caption("Frame:"),crop],[caption("Corner:"),corners],[caption("Size:"),size],[caption("Split:"),splits],[caption("Deskew:"),tilt],[caption("Pictures:"),pictures]])
         frame.rowSpacing=7;frame.columnSpacing=8;frame.column(at:0).xPlacement = .trailing;frame.column(at:0).width=78;frame.column(at:1).xPlacement = .fill
@@ -49,8 +49,14 @@ extension AppDelegate {
         for (i,name) in ["Off","1","2","3"].enumerated() {despeckleControl.setLabel(name,forSegment:i);despeckleControl.setToolTip(["No speck removal","Cautious: only the smallest specks","Normal","Aggressive: larger specks too"][i]+" (Black & White only)",forSegment:i)}
         despeckleControl.selectedSegment=0
         cleanupName.font = .systemFont(ofSize:11);cleanupName.textColor = .secondaryLabelColor;cleanupName.alignment = .center
-        for slider in [brightnessSlider,contrastSlider] {slider.isContinuous=true;slider.target=self;slider.action=#selector(adjustmentChanged(_:));slider.controlSize = .small}
-        let adjustments=NSGridView(views:[[caption("Cleanup:"),cleanupControl],[NSGridCell.emptyContentView,cleanupName],[caption("Despeckle:"),despeckleControl],[caption("Brightness:"),brightnessSlider],[caption("Contrast:"),contrastSlider]])
+        for slider in [brightnessSlider,contrastSlider,sharpnessSlider] {slider.isContinuous=true;slider.target=self;slider.action=#selector(adjustmentChanged(_:));slider.controlSize = .small}
+        // A tick marks the neutral middle of brightness and contrast.
+        for slider in [brightnessSlider,contrastSlider] {slider.numberOfTickMarks=3}
+        for value in [brightnessValue,contrastValue,sharpnessValue] {value.font = .monospacedDigitSystemFont(ofSize:11,weight:.regular);value.textColor = .secondaryLabelColor;value.alignment = .right}
+        let blank=NSGridCell.emptyContentView
+        let adjustments=NSGridView(views:[[caption("Cleanup:"),cleanupControl,blank],[blank,cleanupName,blank],[caption("Despeckle:"),despeckleControl,blank],[caption("Brightness:"),brightnessSlider,brightnessValue],[caption("Contrast:"),contrastSlider,contrastValue],[caption("Sharpness:"),sharpnessSlider,sharpnessValue]])
+        for row in 0..<3 {adjustments.mergeCells(inHorizontalRange:NSRange(location:1,length:2),verticalRange:NSRange(location:row,length:1));adjustments.cell(atColumnIndex:1,rowIndex:row).xPlacement = .fill}
+        adjustments.column(at:2).width=30
         adjustments.rowSpacing=6;adjustments.columnSpacing=8;adjustments.column(at:0).xPlacement = .trailing;adjustments.column(at:0).width=78;adjustments.row(at:1).topPadding = -4
         add(header("Image Adjustments",accessory:reset));add(adjustments,after:22)
         // Page format
@@ -66,7 +72,7 @@ extension AppDelegate {
         resolutionLabel.font = .systemFont(ofSize:11);resolutionLabel.textColor = .secondaryLabelColor;resolutionLabel.alignment = .center
         let all=NSButton(title:"Apply Settings to All Pages",target:self,action:#selector(applySettingsToAll));all.bezelStyle = .rounded;all.controlSize = .small;all.toolTip="Copy this page's image adjustments and page format to every page"
         add(header("Page Format"));add(format);add(resolutionLabel);add(all)
-        inspectorControls=[candidates,crop,corners,size,splits,tilt,pictures,reset,cleanupControl,brightnessSlider,contrastSlider,widthField,heightField,fitPopup,all]
+        inspectorControls=[candidates,crop,corners,size,splits,tilt,pictures,reset,cleanupControl,brightnessSlider,contrastSlider,sharpnessSlider,widthField,heightField,fitPopup,all]
         NSLayoutConstraint.activate([
             stack.topAnchor.constraint(equalTo:root.safeAreaLayoutGuide.topAnchor,constant:14),stack.leadingAnchor.constraint(equalTo:root.leadingAnchor,constant:16),stack.trailingAnchor.constraint(equalTo:root.trailingAnchor,constant:-16),
             stack.bottomAnchor.constraint(lessThanOrEqualTo:root.bottomAnchor,constant:-12)])
