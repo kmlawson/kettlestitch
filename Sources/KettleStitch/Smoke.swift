@@ -241,6 +241,13 @@ extension AppDelegate {
             let examples=URL(fileURLWithPath:dir).appendingPathComponent("Bad Examples"),saved=(try? FileManager.default.contentsOfDirectory(at:examples,includingPropertiesForKeys:nil)) ?? []
             precondition(saved.count==1 && Set((try? FileManager.default.contentsOfDirectory(atPath:saved[0].path)) ?? [])==["example.json","overlay.jpg",URL(fileURLWithPath:self.project.pages[0].path).lastPathComponent],"A bad example is one folder of three files")
             precondition(self.badExampleItem?.isHidden==true && self.badExampleItem?.keyEquivalentModifierMask==[.command,.option])
+            // Its shortcut works through the menu bar although the item is hidden, also while a text field is being edited.
+            func kept()->Int {((try? FileManager.default.contentsOfDirectory(atPath:examples.path)) ?? []).count}
+            let shortcut=NSEvent.keyEvent(with:.keyDown,location:.zero,modifierFlags:[.command,.option],timestamp:0,windowNumber:self.window.windowNumber,context:nil,characters:"∫",charactersIgnoringModifiers:"b",isARepeat:false,keyCode:11)!
+            Thread.sleep(forTimeInterval:1.1)
+            precondition(NSApp.mainMenu!.performKeyEquivalent(with:shortcut) && kept()==2,"Option-Command-B saves an example")
+            self.window.makeFirstResponder(self.widthField);Thread.sleep(forTimeInterval:1.1)
+            precondition(NSApp.mainMenu!.performKeyEquivalent(with:shortcut) && kept()==3,"and does so while a field is edited");self.window.makeFirstResponder(self.canvas)
             print("BAD_EXAMPLE passed")
             // T again steps through the other places the detector offered, and round to the first; a split moved by hand starts afresh.
             let options=[PageSplit(top:0.47,bottom:0.47),PageSplit(top:0.5,bottom:0.5),PageSplit(top:0.56,bottom:0.56)],cycled=self.project.pages[0]
