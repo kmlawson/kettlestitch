@@ -5,7 +5,7 @@ extension AppDelegate: NSMenuItemValidation, NSMenuDelegate {
     /// The menu commands this delegate handles. Enabling, titles and check marks all come from `MenuPolicy`.
     static let commands: [Selector:MenuCommand] = [
         #selector(newProject):.newProject,#selector(openProject):.openProject,#selector(importImages):.importPhotographs,#selector(locatePhotographs):.locatePhotographs,#selector(saveProject):.save,#selector(saveAs):.saveAs,#selector(exportImages):.export,#selector(showSettings):.settings,#selector(help):.help,
-        #selector(undo):.undo,#selector(redo):.redo,#selector(copySettings):.copySettings,#selector(pasteSettings):.pasteSettings,#selector(applySettingsToAll):.applySettingsToAll,#selector(resetAdjustments):.resetAdjustments,
+        #selector(undo):.undo,#selector(redo):.redo,#selector(copySettings):.copySettings,#selector(copyRotation):.copyRotation,#selector(pasteRotation):.pasteRotation,#selector(pasteSettings):.pasteSettings,#selector(applySettingsToAll):.applySettingsToAll,#selector(resetAdjustments):.resetAdjustments,
         #selector(next):.nextPage,#selector(previous):.previousPage,#selector(firstPage):.firstPage,#selector(lastPage):.lastPage,#selector(nextReview):.nextUnreviewed,#selector(nextFlagged):.nextFlagged,#selector(accept):.accept,
         #selector(selectAllPages):.selectAllPages,#selector(toggleFlag):.flag,#selector(reversePages):.reversePages,#selector(removePages):.removePages,#selector(rotateLeft):.rotateLeft,#selector(rotate):.rotateRight,
         #selector(detectCurrent):.detect,#selector(detectPending):.detectPending,#selector(nextCandidate):.nextProposal,#selector(previousCandidate):.previousProposal,#selector(resetCrop):.fullImage,#selector(copyPrevious):.copyPreviousCrop,
@@ -25,7 +25,7 @@ extension AppDelegate: NSMenuItemValidation, NSMenuDelegate {
         s.currentFlagged=page?.flagged==true;s.currentHasSplit=page?.split != nil;s.targetsHaveSplit=targets.contains{project.pages[$0].split != nil}
         s.targetsHaveDeskew=targets.contains{project.pages[$0].deskew != nil};s.targetsHaveZones=targets.contains{project.pages[$0].pictureZones != nil};s.outlierCount=deviationRows.filter{$0.isOutlier}.count
         s.detecting=detecting;s.exporting=exporting;s.reviewing=reviewing;s.previewing=canvas.preview
-        s.reviewer=ReviewChoice.provider.name
+        s.reviewer=ReviewChoice.provider.name;s.rotationCopied=copiedRotation != nil
         s.windowActive=window.attachedSheet==nil && (NSApp.keyWindow==nil || NSApp.keyWindow===window)
         s.sidebarVisible = !sidebarItem.isCollapsed;s.inspectorVisible = !inspectorItem.isCollapsed
         return s
@@ -76,6 +76,7 @@ extension AppDelegate: NSMenuItemValidation, NSMenuDelegate {
         add(edit,"Cut",#selector(NSText.cut(_:)),"x",own:false);add(edit,"Copy",#selector(NSText.copy(_:)),"c",own:false);add(edit,"Paste",#selector(NSText.paste(_:)),"v",own:false);add(edit,"Select All",#selector(NSText.selectAll(_:)),"a",own:false)
         edit.addItem(.separator())
         add(edit,"Copy Settings",#selector(copySettings),"c",[.command,.shift]);add(edit,"Paste Settings",#selector(pasteSettings),"v",[.command,.shift])
+        add(edit,"Copy Rotation",#selector(copyRotation),"c",[.command,.option]);add(edit,"Paste Rotation",#selector(pasteRotation),"v",[.command,.option])
         add(edit,"Copy Previous Page\u{2019}s Image Settings",#selector(copyPreviousAdjustments),"v",plain);add(edit,"Apply Settings to All Pages",#selector(applySettingsToAll));add(edit,"Reset Image Settings",#selector(resetAdjustments))
 
         let page=menu("Page")

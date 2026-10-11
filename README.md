@@ -171,6 +171,7 @@ Single keys act on the main window and are off while you type in a field. Letter
 | ⌘S / ⇧⌘S | Save / save as |
 | ⌘Z / ⇧⌘Z | Undo / redo |
 | ⇧⌘C / ⇧⌘V | Copy / paste a page's image settings and page format |
+| ⌥⌘C / ⌥⌘V | Copy / paste a page's rotation |
 | ⇧⌘A | Select all pages |
 | ⇧⌘U | Next flagged page |
 | ⌘⌫ | Remove the selected pages from the project |

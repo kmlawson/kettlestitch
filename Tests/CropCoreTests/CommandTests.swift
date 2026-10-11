@@ -58,6 +58,13 @@ final class MenuPolicyTests:XCTestCase {
         XCTAssertEqual(MenuPolicy.title(.flag,state{$0.targetCount=3}),"Add Flag to 3 Pages")
         XCTAssertEqual(MenuPolicy.title(.sendToClaude,state()),"Send to Claude");XCTAssertEqual(MenuPolicy.title(.sendToClaude,state{$0.targetCount=4}),"Send 4 Pages to Claude")
         XCTAssertEqual(MenuPolicy.title(.proposeSplit,state{$0.targetCount=2}),"Propose Page Split on 2 Pages")
+        // A rotation can be copied from any page, and pasted once one has been copied.
+        XCTAssertTrue(MenuPolicy.isEnabled(.copyRotation,state()));XCTAssertFalse(MenuPolicy.isEnabled(.pasteRotation,state()))
+        XCTAssertTrue(MenuPolicy.isEnabled(.pasteRotation,state{$0.rotationCopied=true}))
+        XCTAssertEqual(MenuPolicy.title(.pasteRotation,state{$0.targetCount=4;$0.rotationCopied=true}),"Paste Rotation to 4 Pages");XCTAssertEqual(MenuPolicy.title(.pasteRotation,state()),"Paste Rotation")
+        // Rotation acts on the whole selection, and its menu items say how many pages that is.
+        XCTAssertEqual(MenuPolicy.title(.rotateRight,state{$0.targetCount=3}),"Rotate 3 Pages Right");XCTAssertEqual(MenuPolicy.title(.rotateLeft,state{$0.targetCount=3}),"Rotate 3 Pages Left")
+        XCTAssertEqual(MenuPolicy.title(.rotateRight,state()),"Rotate Right");XCTAssertEqual(MenuPolicy.title(.rotateLeft,state()),"Rotate Left")
         XCTAssertEqual(MenuPolicy.title(.removePages,state{$0.targetCount=2}),"Remove 2 Pages from Project");XCTAssertEqual(MenuPolicy.title(.removePages,state()),"Remove from Project")
         XCTAssertEqual(MenuPolicy.title(.toggleSidebar,state{$0.sidebarVisible=true}),"Hide Sidebar");XCTAssertEqual(MenuPolicy.title(.toggleSidebar,state()),"Show Sidebar")
         XCTAssertEqual(MenuPolicy.title(.toggleInspector,state{$0.inspectorVisible=true}),"Hide Inspector")

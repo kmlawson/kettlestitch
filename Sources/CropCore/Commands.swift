@@ -2,7 +2,7 @@ import Foundation
 
 public enum MenuCommand: CaseIterable {
     case newProject, openProject, importPhotographs, locatePhotographs, save, saveAs, export, settings, help
-    case undo, redo, copySettings, pasteSettings, applySettingsToAll, resetAdjustments
+    case undo, redo, copySettings, pasteSettings, copyRotation, pasteRotation, applySettingsToAll, resetAdjustments
     case nextPage, previousPage, firstPage, lastPage, nextUnreviewed, nextFlagged, accept
     case selectAllPages, flag, reversePages, removePages, rotateLeft, rotateRight
     case detect, detectPending, nextProposal, previousProposal, fullImage, copyPreviousCrop
@@ -43,6 +43,8 @@ public struct MenuState {
     public var windowActive = true
     /// Who Send to… goes to: Claude, OpenAI or Gemini, as chosen in Settings.
     public var reviewer = "Claude"
+    /// True once a page's rotation has been copied, so that it can be pasted.
+    public var rotationCopied = false
     public init() {}
 }
 public enum MenuPolicy {
@@ -64,7 +66,8 @@ public enum MenuPolicy {
         case .undo:return s.editingText ? s.textCanUndo:s.canUndo
         case .redo:return s.editingText ? s.textCanRedo:s.canRedo
         case .export:return s.pageCount>0 && !s.exporting
-        case .copySettings,.applySettingsToAll,.selectAllPages,.flag,.rotateLeft,.rotateRight,.preview,.proposeSplit,.locatePhotographs:return hasPage
+        case .copySettings,.copyRotation,.applySettingsToAll,.selectAllPages,.flag,.rotateLeft,.rotateRight,.preview,.proposeSplit,.locatePhotographs:return hasPage
+        case .pasteRotation:return hasPage && s.rotationCopied
         case .pasteSettings:return hasPage && s.hasCopiedSettings
         case .resetAdjustments:return hasPage && s.targetsHaveAdjustments
         case .nextPage:return hasPage && s.current!<s.pageCount-1
@@ -101,6 +104,9 @@ public enum MenuPolicy {
         case .sendToClaude:return several ? "Send \(s.targetCount) Pages to \(s.reviewer)":"Send to \(s.reviewer)"
         case .deskew:return several ? "Deskew \(s.targetCount) Pages":"Deskew"
         case .proposeSplit:return several ? "Propose Page Split on \(s.targetCount) Pages":"Propose Page Split"
+        case .rotateLeft:return several ? "Rotate \(s.targetCount) Pages Left":"Rotate Left"
+        case .rotateRight:return several ? "Rotate \(s.targetCount) Pages Right":"Rotate Right"
+        case .pasteRotation:return several ? "Paste Rotation to \(s.targetCount) Pages":"Paste Rotation"
         case .removePages:return several ? "Remove \(s.targetCount) Pages from Project":"Remove from Project"
         case .toggleSidebar:return s.sidebarVisible ? "Hide Sidebar":"Show Sidebar"
         case .toggleInspector:return s.inspectorVisible ? "Hide Inspector":"Show Inspector"

@@ -109,6 +109,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
     let banner=NSVisualEffectView(),bannerLabel=NSTextField(labelWithString:""),bannerSpinner=NSProgressIndicator()
     var shownSize=(width:0.0,height:0.0)
     var copiedSettings: (Adjustments?,PageFormat?)?
+    var copiedRotation: Int?
     var pixelSizes: [String:CGSize]=[:]
     var exportOptions=ExportOptions()
     var exportSheet: ExportSheetController?
@@ -527,13 +528,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
     @objc func zoomIn(){canvas.zoom=min(8,canvas.zoom*1.25)}
     @objc func zoomOut(){canvas.zoom=max(0.5,canvas.zoom/1.25)}
     @objc func zoomSegment(_ sender:NSToolbarItemGroup){[zoomOut,fit,zoomIn][sender.selectedIndex]()}
+    /// Turns every selected page a quarter turn. One Undo turns them all back.
     func turn(_ quarter:Int){
-        guard let i=current else{return}
+        let targets=targetIndexes
+        turnPages(targets){_ in quarter}
+        if targets.count>1 {status.stringValue="Turned \(targets.count) pages"}
+    }
+    /// Turns each page by the number of quarter turns `quarters` gives for it, as one change.
+    func turnPages(_ indexes:[Int],_ quarters:(Page)->Int){
+        let changing=indexes.filter{((quarters(project.pages[$0])%4)+4)%4 != 0};guard !changing.isEmpty else{return}
         // A split is measured across the output, so a quarter turn leaves nothing to keep: propose it afresh.
-        let had=project.pages[i].split != nil
-        edit{$0.rotation=($0.rotation+quarter+4)%4;$0.split=$0.split?.rotated(quarterTurns:quarter)}
-        if had,project.pages[i].split==nil {proposeSplits([i],record:false)}
+        let split=changing.filter{project.pages[$0].split != nil}
+        edit(changing){let by=quarters($0);$0.rotation=((($0.rotation+by)%4)+4)%4;$0.split=$0.split?.rotated(quarterTurns:by);if $0.split == nil {$0.splitByHand=nil}}
+        let lost=split.filter{project.pages[$0].split == nil}
+        if !lost.isEmpty {proposeSplits(lost,record:false)}
         // The photograph is shown turned as well as the preview, so the view stays as it was.
+    }
+    /// Rotation is copied and pasted on its own, apart from the image settings and page format.
+    @objc func copyRotation(){
+        guard let i=current else{return};copiedRotation=project.pages[i].rotation
+        status.stringValue="Copied this page's rotation (\(project.pages[i].rotation*90)°)"
+    }
+    @objc func pasteRotation(){
+        guard let rotation=copiedRotation else{return};let targets=targetIndexes
+        let changed=targets.filter{project.pages[$0].rotation != rotation}.count
+        turnPages(targets){rotation-$0.rotation}
+        status.stringValue=changed==0 ? "Already turned that way":"Pasted rotation (\(rotation*90)°) to \(changed) page\(changed==1 ? "":"s")"
     }
 
     // MARK: Page split

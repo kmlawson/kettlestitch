@@ -66,7 +66,7 @@ To adjust a crop:
 - **c** copies the previous photograph's crop. **Shift →** goes to the next photograph and takes the current crop along.
 - **x** sets the crop to the whole photograph. **d** detects again.
 
-**Return** marks the page reviewed and moves on; **n** jumps to the next unreviewed page. **m** flags a page to come back to. **r** and **Shift R** turn the page a quarter turn. The photograph is shown turned the same way, so you adjust the crop the way round it will come out; the corner keys, **h j k l** and the arrow keys all go by what you see. Stepping past the first or last page flashes a red frame instead of moving.
+**Return** marks the page reviewed and moves on; **n** jumps to the next unreviewed page. **m** flags a page to come back to. **r** and **Shift R** turn the page a quarter turn, or every selected page. **Edit ▸ Copy Rotation** and **Paste Rotation** (⌥⌘C, ⌥⌘V) carry one page's rotation to others; rotation is kept apart from the image settings and page format, so Copy Settings and Apply Settings to All Pages leave it alone. The photograph is shown turned the same way, so you adjust the crop the way round it will come out; the corner keys, **h j k l** and the arrow keys all go by what you see. Stepping past the first or last page flashes a red frame instead of moving.
 
 Things to know about the proposals:
 
@@ -77,7 +77,7 @@ Things to know about the proposals:
 
 ## Working on several pages at once
 
-Shift-click or ⌘-click in the sidebar, or choose **Page ▸ Select All Pages** (⇧⌘A). The photograph on screen stays on screen. Image settings, page format, flags, splits, deskew, smudge removal, Remove from Project, the export window's Selected Pages choice and the second opinion then apply to the whole selection. Cropping always applies to the photograph on screen only.
+Shift-click or ⌘-click in the sidebar, or choose **Page ▸ Select All Pages** (⇧⌘A). The photograph on screen stays on screen. Image settings, page format, flags, rotation, splits, deskew, smudge removal, Remove from Project, the export window's Selected Pages choice and the second opinion then apply to the whole selection. Cropping always applies to the photograph on screen only.
 
 Right-clicking a row acts on that row, or on the whole selection if the row is part of it.
 

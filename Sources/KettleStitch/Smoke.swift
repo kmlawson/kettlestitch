@@ -305,6 +305,20 @@ extension AppDelegate {
             precondition(leftAfter>leftBefore,"Shift-H pulls in the side seen on the left");self.undo()
             self.setPreview(true);snapshot(self.window.contentView!,"turned-preview.png");self.setPreview(false)
             key("r",15,.shift);precondition(self.project.pages[0].rotation==turnedBefore)
+            // With several pages selected, one turn turns them all and one Undo turns them all back.
+            let turns=self.project.pages.prefix(3).map{$0.rotation}
+            self.project.selected=0;self.selectCurrent();self.table.selectRowIndexes(IndexSet([0,1,2]),byExtendingSelection:false)
+            key("r",15);precondition(Array(self.project.pages.prefix(3).map{$0.rotation})==turns.map{($0+1)%4} && self.project.pages[3].rotation==0,"r turns every selected page, and no other")
+            self.undo();precondition(Array(self.project.pages.prefix(3).map{$0.rotation})==turns,"One Undo turns them all back")
+            self.table.selectRowIndexes(IndexSet(integer:0),byExtendingSelection:false)
+            // A rotation is copied from one page and pasted to others, apart from the other settings.
+            self.project.pages[0].rotation=2;self.project.selected=0;self.selectCurrent();self.copyRotation()
+            self.table.selectRowIndexes(IndexSet([1,2]),byExtendingSelection:false);self.project.selected=1
+            let formats=self.project.pages[1].format,settings=self.project.pages[1].adjustments
+            self.pasteRotation()
+            precondition(self.project.pages[1].rotation==2 && self.project.pages[2].rotation==2 && self.project.pages[1].format==formats && self.project.pages[1].adjustments==settings,"Paste Rotation changes the rotation and nothing else")
+            self.undo();precondition(self.project.pages[1].rotation==0 && self.project.pages[2].rotation==0)
+            self.project.pages[0].rotation=0;self.project.selected=0;self.selectCurrent();self.refreshDetail()
             print("TURNED_VIEW passed")
             // A project file is written by Save, not by each edit.
             if self.hasProjectFile {
