@@ -839,7 +839,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
         guard confirmUnsaved() else{return}
         let panel=NSSavePanel();panel.nameFieldStringValue="Book.kettlestitch";panel.message="Choose where to save the new project."
         guard panel.runModal() == .OK,let url=panel.url else{return}
-        do{let fresh=Project();try fresh.save(url);writeUntitled();stop();decoded=[:];project=fresh;projectURL=url;undoStack=[];redoStack=[];unsaved=false;noteRecent();updateTitle();reloadPages();selectCurrent()}catch{showError(error)}
+        do{let fresh=Project();try fresh.save(url);writeUntitled();stop();decoded=[:];project=fresh;projectURL=url;undoStack=[];redoStack=[];unsaved=false;untitledChanged=false;noteRecent();updateTitle();reloadPages();selectCurrent()}catch{showError(error)}
     }
     @objc func importImages(){
         let panel=NSOpenPanel();panel.canChooseFiles=true;panel.canChooseDirectories=true;panel.allowsMultipleSelection=true;panel.message="Choose photographs or a folder. Subfolders are not imported."
@@ -885,7 +885,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
     @objc func openProject(){let panel=NSOpenPanel();panel.allowedContentTypes=ImportPolicy.projectExtensions.compactMap{UTType(filenameExtension:$0)}+[.json];guard confirmUnsaved(),panel.runModal() == .OK,let url=panel.url else{return};open(url)}
     @objc func openRecent(_ sender:NSMenuItem){if let url=sender.representedObject as? URL,confirmUnsaved(){open(url)}}
     func open(_ url:URL){
-        do{let loaded=try Project.read(url);writeUntitled();stop();generation=UUID();decoded=[:];project=loaded;project.selected=min(max(0,project.selected),max(0,project.pages.count-1));projectURL=url;unsaved=false;noteRecent();updateTitle();undoStack=[];redoStack=[];thumbs=[:];previewThumbs=[:];thumbnailPending=[:];thumbnailFailures=[:];pixelSizes=[:];reloadPages();selectCurrent();status.stringValue="Opened \(url.lastPathComponent)";DispatchQueue.main.async{self.findMissingPhotographs()}}catch{showError(error)}
+        do{let loaded=try Project.read(url);writeUntitled();stop();generation=UUID();decoded=[:];project=loaded;project.selected=min(max(0,project.selected),max(0,project.pages.count-1));projectURL=url;unsaved=false;untitledChanged=false;noteRecent();updateTitle();undoStack=[];redoStack=[];thumbs=[:];previewThumbs=[:];thumbnailPending=[:];thumbnailFailures=[:];pixelSizes=[:];reloadPages();selectCurrent();status.stringValue="Opened \(url.lastPathComponent)";DispatchQueue.main.async{self.findMissingPhotographs()}}catch{showError(error)}
     }
     @objc func locatePhotographs(){findMissingPhotographs();if Relink.missing(project.pages,exists:FileManager.default.fileExists(atPath:)).isEmpty {status.stringValue="Every photograph is where the project expects it"}}
     /// A project holds each photograph's full path. When some are gone, the project's own folder is tried first;

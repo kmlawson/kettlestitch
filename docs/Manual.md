@@ -216,6 +216,7 @@ A model's corners are estimates; treat them like any other proposal.
 - **A project** is a small `.kettlestitch` file holding the list of photographs and what to do with each. It stores each photograph's full location, not the photograph.
 - **Saving:** **s** (⌘S) saves the project file; **Shift S** saves under a new name; **g** starts a new project at a place you choose. A dot in the window's close button marks unsaved changes.
 - **Auto-save:** with "Save changes automatically every 5 minutes" on in Settings (the default), a project file is saved every five minutes, and when you quit, close or open another project. With it off, you are asked.
+- **Quitting with work never saved to a file:** you are asked whether to save it, and where. If you choose not to, it is not lost: see the next point.
 - **Untitled work** is kept as you go in `~/Library/Application Support/KettleStitch/`, as `Untitled <date and time>.kettlestitch`, and appears under Open Recent.
 - **Moved photographs:** if a project cannot find its photographs, it looks in its own folder and then asks where they are now. They are matched by file name, and you can choose a folder above several moved folders. **File ▸ Locate Missing Photographs…** asks again later.
 - **API keys** are in your login keychain, one for each provider.
