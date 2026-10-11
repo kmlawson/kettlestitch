@@ -658,6 +658,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
         a.despeckle=a.cleanup == .blackAndWhite && despeckleControl.selectedSegment>0 ? despeckleControl.selectedSegment:nil;despeckleControl.isEnabled=a.cleanup == .blackAndWhite
         setAdjustments(a)
     }
+    /// Gives this page the cleanup, despeckle, brightness, contrast and sharpness of the page before it.
+    /// The preview comes on first, so the page is seen as it was and then as it becomes.
+    @objc func copyPreviousAdjustments(){
+        guard let i=current,i>0 else{NSSound.beep();status.stringValue="There is no page before this one to copy adjustments from";return}
+        let adjustments=project.pages[i-1].adjustments
+        if !canvas.preview {setPreview(true)}
+        guard project.pages[i].adjustments != adjustments else{status.stringValue="This page already has the previous page's image adjustments";return}
+        edit([i],geometry:false){$0.adjustments=adjustments}
+        status.stringValue=adjustments == nil ? "The previous page has no image adjustments; this page's were removed":"Copied the previous page's image adjustments (\((adjustments ?? Adjustments()).cleanup.title) cleanup, brightness, contrast, sharpness)"
+    }
     @objc func resetAdjustments(){guard current != nil else{return};cleanupControl.selectedSegment=0;brightnessSlider.doubleValue=0;contrastSlider.doubleValue=0;sharpnessSlider.doubleValue=0;showAdjustmentValues();despeckleControl.selectedSegment=0;despeckleControl.isEnabled=false;setAdjustments(Adjustments())}
     /// The number beside each slider: signed from the neutral middle for brightness and contrast, 0–100 for sharpness.
     func showAdjustmentValues(){
@@ -1048,7 +1058,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
         case "p":togglePreview()
         case "r":e.modifierFlags.contains(.shift) ? rotateLeft():rotate()
         case "a":sendToClaude();case "m":toggleFlag()
-        case "t","v":e.modifierFlags.contains(.shift) ? removeSplit():proposeSplit()
+        case "t":e.modifierFlags.contains(.shift) ? removeSplit():proposeSplit()
+        case "v" where !e.modifierFlags.contains(.shift):copyPreviousAdjustments()
         case ",","<":e.modifierFlags.contains(.option) ? turnDeskew(-0.1):moveSplit(e.modifierFlags.contains(.shift) ? -0.01:-0.002)
         case ".",">":e.modifierFlags.contains(.option) ? turnDeskew(0.1):moveSplit(e.modifierFlags.contains(.shift) ? 0.01:0.002)
         case "q":e.modifierFlags.contains(.shift) ? removeDeskew():deskew()

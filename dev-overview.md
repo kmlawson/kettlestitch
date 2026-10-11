@@ -122,7 +122,8 @@ Detection action D refreshes candidates. It assigns the top result to the actual
 | Page Up / Page Down | Move ten images |
 | P / R / Shift-R | Corrected preview / clockwise / counterclockwise output rotation |
 | M / A | Flag / Send to Claude |
-| T / Shift-T (also V) | Propose page split / remove it |
+| T / Shift-T | Propose page split / remove it |
+| V | Copy the previous page's image adjustments, turning the preview on |
 | Q / Shift-Q | Deskew / remove deskew; Option-`,` and Option-`.` turn by 0.1° |
 | W / Shift-W | Draw a picture zone / remove zones |
 | U | Next unusual page |

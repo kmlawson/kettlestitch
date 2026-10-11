@@ -76,7 +76,7 @@ extension AppDelegate: NSMenuItemValidation, NSMenuDelegate {
         add(edit,"Cut",#selector(NSText.cut(_:)),"x",own:false);add(edit,"Copy",#selector(NSText.copy(_:)),"c",own:false);add(edit,"Paste",#selector(NSText.paste(_:)),"v",own:false);add(edit,"Select All",#selector(NSText.selectAll(_:)),"a",own:false)
         edit.addItem(.separator())
         add(edit,"Copy Settings",#selector(copySettings),"c",[.command,.shift]);add(edit,"Paste Settings",#selector(pasteSettings),"v",[.command,.shift])
-        add(edit,"Apply Settings to All Pages",#selector(applySettingsToAll));add(edit,"Reset Image Adjustments",#selector(resetAdjustments))
+        add(edit,"Copy Previous Page\u{2019}s Image Adjustments",#selector(copyPreviousAdjustments),"v",plain);add(edit,"Apply Settings to All Pages",#selector(applySettingsToAll));add(edit,"Reset Image Adjustments",#selector(resetAdjustments))
 
         let page=menu("Page")
         add(page,"Next Page",#selector(next),arrow(NSRightArrowFunctionKey),plain);add(page,"Previous Page",#selector(previous),arrow(NSLeftArrowFunctionKey),plain)

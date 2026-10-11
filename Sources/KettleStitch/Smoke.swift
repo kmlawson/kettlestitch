@@ -152,9 +152,9 @@ extension AppDelegate {
             key("r",15);precondition(self.project.pages[1].split==nil,"A quarter turn drops the split until the fold is found again")
             key("r",15,.shift);self.invalidateWork();key("p",35)
             self.project.pages[1].split=PageSplit(top:0.4,bottom:0.45);self.refreshDetail()
-            key("v",9,.shift);precondition(self.project.pages[1].split==nil && canvas.split==nil)
+            key("t",17,.shift);precondition(self.project.pages[1].split==nil && canvas.split==nil)
             self.undo();precondition(self.project.pages[1].split != nil)
-            key("v",9,.shift)
+            key("t",17,.shift)
             self.project.pages[1].split = .centre;key("t",17,.shift);precondition(self.project.pages[1].split==nil,"Shift-T removes the split, as Shift-Command-T does")
             print("PAGE_SPLIT_KEYS_DRAG_ROTATE_REMOVE passed")
             // Deskew, despeckle, picture zones and deviations as the real window drives them.
@@ -257,6 +257,13 @@ extension AppDelegate {
             key("t",17);precondition(self.project.pages[0].split==options[0],"After the last candidate comes the first")
             self.project.pages[0].split=nil;self.splitOptions[cycled.id]=nil;self.refreshDetail()
             print("SPLIT_CANDIDATES passed")
+            // V brings over the previous page's image adjustments and turns the preview on to show them.
+            var borrowed=Adjustments();borrowed.cleanup = .grayscale;borrowed.brightness=0.25;borrowed.sharpness=0.4
+            self.project.pages[0].adjustments=borrowed;self.project.pages[1].adjustments=nil
+            self.project.selected=1;self.selectCurrent();canvas.image=smokeImage;self.original=smokeImage;self.setPreview(false)
+            key("v",9);precondition(self.project.pages[1].adjustments==borrowed && canvas.preview,"V copies the adjustments and shows the preview")
+            self.undo();precondition(self.project.pages[1].adjustments==nil);self.project.pages[0].adjustments=nil;self.setPreview(false)
+            print("COPY_ADJUSTMENTS passed")
             // A project file is written by Save, not by each edit.
             if self.hasProjectFile {
                 func onDisk()->Project? {try? Project.read(self.projectURL)}

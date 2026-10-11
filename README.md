@@ -126,8 +126,8 @@ Single keys act on the main window and are off while you type in a field. Press 
 
 | Key | Action |
 | --- | --- |
-| T (or V) | Propose a split between facing pages; again for the next candidate |
-| Shift T (or Shift V) | Remove the split |
+| T | Propose a split between facing pages; again for the next candidate |
+| Shift T | Remove the split |
 | , / . | Move the split left / right; add Shift to move farther |
 
 ### Deskew and picture zones
@@ -152,6 +152,7 @@ Single keys act on the main window and are off while you type in a field. Press 
 | Key | Action |
 | --- | --- |
 | P | Corrected preview |
+| V | Copy the previous photograph's image adjustments (cleanup, brightness, contrast, sharpness), with the preview on |
 | R | Rotate the output clockwise |
 | Shift R | Rotate the output counterclockwise |
 | + / − | Zoom in / out |

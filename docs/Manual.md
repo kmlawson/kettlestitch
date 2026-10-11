@@ -52,7 +52,8 @@ Single-key commands are suspended in text-entry fields and file dialogs.
 | Rotate output clockwise / counterclockwise | R / Shift + R |
 | Add or remove a flag | M |
 | Send to Claude | A |
-| Propose page split / remove it | T / Shift + T (also V / Shift + V) |
+| Propose page split / remove it | T / Shift + T |
+| Copy the previous photograph's image adjustments | V |
 | Move split left / right | , / . |
 | Larger split movement | Add Shift |
 | Deskew / remove deskew | Q / Shift + Q |
