@@ -39,6 +39,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
     let brightnessSlider=NSSlider(value:0,minValue:-1,maxValue:1,target:nil,action:nil)
     let contrastSlider=NSSlider(value:0,minValue:-1,maxValue:1,target:nil,action:nil)
     let sharpnessSlider=NSSlider(value:0,minValue:0,maxValue:1,target:nil,action:nil)
+    let exposureSlider=NSSlider(value:0,minValue:-1,maxValue:1,target:nil,action:nil),exposureValue=NSTextField(labelWithString:"0")
     /// The brush for the next stroke: half its width as a fraction of the photograph's longer side, and how heavily it blurs.
     let smudgeSizeSlider=NSSlider(value:0.02,minValue:0.005,maxValue:0.08,target:nil,action:nil)
     let smudgeStrengthSlider=NSSlider(value:0.5,minValue:0,maxValue:1,target:nil,action:nil)
@@ -365,7 +366,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
         counter.stringValue="Photo \(i+1) of \(project.pages.count) · \(reviewed) reviewed";window?.subtitle=counter.stringValue
         let a=p.adjustments ?? Adjustments()
         cleanupControl.selectedSegment=Cleanup.allCases.firstIndex(of:a.cleanup) ?? 0;cleanupName.stringValue=a.cleanup.title
-        brightnessSlider.doubleValue=a.brightness;contrastSlider.doubleValue=a.contrast;sharpnessSlider.doubleValue=a.sharpness ?? 0;showAdjustmentValues()
+        brightnessSlider.doubleValue=a.brightness;contrastSlider.doubleValue=a.contrast;sharpnessSlider.doubleValue=a.sharpness ?? 0;exposureSlider.doubleValue=a.exposure ?? 0;showAdjustmentValues()
         despeckleControl.selectedSegment=min(3,max(0,a.despeckle ?? 0));despeckleControl.isEnabled=a.cleanup == .blackAndWhite
         let size=outputPixelSize(p),layout=OutputGeometry.layout(pixelWidth:Double(size.width),pixelHeight:Double(size.height),format:p.format)
         let fitted=p.format?.fitInto != nil
@@ -718,6 +719,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
         // Whole steps of the number shown, so the middle of a slider is exactly neutral.
         a.brightness=(a.brightness*100).rounded()/100;a.contrast=(a.contrast*100).rounded()/100
         let sharpness=(sharpnessSlider.doubleValue*100).rounded()/100;a.sharpness=sharpness>0 ? sharpness:nil
+        let exposure=(exposureSlider.doubleValue*100).rounded()/100;a.exposure=exposure != 0 ? exposure:nil
         showAdjustmentValues()
         // Specks only exist once the page is black and white.
         a.despeckle=a.cleanup == .blackAndWhite && despeckleControl.selectedSegment>0 ? despeckleControl.selectedSegment:nil;despeckleControl.isEnabled=a.cleanup == .blackAndWhite
@@ -731,13 +733,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
         if !canvas.preview {setPreview(true)}
         guard project.pages[i].adjustments != adjustments else{status.stringValue="This page already has the previous page's image adjustments";return}
         edit([i],geometry:false){$0.adjustments=adjustments}
-        status.stringValue=adjustments == nil ? "The previous page has no image adjustments; this page's were removed":"Copied the previous page's image adjustments (\((adjustments ?? Adjustments()).cleanup.title) cleanup, brightness, contrast, sharpness)"
+        status.stringValue=adjustments == nil ? "The previous page has no image adjustments; this page's were removed":"Copied the previous page's image adjustments (\((adjustments ?? Adjustments()).cleanup.title) cleanup, exposure, brightness, contrast, sharpness)"
     }
-    @objc func resetAdjustments(){guard current != nil else{return};cleanupControl.selectedSegment=0;brightnessSlider.doubleValue=0;contrastSlider.doubleValue=0;sharpnessSlider.doubleValue=0;showAdjustmentValues();despeckleControl.selectedSegment=0;despeckleControl.isEnabled=false;setAdjustments(Adjustments())}
+    @objc func resetAdjustments(){guard current != nil else{return};cleanupControl.selectedSegment=0;brightnessSlider.doubleValue=0;contrastSlider.doubleValue=0;sharpnessSlider.doubleValue=0;exposureSlider.doubleValue=0;showAdjustmentValues();despeckleControl.selectedSegment=0;despeckleControl.isEnabled=false;setAdjustments(Adjustments())}
     /// The number beside each slider: signed from the neutral middle for brightness and contrast, 0–100 for sharpness.
     func showAdjustmentValues(){
         func signed(_ value:Double)->String {let n=Int((value*100).rounded());return n>0 ? "+\(n)":n<0 ? "−\(-n)":"0"}
-        brightnessValue.stringValue=signed(brightnessSlider.doubleValue);contrastValue.stringValue=signed(contrastSlider.doubleValue)
+        exposureValue.stringValue=signed(exposureSlider.doubleValue);brightnessValue.stringValue=signed(brightnessSlider.doubleValue);contrastValue.stringValue=signed(contrastSlider.doubleValue)
         sharpnessValue.stringValue=String(Int((sharpnessSlider.doubleValue*100).rounded()))
     }
     /// A slider drag is one undo step: the snapshot is taken at its first change and saved once it settles.

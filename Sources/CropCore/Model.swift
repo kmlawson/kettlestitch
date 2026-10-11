@@ -94,7 +94,7 @@ public enum Cleanup: String, Codable, CaseIterable {
     /// Modes whose output has no colour.
     public var isMonochrome: Bool {self == .grayscale || self == .blackAndWhite}
 }
-/// Brightness and contrast are -1...1 with 0 neutral. Sharpness is 0...1.
+/// Brightness, contrast and exposure are -1...1 with 0 neutral. Sharpness is 0...1.
 public struct Adjustments: Codable, Equatable {
     public var cleanup = Cleanup.none
     public var brightness = 0.0
@@ -103,6 +103,8 @@ public struct Adjustments: Codable, Equatable {
     public var despeckle: Int?
     /// Optional so that projects written before it existed still decode; nil is off.
     public var sharpness: Double?
+    /// -1...1 with 0 neutral, two stops either way. Optional for the same reason; nil is neutral.
+    public var exposure: Double?
     public init() {}
     public var isIdentity: Bool {self == Adjustments()}
 }

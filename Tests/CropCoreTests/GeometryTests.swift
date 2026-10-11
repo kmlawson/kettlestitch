@@ -48,7 +48,13 @@ final class GeometryTests:XCTestCase {
             CIContext(options:[.workingColorSpace:NSNull()]).render(image,toBitmap:&row,rowBytes:800,bounds:CGRect(x:1400,y:50,width:200,height:1),format:.RGBA8,colorSpace:nil)
             let reds=stride(from:40,to:640,by:4).map{row[$0]};return (reds.min()!,reds.max()!)
         }
+        let plainRange=range(step)
         var a=Adjustments();XCTAssertEqual(range(Imaging.process(step,a)).0,range(step).0)
+        // Exposure is neutral at zero, lightens above it and darkens below, and old projects have none.
+        XCTAssertNil(a.exposure);XCTAssertFalse(String(decoding:saved,as:UTF8.self).contains("exposure"))
+        var light=Adjustments();light.exposure=0.5;XCTAssertFalse(light.isIdentity)
+        var dark=Adjustments();dark.exposure = -0.5
+        XCTAssertGreaterThan(range(Imaging.process(step,light)).1,plainRange.1);XCTAssertLessThan(range(Imaging.process(step,dark)).1,plainRange.1)
         a.sharpness=1;XCTAssertFalse(a.isIdentity)
         let plain=range(step),sharp=range(Imaging.process(step,a))
         XCTAssertLessThan(sharp.0,plain.0);XCTAssertGreaterThan(sharp.1,plain.1)

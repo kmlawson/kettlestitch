@@ -18,7 +18,7 @@ It is named after the kettle stitch, a knot that links one sewn section of a boo
 - **Crop detection.** Each imported photograph gets several proposed crops; pick one with **[** and **]**, adjust its corners and edges, or copy the crop from the page before.
 - **Page splitting.** The fold between facing pages is found in the gutter between their print, starting from where you put the split on the previous page. Press **t** again to step through other candidates.
 - **Deskew** to level the lines of text, separately for each half of a split spread. Currently does not work very well.
-- **Cleanup**: grayscale, black and white with speck removal, brightness, contrast and sharpness, with picture zones that keep their tones on a black-and-white page.
+- **Cleanup**: grayscale, black and white with speck removal, exposure, brightness, contrast and sharpness, with picture zones that keep their tones on a black-and-white page.
 - **Smudge brush** to blur text that should not be readable in the output.
 - **Preview** of exactly what will be exported, kept on as you move from page to page.
 - **Export** to PDF or to JPEG, PNG or TIFF. Exports carry no metadata from the photographs (no location, camera or owner), and PDFs carry no producer, creator or dates. OCR via Apple Vision is offered.
@@ -153,7 +153,7 @@ Single keys act on the main window and are off while you type in a field. Letter
 | Key | Action |
 | --- | --- |
 | p | Corrected preview |
-| v | Copy the previous photograph's image adjustments (cleanup, brightness, contrast, sharpness), with the preview on |
+| v | Copy the previous photograph's image adjustments (cleanup, exposure, brightness, contrast, sharpness), with the preview on |
 | r | Rotate the output clockwise |
 | Shift R | Rotate the output counterclockwise |
 | + / − | Zoom in / out |

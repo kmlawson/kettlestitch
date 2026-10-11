@@ -34,6 +34,8 @@ public enum Imaging {
     public static func process(_ input: CIImage, _ adjustments: Adjustments) -> CIImage {
         var image=input
         if adjustments.cleanup != .none {image=flattened(image)}
+        // Exposure scales the light itself, as a longer or shorter exposure would, before the tones are shaped.
+        if let exposure=adjustments.exposure,exposure != 0 {image=image.applyingFilter("CIExposureAdjust",parameters:[kCIInputEVKey:max(-1,min(1,exposure))*2])}
         let mono=adjustments.cleanup.isMonochrome
         if mono || adjustments.brightness != 0 || adjustments.contrast != 0 {
             image=image.applyingFilter("CIColorControls",parameters:[kCIInputBrightnessKey:adjustments.brightness*0.5,kCIInputContrastKey:exp2(adjustments.contrast),kCIInputSaturationKey:mono ? 0.0:1.0])

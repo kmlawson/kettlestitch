@@ -84,12 +84,13 @@ extension AppDelegate {
         for (i,name) in ["Off","1","2","3"].enumerated() {despeckleControl.setLabel(name,forSegment:i);despeckleControl.setToolTip(["No speck removal","Cautious: only the smallest specks","Normal","Aggressive: larger specks too"][i]+" (Black & White only)",forSegment:i)}
         despeckleControl.selectedSegment=0
         cleanupName.font = .systemFont(ofSize:11);cleanupName.textColor = .secondaryLabelColor;cleanupName.alignment = .center
-        for slider in [brightnessSlider,contrastSlider,sharpnessSlider] {slider.isContinuous=true;slider.target=self;slider.action=#selector(adjustmentChanged(_:));slider.controlSize = .small}
+        for slider in [exposureSlider,brightnessSlider,contrastSlider,sharpnessSlider] {slider.isContinuous=true;slider.target=self;slider.action=#selector(adjustmentChanged(_:));slider.controlSize = .small}
         // A tick marks the neutral middle of brightness and contrast.
-        for slider in [brightnessSlider,contrastSlider] {slider.numberOfTickMarks=3}
-        for value in [brightnessValue,contrastValue,sharpnessValue] {value.font = .monospacedDigitSystemFont(ofSize:11,weight:.regular);value.textColor = .secondaryLabelColor;value.alignment = .right}
+        for slider in [exposureSlider,brightnessSlider,contrastSlider] {slider.numberOfTickMarks=3}
+        exposureSlider.toolTip="Lighten or darken the photograph as a longer or shorter exposure would, up to two stops either way"
+        for value in [exposureValue,brightnessValue,contrastValue,sharpnessValue] {value.font = .monospacedDigitSystemFont(ofSize:11,weight:.regular);value.textColor = .secondaryLabelColor;value.alignment = .right}
         let blank=NSGridCell.emptyContentView
-        let adjustments=NSGridView(views:[[caption("Cleanup:"),cleanupControl,blank],[blank,cleanupName,blank],[caption("Despeckle:"),despeckleControl,blank],[caption("Brightness:"),brightnessSlider,brightnessValue],[caption("Contrast:"),contrastSlider,contrastValue],[caption("Sharpness:"),sharpnessSlider,sharpnessValue]])
+        let adjustments=NSGridView(views:[[caption("Cleanup:"),cleanupControl,blank],[blank,cleanupName,blank],[caption("Despeckle:"),despeckleControl,blank],[caption("Exposure:"),exposureSlider,exposureValue],[caption("Brightness:"),brightnessSlider,brightnessValue],[caption("Contrast:"),contrastSlider,contrastValue],[caption("Sharpness:"),sharpnessSlider,sharpnessValue]])
         for row in 0..<3 {adjustments.mergeCells(inHorizontalRange:NSRange(location:1,length:2),verticalRange:NSRange(location:row,length:1));adjustments.cell(atColumnIndex:1,rowIndex:row).xPlacement = .fill}
         adjustments.column(at:2).width=30
         adjustments.rowSpacing=6;adjustments.columnSpacing=8;adjustments.column(at:0).xPlacement = .trailing;adjustments.column(at:0).width=78;adjustments.row(at:1).topPadding = -4
@@ -105,7 +106,7 @@ extension AppDelegate {
         let format=NSGridView(views:[[caption("Width:"),field(widthField)],[caption("Height:"),field(heightField)],[caption("Fit into:"),fitPopup]])
         format.rowSpacing=6;format.columnSpacing=8;format.column(at:0).xPlacement = .trailing;format.column(at:0).width=78;format.column(at:1).xPlacement = .leading
         resolutionLabel.font = .systemFont(ofSize:11);resolutionLabel.textColor = .secondaryLabelColor;resolutionLabel.alignment = .center
-        let all=applyAllButton;all.target=self;all.action=#selector(applySettingsToAll);all.bezelStyle = .rounded;all.controlSize = .small;all.toolTip="Copy this page's image adjustments (cleanup, brightness, contrast, sharpness) and page format to every page. Crops and splits are left as they are."
+        let all=applyAllButton;all.target=self;all.action=#selector(applySettingsToAll);all.bezelStyle = .rounded;all.controlSize = .small;all.toolTip="Copy this page's image adjustments (cleanup, exposure, brightness, contrast, sharpness) and page format to every page. Crops and splits are left as they are."
         section("Page Format",key:"format",open:false,[format,resolutionLabel])
         // Outside the sections, because it carries the image adjustments as well as the page format.
         add(all,after:22)
@@ -119,7 +120,7 @@ extension AppDelegate {
         })
         shortcuts.rowSpacing=4;shortcuts.columnSpacing=8;shortcuts.column(at:0).xPlacement = .trailing;shortcuts.column(at:0).width=58;shortcuts.rowAlignment = .firstBaseline
         section("Shortcuts",key:"shortcuts",[shortcuts])
-        inspectorControls=[candidates,crop,corners,size,splits,tilt,pictures,reset,smudgeControl,smudgeSizeSlider,smudgeStrengthSlider,cleanupControl,brightnessSlider,contrastSlider,sharpnessSlider,widthField,heightField,fitPopup,all]
+        inspectorControls=[candidates,crop,corners,size,splits,tilt,pictures,reset,smudgeControl,smudgeSizeSlider,smudgeStrengthSlider,cleanupControl,exposureSlider,brightnessSlider,contrastSlider,sharpnessSlider,widthField,heightField,fitPopup,all]
         NSLayoutConstraint.activate([
             scroll.topAnchor.constraint(equalTo:root.topAnchor),scroll.bottomAnchor.constraint(equalTo:root.bottomAnchor),scroll.leadingAnchor.constraint(equalTo:root.leadingAnchor),scroll.trailingAnchor.constraint(equalTo:root.trailingAnchor),
             document.topAnchor.constraint(equalTo:scroll.contentView.topAnchor),document.leadingAnchor.constraint(equalTo:scroll.contentView.leadingAnchor),document.widthAnchor.constraint(equalTo:scroll.contentView.widthAnchor),
