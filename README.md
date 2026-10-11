@@ -29,11 +29,13 @@ The [manual](docs/Manual.md) describes each of these in detail.
 
 ## Install
 
-1. Download `KettleStitch-0.4.0.dmg` (or the newest one) from the [Releases page](https://github.com/kmlawson/kettlestitch/releases).
+1. Download a disk image from the [Releases page](https://github.com/kmlawson/kettlestitch/releases). Each release offers two:
+   - **`KettleStitch-<version>-apple-silicon.dmg`** for Macs with an Apple chip (M1 and later); the smaller download.
+   - **`KettleStitch-<version>-universal.dmg`** for any Mac, Intel or Apple Silicon. Choose this one if you are unsure.
 2. Open the disk image and drag **KettleStitch** onto the **Applications** folder beside it.
 3. Open KettleStitch from Applications, and expect macOS to refuse the first time; see below.
 
-It needs macOS 13 or later and runs on both Apple Silicon and Intel Macs.
+It needs macOS 13 or later. To see which chip your Mac has, choose Apple menu ▸ About This Mac.
 
 > [!WARNING]
 > **macOS will block KettleStitch the first time you open it.** The app is not signed with an Apple Developer ID or notarized by Apple, so Gatekeeper reports that it "cannot be opened because Apple cannot check it for malicious software", or that the developer cannot be verified. This is expected for an app distributed this way. To allow it:
@@ -54,7 +56,7 @@ You need Xcode or the Swift toolchain.
 ./scripts/build-app.sh          # builds dist/KettleStitch.app for this Mac
 open dist/KettleStitch.app
 swift test --disable-sandbox    # runs the tests
-./scripts/build-dmg.sh          # builds the universal release and dist/KettleStitch-<version>.dmg
+./scripts/build-dmg.sh          # builds the two release disk images in dist/
 ```
 
 An app you build yourself is not blocked by Gatekeeper, because it was never downloaded.

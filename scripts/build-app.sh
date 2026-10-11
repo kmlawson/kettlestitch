@@ -3,15 +3,14 @@ set -euo pipefail
 cd "${0:A:h}/.."
 export CLANG_MODULE_CACHE_PATH="${TMPDIR:-/tmp}/kettlestitch-clang"
 export SWIFTPM_MODULECACHE_OVERRIDE="${TMPDIR:-/tmp}/kettlestitch-swift"
-# RELEASE=1 makes the build that is given to others: for Apple Silicon and Intel alike, and without the debugging
-# records that name the folders it was built in.
-if [[ -n "${RELEASE:-}" ]]; then
-  swift build --disable-sandbox -c release --arch arm64 --arch x86_64
-  BUILT=.build/apple/Products/Release/KettleStitch
-else
-  swift build --disable-sandbox -c release
-  BUILT=.build/release/KettleStitch
-fi
+# RELEASE makes a build that is given to others, without the debugging records that name the folders it was built
+# in: RELEASE=universal for Apple Silicon and Intel alike, RELEASE=silicon for Apple Silicon alone.
+case "${RELEASE:-}" in
+  universal) swift build --disable-sandbox -c release --arch arm64 --arch x86_64; BUILT=.build/apple/Products/Release/KettleStitch ;;
+  silicon)   swift build --disable-sandbox -c release --arch arm64; BUILT=.build/arm64-apple-macosx/release/KettleStitch ;;
+  "")        swift build --disable-sandbox -c release; BUILT=.build/release/KettleStitch ;;
+  *)         echo "RELEASE must be universal or silicon"; exit 2 ;;
+esac
 APP="$PWD/dist/KettleStitch.app"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 # Rename into place: a running copy keeps its old file instead of having it overwritten.
