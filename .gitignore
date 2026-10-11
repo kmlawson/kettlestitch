@@ -4,3 +4,4 @@ dist/
 .qa/
 sample-images/
 docs/*-notes-and-research.md
+examples/
