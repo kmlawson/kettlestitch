@@ -201,7 +201,11 @@ public struct Project: Codable {
     public var selected = 0
     public init() {}
     public static func read(_ url: URL) throws -> Project {
-        var p = try JSONDecoder().decode(Project.self, from: Data(contentsOf: url))
+        try JSONDecoder().decode(Project.self, from: Data(contentsOf: url)).checked()
+    }
+    /// The project as it may be opened: of a version this app reads, with sound geometry.
+    public func checked() throws -> Project {
+        var p=self
         guard p.version == 1, p.pages.allSatisfy({$0.quad.valid && $0.candidates.allSatisfy{$0.quad.valid}}) else {throw CropError.message("Unsupported or invalid project geometry")}
         for i in p.pages.indices {p.pages[i].filterProposals()}
         return p

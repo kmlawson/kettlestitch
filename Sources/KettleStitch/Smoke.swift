@@ -353,6 +353,21 @@ extension AppDelegate {
                 precondition(self.unsaved && self.window.isDocumentEdited && onDisk()?.pages[self.project.selected].flagged != self.project.pages[self.project.selected].flagged,"An edit waits for Save")
                 self.saveProject()
                 precondition(!self.unsaved && !self.window.isDocumentEdited && onDisk()?.pages[self.project.selected].flagged==self.project.pages[self.project.selected].flagged,"Save updates the current file")
+                // Unsaved changes to a named project are also kept aside, until they are saved or let go.
+                let copy=RecoverySnapshot.url(self.sessionID,in:self.supportURL)
+                precondition(!FileManager.default.fileExists(atPath:copy.path),"Nothing is kept aside for a saved project")
+                self.edit{$0.flagged = $0.flagged==true ? nil:true};self.writeRecoveryCopy()
+                let kept=try? RecoverySnapshot.read(copy)
+                precondition(kept?.originalPath==self.projectURL.path && kept?.project.pages[self.project.selected].flagged==self.project.pages[self.project.selected].flagged && onDisk()?.pages[self.project.selected].flagged != self.project.pages[self.project.selected].flagged,"The copy holds what the file does not yet")
+                // Another session finds it, and opening it leaves the project file as it was until Save.
+                let own=self.sessionID,before=try? Data(contentsOf:self.projectURL);self.sessionID=UUID()
+                let found=self.recoveryEntries().first{$0.snapshot==own}
+                precondition(found?.reason == .unsavedChanges && found?.pageCount==self.project.pages.count,"\(String(describing:found))")
+                self.unsaved=false;self.recover(found!,saveAs:false)
+                precondition(self.sessionID==own && self.unsaved && self.window.isDocumentEdited && (try? Data(contentsOf:self.projectURL))==before && FileManager.default.fileExists(atPath:copy.path))
+                self.showRecovery();precondition(self.recovery!.rows.allSatisfy{$0.snapshot != own},"The open session is not offered to itself");snapshot(self.recovery!.window.contentView!,"recovery.png");self.recovery!.window.close()
+                self.saveProject();precondition(!self.unsaved && !FileManager.default.fileExists(atPath:copy.path),"Saving makes the copy unnecessary")
+                print("RECOVERY passed")
                 print("SAVE passed")
             }
             // terminate normally never returns; if the quit is refused, say so instead of hanging.

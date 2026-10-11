@@ -46,11 +46,12 @@ The user steers by small, frequent interaction changes. Follow the newest reques
 | `Sources/CropCore/ClaudeReview.swift` | The second opinion's prompt, reply schema and parsing, overlay drawing, usage log, and `run`, the one network call |
 | `Sources/CropCore/ReviewProviders.swift` | Providers, offered models and list prices, the request for each API, reading each reply, the no-redirect session |
 | `Sources/CropCore/Commands.swift` | Menu enabling and titles (`MenuPolicy`), shortcut reference data, shared progress tracker |
+| `Sources/CropCore/Recovery.swift` | Recovery copies of unsaved changes and the list of what can be recovered |
 | `Sources/CropCore/Launch.swift` | What opens at launch, untitled names, auto-save rule, sorting dropped files, relinking moved photographs, legacy names |
 | `Sources/KettleStitch/main.swift` | AppDelegate: state, project lifecycle, queues, every action, single-key routing, undo |
 | `Sources/KettleStitch/Interface.swift` | Window, split view, sidebar cell and its two layouts, `ThumbnailPolicy`, status bar, toolbar |
 | `Sources/KettleStitch/Inspector.swift` | Inspector sections, fold buttons, smudge icons, shortcut list |
-| `Sources/KettleStitch/Menus.swift` | Menu bar, state for `MenuPolicy`, Open Recent, shortcut and usage-log windows |
+| `Sources/KettleStitch/Menus.swift` | Menu bar, state for `MenuPolicy`, Open Recent, shortcut, usage-log and Recovery windows |
 | `Sources/KettleStitch/ExportSheet.swift` | Export window |
 | `Sources/KettleStitch/Settings.swift` | `Keychain`, `ReviewChoice`, Settings window |
 | `Sources/KettleStitch/Canvas.swift` | Drawing, crop and split overlays, magnifier, mouse editing, zoom, smudge painting |
@@ -75,7 +76,7 @@ Coordinates are fractions of the **upright, EXIF-oriented photograph**, origin t
 
 **State and undo.** AppDelegate owns the project on the main thread. `edit` snapshots the affected pages for undo, bumps `revision` for geometry changes, calls `save()` and refreshes views. Undo entries are page snapshots or a page-list snapshot (import, reorder, removal); restoring a list keeps each page's current data. Settings apply to `targetIndexes`: the sidebar selection when it includes the photograph on screen. `reloadPages()` must wrap every full table reload, because NSTableView resets its selection.
 
-**Saving.** `save()` records a change. An untitled session is written to Application Support, coalesced to once a second (`writeUntitled`). A named project is only marked `unsaved` and written by File ▸ Save, the five-minute auto-save timer, or `confirmUnsaved()`, which guards quit, close, New and Open and saves silently when auto-save is on or in test mode.
+**Saving.** `save()` records a change. An untitled session is written to Application Support, coalesced to once a second (`writeUntitled`). A named project is only marked `unsaved` and written by File ▸ Save, the five-minute auto-save timer, or `confirmUnsaved()`, which guards quit, close, New and Open and saves silently when auto-save is on or in test mode. Two seconds after a run of edits to a named project, `writeRecoveryCopy` writes a `RecoverySnapshot` to `Recovery/<session id>.kettlestitch-recovery` in the support folder; a successful write or a chosen "Don't Save" removes it (`dropRecoveryCopy`). `RecoveryList` reads what is left, with untitled sessions, for the Recovery window, which opens at launch when a copy holds work that is nowhere else. A failed save stays in the window subtitle (`saveFailure`) until a save succeeds.
 
 **Loading and display.** Files arrive through `receive(_:)`, which lists folders and reads sizes off the main thread behind a notice. The canvas shows at most 3200 pixels; `readAhead` decodes the next photograph in the direction of travel and keeps the current one and its two neighbours. `loadCurrent` leaves the placeholder empty during a page change; the "drop photographs here" text is only for an empty project.
 

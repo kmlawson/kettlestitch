@@ -229,6 +229,7 @@ A model's corners are estimates; treat them like any other proposal.
 - **Auto-save:** with "Save changes automatically every 5 minutes" on in Settings (the default), a project file is saved every five minutes, and when you quit, close or open another project. With it off, you are asked.
 - **Quitting with work never saved to a file:** you are asked whether to save it, and where. If you choose not to, it is not lost: see the next point.
 - **Untitled work** is kept as you go in `~/Library/Application Support/KettleStitch/`, as `Untitled <date and time>.kettlestitch`, and appears under Open Recent.
+- **After a crash:** unsaved changes to a project file are also kept aside, a couple of seconds after you stop editing. If KettleStitch closes without saving them, the **Recovery** window opens the next time and lists them. Opening a copy shows the project with those changes still unsaved; the project file changes only when you save. **File ▸ Recovery…** shows the same list at any time, with untitled work too, and is where to delete copies you no longer want. Nothing is deleted on its own.
 - **Moved photographs:** if a project cannot find its photographs, it looks in its own folder and then asks where they are now. They are matched by file name, and you can choose a folder above several moved folders. **File ▸ Locate Missing Photographs…** asks again later.
 - **API keys** are in your login keychain, one for each provider.
 - **The usage log** for second opinions is `claude-usage.json` in the same Application Support folder.

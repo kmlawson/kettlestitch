@@ -116,6 +116,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
     var exportOptions=ExportOptions()
     var exportSheet: ExportSheetController?
     var settings: SettingsController?
+    var recovery: RecoveryController?
+    /// The app's folder in Application Support, or the test folder.
+    var supportURL: URL!
+    /// Names this session's recovery copy. A new one is taken whenever another project is opened.
+    var sessionID=UUID()
+    /// What went wrong the last time the project could not be written, shown until a write succeeds.
+    var saveFailure: String?
     var shortcuts: ShortcutsController?
     var usageLog: UsageLogController?
     /// The candidates the last split proposal for each page came with, and which of them is showing.
@@ -157,6 +164,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
         let support=testDirectory.map{URL(fileURLWithPath:$0)} ?? library.appendingPathComponent("KettleStitch")
         if testDirectory == nil {carryOverLegacyData(in:library,to:support)}
         do {try FileManager.default.createDirectory(at:support,withIntermediateDirectories:true)} catch {showError(error)}
+        supportURL=support
         // The app opens empty. Each session gets its own untitled file, so unnamed work from an earlier
         // session is never overwritten; it stays reachable under File ▸ Open Recent.
         projectURL=support.appendingPathComponent(LaunchPolicy.untitledName(Date()));usageURL=support.appendingPathComponent(UsageLog.fileName)
@@ -198,7 +206,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
             if self.write() {self.status.stringValue="Auto-saved \(self.projectURL.lastPathComponent)"}
         }
         status.stringValue=project.pages.isEmpty ? "Drop photographs here, or choose File ▸ Import Photographs":"Press ? for keyboard shortcuts"
-        checkForUpdatesAtStartup()
+        checkForUpdatesAtStartup();DispatchQueue.main.async{self.offerRecovery()}
         window.delegate=self;window.registerForDraggedTypes([.fileURL])
         let waiting=pendingOpen;pendingOpen=[];if !waiting.isEmpty {receive(waiting)} else if !project.pages.isEmpty {DispatchQueue.main.async{self.findMissingPhotographs()}}
         // Test hook for files handed over by the system at launch: report what arrived, then quit.
@@ -226,7 +234,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
     }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication)->Bool {true}
     func applicationShouldTerminate(_ sender: NSApplication)->NSApplication.TerminateReply {confirmUnsaved(leaving:true) ? .terminateNow:.terminateCancel}
-    func applicationWillTerminate(_ notification: Notification){queue.cancelAllOperations();reviewTask?.cancel();writeUntitled()}
+    func applicationWillTerminate(_ notification: Notification){queue.cancelAllOperations();reviewTask?.cancel();writeUntitled();writeRecoveryCopy()}
 
     // MARK: Page list
     func numberOfRows(in tableView:NSTableView)->Int {project.pages.count}
@@ -440,7 +448,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
         candidates.removeAllItems();candidates.addItem(withTitle:p.candidates.isEmpty ? "No proposals":"Choose proposal")
         for (j,c) in p.candidates.enumerated(){candidates.addItem(withTitle:"\(j+1) · \(c.source)")}
         if let selected=p.candidates.firstIndex(where:{$0.quad==p.quad}){candidates.selectItem(at:selected+1)}
-        counter.stringValue="Photo \(i+1) of \(project.pages.count) · \(reviewed) reviewed";window?.subtitle=counter.stringValue
+        counter.stringValue="Photo \(i+1) of \(project.pages.count) · \(reviewed) reviewed";window?.subtitle=saveFailure ?? counter.stringValue
         let a=p.adjustments ?? Adjustments()
         cleanupControl.selectedSegment=Cleanup.allCases.firstIndex(of:a.cleanup) ?? 0;cleanupName.stringValue=a.cleanup.title
         brightnessSlider.doubleValue=a.brightness;contrastSlider.doubleValue=a.contrast;sharpnessSlider.doubleValue=a.sharpness ?? 0;exposureSlider.doubleValue=a.exposure ?? 0;showAdjustmentValues()
@@ -465,7 +473,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
     /// or the auto-save timer. `change` is false when only the page on screen moved.
     func save(change:Bool=true){
         if change {deviationCache=nil}
-        if hasProjectFile {if change{unsaved=true};updateTitle();return}
+        if hasProjectFile {
+            if change {
+                unsaved=true
+                // A copy of the unsaved state is kept aside once the edits pause, in case the app does not get to Save.
+                NSObject.cancelPreviousPerformRequests(withTarget:self,selector:#selector(writeRecoveryCopy),object:nil)
+                perform(#selector(writeRecoveryCopy),with:nil,afterDelay:2)
+            }
+            updateTitle();return
+        }
         if change {untitledChanged=true}
         // Writing a long project takes tens of milliseconds, so a run of steps or edits is written once it pauses.
         NSObject.cancelPreviousPerformRequests(withTarget:self,selector:#selector(writeUntitled),object:nil)
@@ -478,8 +494,55 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
     @discardableResult func write()->Bool {
         // An untitled project nothing was added to leaves no file behind.
         guard LaunchPolicy.shouldWrite(pageCount:project.pages.count,fileExists:FileManager.default.fileExists(atPath:projectURL.path)) else{unsaved=false;updateTitle();return true}
-        do{try project.save(projectURL);unsaved=false;updateTitle();noteRecent();return true}
-        catch{window?.subtitle="SAVE FAILED — \(error.localizedDescription)";status.stringValue="SAVE FAILED: \(error.localizedDescription)";return false}
+        do{try project.save(projectURL);unsaved=false;saveFailure=nil;dropRecoveryCopy();updateTitle();refreshDetail();noteRecent();return true}
+        catch{saveFailure="SAVE FAILED — \(error.localizedDescription)";window?.subtitle=saveFailure!;status.stringValue="SAVE FAILED: \(error.localizedDescription)";return false}
+    }
+    // MARK: Recovery
+    /// Writes this session's recovery copy: the named project as it stands, unsaved changes included.
+    @objc func writeRecoveryCopy(){
+        NSObject.cancelPreviousPerformRequests(withTarget:self,selector:#selector(writeRecoveryCopy),object:nil)
+        guard hasProjectFile,unsaved,!project.pages.isEmpty else{return}
+        do{try RecoverySnapshot(id:sessionID,originalPath:projectURL.path,written:Date(),project:project).write(in:supportURL)}
+        catch{status.stringValue="Could not write the recovery copy: \(error.localizedDescription)"}
+    }
+    /// The copy is no longer needed: its changes are in the project file, or were knowingly discarded.
+    func dropRecoveryCopy(){
+        NSObject.cancelPreviousPerformRequests(withTarget:self,selector:#selector(writeRecoveryCopy),object:nil)
+        RecoverySnapshot.remove(sessionID,in:supportURL)
+    }
+    func recoveryEntries()->[RecoveryList.Entry] {
+        RecoveryList.entries(in:supportURL,except:sessionID,exceptFile:hasProjectFile ? nil:projectURL,exists:FileManager.default.fileExists(atPath:),
+            modified:{(try? FileManager.default.attributesOfItem(atPath:$0))?[.modificationDate] as? Date})
+    }
+    @objc func showRecovery(){
+        if recovery == nil {
+            recovery=RecoveryController()
+            recovery!.entries={[weak self] in self?.recoveryEntries() ?? []}
+            recovery!.onOpen={[weak self] entry,saveAs in self?.recover(entry,saveAs:saveAs)}
+        }
+        recovery!.show()
+    }
+    /// Opens a recovery copy. A named project's copy opens as that project with its changes unsaved, so the file
+    /// itself changes only when the user saves; `saveAs` asks for a new file at once.
+    func recover(_ entry:RecoveryList.Entry,saveAs:Bool){
+        guard confirmUnsaved() else{return}
+        if entry.snapshot == nil {open(entry.file)} else {
+            do {
+                let copy=try RecoverySnapshot.read(entry.file)
+                guard let original=copy.originalPath else{throw CropError.message("This recovery copy does not say which project it belongs to")}
+                show(copy.project,at:URL(fileURLWithPath:original))
+                // The copy stays this session's own until the project is saved.
+                sessionID=copy.id;unsaved=true;updateTitle()
+                status.stringValue="Recovered unsaved changes to \(projectURL.lastPathComponent) · Save writes them to the project"
+            } catch {showError(error);return}
+        }
+        recovery?.reload()
+        if saveAs {self.saveAs(nil);recovery?.reload()}
+    }
+    /// At launch, says so when a project's unsaved changes were left behind by a crash.
+    func offerRecovery(){
+        guard testDirectory == nil,recoveryEntries().contains(where:{$0.reason.needsAttention}) else{return}
+        showRecovery();recovery?.note.stringValue="KettleStitch closed before these changes were saved. Open a copy to carry on from where you were."
     }
     @objc func saveProject(){
         guard hasProjectFile else{saveAs();return}
@@ -514,7 +577,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
         switch alert.runModal() {
         case .alertFirstButtonReturn:return write()
         case .alertSecondButtonReturn:return false
-        default:unsaved=false;updateTitle();return true
+        default:unsaved=false;dropRecoveryCopy();updateTitle();return true
         }
     }
 
@@ -932,7 +995,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
         guard confirmUnsaved() else{return}
         let panel=NSSavePanel();panel.nameFieldStringValue="Book.kettlestitch";panel.message="Choose where to save the new project."
         guard panel.runModal() == .OK,let url=panel.url else{return}
-        do{let fresh=Project();try fresh.save(url);writeUntitled();stop();decoded=[:];project=fresh;projectURL=url;undoStack=[];redoStack=[];unsaved=false;untitledChanged=false;noteRecent();updateTitle();reloadPages();selectCurrent()}catch{showError(error)}
+        do{let fresh=Project();try fresh.save(url);writeUntitled();stop();dropRecoveryCopy();sessionID=UUID();decoded=[:];project=fresh;projectURL=url;undoStack=[];redoStack=[];unsaved=false;untitledChanged=false;noteRecent();updateTitle();reloadPages();selectCurrent()}catch{showError(error)}
     }
     @objc func importImages(){
         let panel=NSOpenPanel();panel.canChooseFiles=true;panel.canChooseDirectories=true;panel.allowsMultipleSelection=true;panel.message="Choose photographs or a folder. Subfolders are not imported."
@@ -978,7 +1041,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
     @objc func openProject(){let panel=NSOpenPanel();panel.allowedContentTypes=ImportPolicy.projectExtensions.compactMap{UTType(filenameExtension:$0)}+[.json];guard confirmUnsaved(),panel.runModal() == .OK,let url=panel.url else{return};open(url)}
     @objc func openRecent(_ sender:NSMenuItem){if let url=sender.representedObject as? URL,confirmUnsaved(){open(url)}}
     func open(_ url:URL){
-        do{let loaded=try Project.read(url);writeUntitled();stop();generation=UUID();decoded=[:];project=loaded;project.selected=min(max(0,project.selected),max(0,project.pages.count-1));projectURL=url;unsaved=false;untitledChanged=false;noteRecent();updateTitle();undoStack=[];redoStack=[];thumbs=[:];previewThumbs=[:];turnedThumbs=[:];thumbnailPending=[:];thumbnailFailures=[:];pixelSizes=[:];reloadPages();selectCurrent();status.stringValue="Opened \(url.lastPathComponent)";DispatchQueue.main.async{self.findMissingPhotographs()}}catch{showError(error)}
+        do{show(try Project.read(url),at:url);status.stringValue="Opened \(url.lastPathComponent)"}catch{showError(error)}
+    }
+    /// Replaces the project on screen with another. What was open has been saved or let go by now.
+    func show(_ loaded:Project,at url:URL){
+        do{writeUntitled();stop();dropRecoveryCopy();sessionID=UUID();saveFailure=nil;generation=UUID();decoded=[:];project=loaded;project.selected=min(max(0,project.selected),max(0,project.pages.count-1));projectURL=url;unsaved=false;untitledChanged=false;noteRecent();updateTitle();undoStack=[];redoStack=[];thumbs=[:];previewThumbs=[:];turnedThumbs=[:];thumbnailPending=[:];thumbnailFailures=[:];pixelSizes=[:];reloadPages();selectCurrent();DispatchQueue.main.async{self.findMissingPhotographs()}}
     }
     @objc func locatePhotographs(){findMissingPhotographs();if Relink.missing(project.pages,exists:FileManager.default.fileExists(atPath:)).isEmpty {status.stringValue="Every photograph is where the project expects it"}}
     /// A project holds each photograph's full path. When some are gone, the project's own folder is tried first;

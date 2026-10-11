@@ -66,6 +66,7 @@ extension AppDelegate: NSMenuItemValidation, NSMenuDelegate {
         let file=menu("File")
         add(file,"New Project…",#selector(newProject),"n");add(file,"Open Project…",#selector(openProject),"o")
         let recent=NSMenu(title:"Open Recent");recent.delegate=self;add(file,"Open Recent",nil,own:false).submenu=recent
+        add(file,"Recovery…",#selector(showRecovery))
         file.addItem(.separator());add(file,"Import Photographs…",#selector(importImages),"i",plain);add(file,"Locate Missing Photographs…",#selector(locatePhotographs))
         file.addItem(.separator());add(file,"Close",#selector(NSWindow.performClose(_:)),"w",own:false);add(file,"Save",#selector(saveProject),"s");add(file,"Save Project As…",#selector(saveAs),"s",[.command,.shift])
         file.addItem(.separator());add(file,"Export…",#selector(exportImages),"e",plain)
@@ -237,4 +238,76 @@ final class DeviationsController: NSObject, NSTableViewDataSource, NSTableViewDe
         return label
     }
     @objc func rowClicked(){if rows.indices.contains(table.clickedRow){owner?.show(rows[table.clickedRow].index)}}
+}
+
+/// Lists what can be recovered: named projects' unsaved changes left by a crash, and sessions never given a name.
+final class RecoveryController: NSObject, NSTableViewDataSource, NSTableViewDelegate {
+    let window=NSPanel(contentRect:NSRect(x:0,y:0,width:820,height:360),styleMask:[.titled,.closable,.resizable,.utilityWindow],backing:.buffered,defer:false)
+    let table=NSTableView(),note=NSTextField(wrappingLabelWithString:"")
+    let openButton=NSButton(title:"Open",target:nil,action:nil),saveAsButton=NSButton(title:"Save As…",target:nil,action:nil),deleteButton=NSButton(title:"Delete…",target:nil,action:nil)
+    var entries:(()->[RecoveryList.Entry])?
+    var onOpen:((RecoveryList.Entry,Bool)->Void)?
+    private(set) var rows:[RecoveryList.Entry]=[]
+    static let standing="Copies of unsaved work kept on this Mac. Opening one never changes a project file until you save. They stay here until you delete them."
+    static let columns:[(id:String,title:String,width:CGFloat)]=[("name","Project",170),("pages","Pages",50),("written","Last Change",140),("missing","Missing Photos",95),("why","Why It Is Here",220),("path","Project File",260)]
+    override init(){
+        super.init()
+        window.title="Recovery";window.isReleasedWhenClosed=false;window.isFloatingPanel=false;window.hidesOnDeactivate=false;window.minSize=NSSize(width:560,height:220)
+        for column in Self.columns {
+            let c=NSTableColumn(identifier:NSUserInterfaceItemIdentifier(column.id));c.title=column.title;c.width=column.width;table.addTableColumn(c)
+        }
+        table.dataSource=self;table.delegate=self;table.usesAlternatingRowBackgroundColors=true;table.allowsMultipleSelection=false;table.target=self;table.doubleAction=#selector(open)
+        let scroll=NSScrollView();scroll.hasVerticalScroller=true;scroll.hasHorizontalScroller=true;scroll.documentView=table;scroll.borderType = .bezelBorder
+        note.font = .systemFont(ofSize:11);note.textColor = .secondaryLabelColor
+        openButton.target=self;openButton.action=#selector(open);openButton.keyEquivalent="\r"
+        saveAsButton.target=self;saveAsButton.action=#selector(saveAs);deleteButton.target=self;deleteButton.action=#selector(remove)
+        let buttons=NSStackView(views:[deleteButton,NSView(),saveAsButton,openButton])
+        let stack=NSStackView(views:[note,scroll,buttons]);stack.orientation = .vertical;stack.alignment = .leading;stack.spacing=10;stack.edgeInsets=NSEdgeInsets(top:14,left:14,bottom:14,right:14)
+        for view in [scroll,buttons,note] as [NSView] {view.translatesAutoresizingMaskIntoConstraints=false;view.widthAnchor.constraint(equalTo:stack.widthAnchor,constant:-28).isActive=true}
+        window.contentView=stack;window.center()
+    }
+    func show(){note.stringValue=Self.standing;reload();window.makeKeyAndOrderFront(nil)}
+    func reload(){
+        rows=entries?() ?? [];table.reloadData()
+        if !rows.isEmpty,table.selectedRow<0 {table.selectRowIndexes(IndexSet(integer:0),byExtendingSelection:false)}
+        if rows.isEmpty {note.stringValue="There is nothing to recover."}
+        showSelection()
+    }
+    func showSelection(){let chosen=table.selectedRow>=0;for button in [openButton,saveAsButton,deleteButton] {button.isEnabled=chosen}}
+    var selected:RecoveryList.Entry? {rows.indices.contains(table.selectedRow) ? rows[table.selectedRow]:nil}
+    static let date:DateFormatter={let f=DateFormatter();f.dateStyle = .medium;f.timeStyle = .short;return f}()
+    func text(_ entry:RecoveryList.Entry,_ column:String)->String {
+        switch column {
+        case "name":return entry.name
+        case "pages":return String(entry.pageCount)
+        case "written":return entry.written == .distantPast ? "":Self.date.string(from:entry.written)
+        case "missing":return entry.missing==0 ? "None":"\(entry.missing) of \(entry.pageCount)"
+        case "why":return entry.reason.explanation
+        default:return entry.originalPath.map{($0 as NSString).abbreviatingWithTildeInPath} ?? ""
+        }
+    }
+    func numberOfRows(in tableView:NSTableView)->Int {rows.count}
+    func tableView(_ tableView:NSTableView,viewFor tableColumn:NSTableColumn?,row:Int)->NSView? {
+        let id=tableColumn?.identifier ?? NSUserInterfaceItemIdentifier("name")
+        let cell=tableView.makeView(withIdentifier:id,owner:nil) as? NSTableCellView ?? {
+            let cell=NSTableCellView(),label=NSTextField(labelWithString:"");label.lineBreakMode = .byTruncatingMiddle;label.translatesAutoresizingMaskIntoConstraints=false
+            cell.identifier=id;cell.addSubview(label);cell.textField=label
+            NSLayoutConstraint.activate([label.leadingAnchor.constraint(equalTo:cell.leadingAnchor,constant:2),label.trailingAnchor.constraint(equalTo:cell.trailingAnchor,constant:-2),label.centerYAnchor.constraint(equalTo:cell.centerYAnchor)])
+            return cell
+        }()
+        cell.textField?.stringValue=text(rows[row],id.rawValue);cell.textField?.toolTip=cell.textField?.stringValue
+        return cell
+    }
+    func tableViewSelectionDidChange(_ notification:Notification){showSelection()}
+    @objc func open(){if let selected {onOpen?(selected,false)}}
+    @objc func saveAs(){if let selected {onOpen?(selected,true)}}
+    @objc func remove(){
+        guard let selected else{return}
+        let alert=NSAlert();alert.alertStyle = .warning;alert.messageText="Delete the recovery copy of “\(selected.name)”?"
+        alert.informativeText=selected.reason.needsAttention ? "Its changes exist nowhere else and cannot be brought back. The project file and the photographs are not touched.":"This cannot be undone. Photographs are not touched."
+        alert.addButton(withTitle:"Delete");alert.addButton(withTitle:"Cancel")
+        guard alert.runModal() == .alertFirstButtonReturn else{return}
+        do{try FileManager.default.removeItem(at:selected.file)}catch{NSAlert(error:error).runModal()}
+        note.stringValue=Self.standing;reload()
+    }
 }
