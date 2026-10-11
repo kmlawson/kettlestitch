@@ -224,7 +224,19 @@ final class CropCanvas: NSView {
         else if quad != before {onCommit?(quad)}
         needsDisplay=true
     }
-    override func scrollWheel(with event: NSEvent) {pan.x-=event.scrollingDeltaX;pan.y-=event.scrollingDeltaY;needsDisplay=true}
+    /// A mouse wheel zooms about the pointer. A trackpad's two-finger scroll still moves the picture; it zooms by pinching.
+    override func scrollWheel(with event: NSEvent) {
+        guard !event.hasPreciseScrollingDeltas else {pan.x-=event.scrollingDeltaX;pan.y-=event.scrollingDeltaY;needsDisplay=true;return}
+        guard event.scrollingDeltaY != 0 else {return}
+        zoom(by:pow(1.12,max(-4,min(4,event.scrollingDeltaY))),about:convert(event.locationInWindow,from:nil))
+    }
+    /// Changes the zoom so that the part of the picture under `point` stays under it.
+    func zoom(by factor: CGFloat, about point: CGPoint) {
+        let old=zoom,new=min(8,max(0.5,old*factor));guard new != old,image != nil else {return}
+        let r=imageRect,centre=CGPoint(x:r.midX,y:r.midY),scale=new/old
+        pan=CGPoint(x:point.x-bounds.midX-(point.x-centre.x)*scale,y:point.y-bounds.midY-(point.y-centre.y)*scale)
+        zoom=new
+    }
     override func magnify(with event: NSEvent) {zoom=min(8,max(0.5,zoom*(1+event.magnification)))}
     override func keyDown(with event: NSEvent) {
         if event.keyCode==36 {onAccept?();return}

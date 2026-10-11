@@ -1,10 +1,26 @@
 import AppKit
 import CropCore
 
+/// The disclosure triangle of an inspector section. Whether the section is open is remembered between launches.
+final class FoldButton: NSButton {
+    private var body:NSView?
+    private var key=""
+    convenience init(key:String,open:Bool,body:NSView){
+        self.init(title:"",target:nil,action:nil)
+        self.key="inspectorOpen."+key;self.body=body;bezelStyle = .disclosure;setButtonType(.pushOnPushOff);target=self;action=#selector(changed)
+        let remembered=UserDefaults.standard.object(forKey:self.key) as? Bool ?? open
+        state=remembered ? .on:.off;body.isHidden = !remembered
+    }
+    @objc func flip(){state=state == .on ? .off:.on;changed()}
+    @objc func changed(){body?.isHidden=state != .on;UserDefaults.standard.set(state == .on,forKey:key)}
+}
+private final class InspectorDocument: NSView {override var isFlipped:Bool{true}}
 extension AppDelegate {
-    func header(_ title:String,accessory:NSView?=nil)->NSView {
+    /// A section heading. With `fold` it carries a disclosure triangle, and a click anywhere on the title folds the section too.
+    func header(_ title:String,accessory:NSView?=nil,fold:FoldButton?=nil)->NSView {
         let label=NSTextField(labelWithString:title.uppercased());label.font = .systemFont(ofSize:11,weight:.semibold);label.textColor = .secondaryLabelColor
-        let row=NSStackView(views:[label,NSView()]+(accessory.map{[$0]} ?? []))
+        if let fold {label.addGestureRecognizer(NSClickGestureRecognizer(target:fold,action:#selector(FoldButton.flip)))}
+        let row=NSStackView(views:(fold.map{[$0]} ?? [])+[label,NSView()]+(accessory.map{[$0]} ?? []));row.spacing=4
         let line=NSBox();line.boxType = .separator
         let stack=NSStackView(views:[row,line]);stack.orientation = .vertical;stack.spacing=4
         row.widthAnchor.constraint(equalTo:stack.widthAnchor).isActive=true;line.widthAnchor.constraint(equalTo:stack.widthAnchor).isActive=true
@@ -17,8 +33,17 @@ extension AppDelegate {
         return control
     }
     func buildInspector()->NSView {
-        let root=PaneView()
-        let stack=NSStackView();stack.orientation = .vertical;stack.alignment = .leading;stack.spacing=10;stack.translatesAutoresizingMaskIntoConstraints=false;root.addSubview(stack)
+        // The sections scroll when the window is too short for all of them.
+        let root=PaneView(),scroll=NSScrollView(),document=InspectorDocument()
+        scroll.hasVerticalScroller=true;scroll.drawsBackground=false;scroll.automaticallyAdjustsContentInsets=true;scroll.translatesAutoresizingMaskIntoConstraints=false;document.translatesAutoresizingMaskIntoConstraints=false
+        root.addSubview(scroll);scroll.documentView=document
+        let stack=NSStackView();stack.orientation = .vertical;stack.alignment = .leading;stack.spacing=10;stack.translatesAutoresizingMaskIntoConstraints=false;document.addSubview(stack)
+        /// A group of controls that folds away under its heading.
+        func section(_ title:String,key:String,open:Bool=true,accessory:NSView?=nil,_ views:[NSView]){
+            let body=NSStackView();body.orientation = .vertical;body.alignment = .leading;body.spacing=10
+            for view in views {body.addArrangedSubview(view);view.widthAnchor.constraint(equalTo:body.widthAnchor).isActive=true}
+            add(header(title,accessory:accessory,fold:FoldButton(key:key,open:open,body:body)));add(body,after:22)
+        }
         func add(_ view:NSView,after gap:CGFloat?=nil){
             stack.addArrangedSubview(view);view.widthAnchor.constraint(equalTo:stack.widthAnchor).isActive=true
             if let gap {stack.setCustomSpacing(gap,after:view)}
@@ -45,7 +70,7 @@ extension AppDelegate {
         smudgeBrushChanged(nil)
         let frame=NSGridView(views:[[caption("Proposal:"),candidates],[caption("Frame:"),crop],[caption("Corner:"),corners],[caption("Size:"),size],[caption("Split:"),splits],[caption("Deskew:"),tilt],[caption("Pictures:"),pictures],[caption("Smudge:"),smudgeControl],[caption("Brush:"),brushSize],[caption("Strength:"),brushStrength]])
         frame.rowSpacing=7;frame.columnSpacing=8;frame.column(at:0).xPlacement = .trailing;frame.column(at:0).width=78;frame.column(at:1).xPlacement = .fill
-        add(header("Cropping Frame"));add(detail);add(note);add(frame,after:22)
+        section("Cropping Frame",key:"crop",[detail,note,frame])
         // Image adjustments
         let reset=NSButton(image:symbol("arrow.counterclockwise") ?? NSImage(),target:self,action:#selector(resetAdjustments));reset.isBordered=false;reset.toolTip="Reset image adjustments"
         cleanupControl.segmentCount=4;cleanupControl.trackingMode = .selectOne;cleanupControl.segmentDistribution = .fillEqually;cleanupControl.target=self;cleanupControl.action=#selector(adjustmentChanged(_:))
@@ -68,7 +93,7 @@ extension AppDelegate {
         for row in 0..<3 {adjustments.mergeCells(inHorizontalRange:NSRange(location:1,length:2),verticalRange:NSRange(location:row,length:1));adjustments.cell(atColumnIndex:1,rowIndex:row).xPlacement = .fill}
         adjustments.column(at:2).width=30
         adjustments.rowSpacing=6;adjustments.columnSpacing=8;adjustments.column(at:0).xPlacement = .trailing;adjustments.column(at:0).width=78;adjustments.row(at:1).topPadding = -4
-        add(header("Image Adjustments",accessory:reset));add(adjustments,after:22)
+        section("Image Adjustments",key:"adjustments",accessory:reset,[adjustments])
         // Page format
         func field(_ f:NSTextField)->NSView {
             f.alignment = .left;f.target=self;f.action=#selector(formatChanged(_:));f.cell?.sendsActionOnEndEditing=true;f.widthAnchor.constraint(equalToConstant:64).isActive=true
@@ -80,12 +105,24 @@ extension AppDelegate {
         let format=NSGridView(views:[[caption("Width:"),field(widthField)],[caption("Height:"),field(heightField)],[caption("Fit into:"),fitPopup]])
         format.rowSpacing=6;format.columnSpacing=8;format.column(at:0).xPlacement = .trailing;format.column(at:0).width=78;format.column(at:1).xPlacement = .leading
         resolutionLabel.font = .systemFont(ofSize:11);resolutionLabel.textColor = .secondaryLabelColor;resolutionLabel.alignment = .center
-        let all=NSButton(title:"Apply Settings to All Pages",target:self,action:#selector(applySettingsToAll));all.bezelStyle = .rounded;all.controlSize = .small;all.toolTip="Copy this page's image adjustments and page format to every page"
-        add(header("Page Format"));add(format);add(resolutionLabel);add(all)
+        let all=applyAllButton;all.target=self;all.action=#selector(applySettingsToAll);all.bezelStyle = .rounded;all.controlSize = .small;all.toolTip="Copy this page's image adjustments and page format to every page"
+        section("Page Format",key:"format",open:false,[format,resolutionLabel,all])
+        // The keys used most, kept in view; the full list is one key away.
+        let keys:[(String,String)]=[("← / →","Previous / next image"),("C","Set crop to same as previous image"),("T","Propose split"),("R","Rotate (Shift-R for reverse)"),("; / '","Decrease / increase current crop"),("H J K L","Increase crop edges (Shift to decrease, Option to move crop)"),("/","See more shortcuts")]
+        let shortcuts=NSGridView(views:keys.map{entry->[NSView] in
+            let key=NSTextField(labelWithString:entry.0);key.font = .monospacedSystemFont(ofSize:11,weight:.medium);key.textColor = .secondaryLabelColor;key.alignment = .right
+            let action=NSTextField(wrappingLabelWithString:entry.1);action.font = .systemFont(ofSize:11);action.textColor = .secondaryLabelColor
+            action.setContentCompressionResistancePriority(.defaultLow,for:.horizontal)
+            return [key,action]
+        })
+        shortcuts.rowSpacing=4;shortcuts.columnSpacing=8;shortcuts.column(at:0).xPlacement = .trailing;shortcuts.column(at:0).width=58;shortcuts.rowAlignment = .firstBaseline
+        section("Shortcuts",key:"shortcuts",[shortcuts])
         inspectorControls=[candidates,crop,corners,size,splits,tilt,pictures,reset,smudgeControl,smudgeSizeSlider,smudgeStrengthSlider,cleanupControl,brightnessSlider,contrastSlider,sharpnessSlider,widthField,heightField,fitPopup,all]
         NSLayoutConstraint.activate([
-            stack.topAnchor.constraint(equalTo:root.safeAreaLayoutGuide.topAnchor,constant:14),stack.leadingAnchor.constraint(equalTo:root.leadingAnchor,constant:16),stack.trailingAnchor.constraint(equalTo:root.trailingAnchor,constant:-16),
-            stack.bottomAnchor.constraint(lessThanOrEqualTo:root.bottomAnchor,constant:-12)])
+            scroll.topAnchor.constraint(equalTo:root.topAnchor),scroll.bottomAnchor.constraint(equalTo:root.bottomAnchor),scroll.leadingAnchor.constraint(equalTo:root.leadingAnchor),scroll.trailingAnchor.constraint(equalTo:root.trailingAnchor),
+            document.topAnchor.constraint(equalTo:scroll.contentView.topAnchor),document.leadingAnchor.constraint(equalTo:scroll.contentView.leadingAnchor),document.widthAnchor.constraint(equalTo:scroll.contentView.widthAnchor),
+            stack.topAnchor.constraint(equalTo:document.topAnchor,constant:14),stack.leadingAnchor.constraint(equalTo:document.leadingAnchor,constant:16),stack.trailingAnchor.constraint(equalTo:document.trailingAnchor,constant:-16),
+            stack.bottomAnchor.constraint(equalTo:document.bottomAnchor,constant:-12)])
         return root
     }
 }

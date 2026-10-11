@@ -87,6 +87,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
     var decoded:[String:CGImage]=[:]
     var travel=1
     var importing=false
+    let applyAllButton=NSButton(title:"Apply Settings to All Pages",target:nil,action:nil)
     let banner=NSVisualEffectView(),bannerLabel=NSTextField(labelWithString:""),bannerSpinner=NSProgressIndicator()
     var shownSize=(width:0.0,height:0.0)
     var copiedSettings: (Adjustments?,PageFormat?)?
@@ -662,7 +663,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
     @objc func pasteSettings(){guard let s=copiedSettings else{return};let targets=targetIndexes;edit(targets,geometry:false){$0.adjustments=s.0;$0.format=s.1};status.stringValue="Pasted settings to \(targets.count) page\(targets.count==1 ? "":"s")"}
     @objc func applySettingsToAll(){
         guard let i=current else{return};let a=project.pages[i].adjustments,f=project.pages[i].format
-        edit(Array(project.pages.indices),geometry:false){$0.adjustments=a;$0.format=f};status.stringValue="Applied this page's adjustments and format to all \(project.pages.count) pages"
+        // Said before the work, which on a long project takes a moment, and confirmed after it on the button itself.
+        applyAllButton.title="Applying to \(project.pages.count) Pages…";applyAllButton.isEnabled=false;status.stringValue="Applying this page's adjustments and format to all \(project.pages.count) pages…";showBanner("Applying settings to \(project.pages.count) pages…")
+        // A moment first, so the notice is on screen before the main thread is busy.
+        DispatchQueue.main.asyncAfter(deadline:.now()+0.05){[weak self] in guard let self else{return}
+            self.edit(Array(self.project.pages.indices),geometry:false){$0.adjustments=a;$0.format=f}
+            DispatchQueue.main.asyncAfter(deadline:.now()+0.6){[weak self] in if self?.importing==false {self?.showBanner(nil)}};self.status.stringValue="Applied this page's adjustments and format to all \(self.project.pages.count) pages · Undo puts them back"
+            self.applyAllButton.title="✓ Applied to All \(self.project.pages.count) Pages"
+            DispatchQueue.main.asyncAfter(deadline:.now()+2.5){[weak self] in guard let self else{return};self.applyAllButton.title="Apply Settings to All Pages";self.applyAllButton.isEnabled=self.current != nil}
+        }
     }
 
     // MARK: Projects
@@ -992,7 +1001,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
         case "?","/":help()
         default:
             if e.keyCode==53 {if canvas.smudgeMode{setSmudging(false)}else if canvas.zoneMode{canvas.zoneMode=false;status.stringValue="Picture zone cancelled"}else if canvas.hasSelection{canvas.releaseCorner()}else{stop()}}
-            else if e.keyCode==123 {navigate(-1)}else if e.keyCode==124{navigate(1)}else if e.keyCode==36{accept()}
+            else if e.keyCode==123 {navigate(-1)}
+            else if e.keyCode==124 {
+                // With Shift the crop comes along: the same as stepping on and pressing C.
+                let from=current;navigate(1)
+                if e.modifierFlags.contains(.shift),current != from {copyPrevious()}
+            }
+            else if e.keyCode==36{accept()}
             else if e.keyCode==115 {firstPage()}else if e.keyCode==119{lastPage()}
             else if e.keyCode==116{navigate(-10)}else if e.keyCode==121{navigate(10)}else{return false}
         }

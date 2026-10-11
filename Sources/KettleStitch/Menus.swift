@@ -30,6 +30,9 @@ extension AppDelegate: NSMenuItemValidation, NSMenuDelegate {
         return s
     }
     func validateMenuItem(_ item:NSMenuItem)->Bool {
+        // A shortcut without Command or Control is an ordinary key, which belongs to a text field while one is being edited.
+        if item.target === self,!item.keyEquivalent.isEmpty,item.keyEquivalentModifierMask.isDisjoint(with:[.command,.control]),
+           editedText != nil || window.attachedSheet != nil || !(NSApp.keyWindow==nil || NSApp.keyWindow===window) {return false}
         guard let action=item.action,let command=AppDelegate.commands[action] else{return true}
         let state=menuState
         if let title=MenuPolicy.title(command,state){item.title=title}
@@ -48,6 +51,9 @@ extension AppDelegate: NSMenuItemValidation, NSMenuDelegate {
             return item
         }
         func arrow(_ key:Int)->String {String(UnicodeScalar(key)!)}
+        // Commands that have a key of their own show just that key. The window's key monitor is what acts on it;
+        // `validateMenuItem` keeps these from firing while text is typed or another window has the keyboard.
+        let plain:NSEvent.ModifierFlags=[]
         let app=menu("KettleStitch")
         add(app,"About KettleStitch",#selector(NSApplication.orderFrontStandardAboutPanel(_:)),own:false)
         app.addItem(.separator());add(app,"Settings…",#selector(showSettings),",")
@@ -58,9 +64,9 @@ extension AppDelegate: NSMenuItemValidation, NSMenuDelegate {
         let file=menu("File")
         add(file,"New Project…",#selector(newProject),"n");add(file,"Open Project…",#selector(openProject),"o")
         let recent=NSMenu(title:"Open Recent");recent.delegate=self;add(file,"Open Recent",nil,own:false).submenu=recent
-        file.addItem(.separator());add(file,"Import Photographs…",#selector(importImages),"i");add(file,"Locate Missing Photographs…",#selector(locatePhotographs))
+        file.addItem(.separator());add(file,"Import Photographs…",#selector(importImages),"i",plain);add(file,"Locate Missing Photographs…",#selector(locatePhotographs))
         file.addItem(.separator());add(file,"Close",#selector(NSWindow.performClose(_:)),"w",own:false);add(file,"Save",#selector(saveProject),"s");add(file,"Save Project As…",#selector(saveAs),"s",[.command,.shift])
-        file.addItem(.separator());add(file,"Export…",#selector(exportImages),"e")
+        file.addItem(.separator());add(file,"Export…",#selector(exportImages),"e",plain)
 
         let edit=menu("Edit")
         add(edit,"Undo",#selector(undo),"z");add(edit,"Redo",#selector(redo),"z",[.command,.shift])
@@ -72,40 +78,40 @@ extension AppDelegate: NSMenuItemValidation, NSMenuDelegate {
         add(edit,"Apply Settings to All Pages",#selector(applySettingsToAll));add(edit,"Reset Image Adjustments",#selector(resetAdjustments))
 
         let page=menu("Page")
-        add(page,"Next Page",#selector(next),"]");add(page,"Previous Page",#selector(previous),"[")
+        add(page,"Next Page",#selector(next),arrow(NSRightArrowFunctionKey),plain);add(page,"Previous Page",#selector(previous),arrow(NSLeftArrowFunctionKey),plain)
         let go=NSMenu(title:"Go To");add(page,"Go To",nil,own:false).submenu=go
-        add(go,"First Page",#selector(firstPage),arrow(NSUpArrowFunctionKey));add(go,"Last Page",#selector(lastPage),arrow(NSDownArrowFunctionKey))
-        go.addItem(.separator());add(go,"Next Unreviewed",#selector(nextReview),"u");add(go,"Next Flagged",#selector(nextFlagged),"u",[.command,.shift]);add(go,"Next Unusual Page",#selector(nextOutlier),"u",[.command,.option])
-        add(page,"Accept and Next",#selector(accept),"\r")
+        add(go,"First Page",#selector(firstPage),arrow(NSHomeFunctionKey),plain);add(go,"Last Page",#selector(lastPage),arrow(NSEndFunctionKey),plain)
+        go.addItem(.separator());add(go,"Next Unreviewed",#selector(nextReview),"n",plain);add(go,"Next Flagged",#selector(nextFlagged),"u",[.command,.shift]);add(go,"Next Unusual Page",#selector(nextOutlier),"u",plain)
+        add(page,"Accept and Next",#selector(accept),"\r",plain)
         page.addItem(.separator())
-        add(page,"Select All Pages",#selector(selectAllPages),"a",[.command,.shift]);add(page,"Add Flag",#selector(toggleFlag),"l",[.command,.shift])
+        add(page,"Select All Pages",#selector(selectAllPages),"a",[.command,.shift]);add(page,"Add Flag",#selector(toggleFlag),"m",plain)
         page.addItem(.separator())
-        add(page,"Rotate Left",#selector(rotateLeft),"l");add(page,"Rotate Right",#selector(rotate),"r")
+        add(page,"Rotate Left",#selector(rotateLeft),"r",[.shift]);add(page,"Rotate Right",#selector(rotate),"r",plain)
         page.addItem(.separator())
         add(page,"Reverse Pages Order",#selector(reversePages));add(page,"Remove from Project",#selector(removePages),"\u{8}")
 
         let crop=menu("Crop")
-        add(crop,"Detect Cropping Frame",#selector(detectCurrent),"d",[.command,.shift]);add(crop,"Detect All Pending Pages",#selector(detectPending),"d",[.command,.option])
-        add(crop,"Next Proposal",#selector(nextCandidate),"]",[.command,.option]);add(crop,"Previous Proposal",#selector(previousCandidate),"[",[.command,.option])
+        add(crop,"Detect Cropping Frame",#selector(detectCurrent),"d",plain);add(crop,"Detect All Pending Pages",#selector(detectPending),"b",plain)
+        add(crop,"Next Proposal",#selector(nextCandidate),"]",plain);add(crop,"Previous Proposal",#selector(previousCandidate),"[",plain)
         crop.addItem(.separator())
-        add(crop,"Set Cropping Frame to Full Image",#selector(resetCrop));add(crop,"Copy Previous Cropping Frame",#selector(copyPrevious))
+        add(crop,"Set Cropping Frame to Full Image",#selector(resetCrop),"x",plain);add(crop,"Copy Previous Cropping Frame",#selector(copyPrevious),"c",plain)
         crop.addItem(.separator())
-        add(crop,"Propose Page Split",#selector(proposeSplit),"t");add(crop,"Remove Page Split",#selector(removeSplit),"t",[.command,.shift])
-        add(crop,"Move Split Left",#selector(moveSplitLeft),arrow(NSLeftArrowFunctionKey),[.command,.option]);add(crop,"Move Split Right",#selector(moveSplitRight),arrow(NSRightArrowFunctionKey),[.command,.option])
+        add(crop,"Propose Page Split",#selector(proposeSplit),"t",plain);add(crop,"Remove Page Split",#selector(removeSplit),"t",[.shift])
+        add(crop,"Move Split Left",#selector(moveSplitLeft),",",plain);add(crop,"Move Split Right",#selector(moveSplitRight),".",plain)
         crop.addItem(.separator())
-        add(crop,"Deskew",#selector(deskew),"k");add(crop,"Remove Deskew",#selector(removeDeskew),"k",[.command,.shift])
-        add(crop,"Turn Counterclockwise by 0.1°",#selector(deskewCounterclockwise),"[",[.command,.control]);add(crop,"Turn Clockwise by 0.1°",#selector(deskewClockwise),"]",[.command,.control])
+        add(crop,"Deskew",#selector(deskew),"q",plain);add(crop,"Remove Deskew",#selector(removeDeskew),"q",[.shift])
+        add(crop,"Turn Counterclockwise by 0.1°",#selector(deskewCounterclockwise),",",[.option]);add(crop,"Turn Clockwise by 0.1°",#selector(deskewClockwise),".",[.option])
         crop.addItem(.separator())
-        add(crop,"Add Picture Zone",#selector(addZone),"p",[.command,.option]);add(crop,"Remove Picture Zones",#selector(removeZones))
-        crop.addItem(.separator());add(crop,"Smudge Brush",#selector(toggleSmudge),"b");add(crop,"Remove Smudges",#selector(removeSmudges),"b",[.command,.shift])
+        add(crop,"Add Picture Zone",#selector(addZone),"w",plain);add(crop,"Remove Picture Zones",#selector(removeZones),"w",[.shift])
+        crop.addItem(.separator());add(crop,"Smudge Brush",#selector(toggleSmudge),"b",[.shift]);add(crop,"Remove Smudges",#selector(removeSmudges),"b",[.option,.shift])
         crop.addItem(.separator())
-        add(crop,"Send to Claude",#selector(sendToClaude),"c",[.command,.option]);add(crop,"Claude Usage Log…",#selector(showUsageLog))
+        add(crop,"Send to Claude",#selector(sendToClaude),"a",plain);add(crop,"Claude Usage Log…",#selector(showUsageLog))
         crop.addItem(.separator())
         add(crop,"Stop Background Work",#selector(stop),".")
 
         let view=menu("View")
-        add(view,"Corrected Preview",#selector(togglePreview),"p",[.command,.shift])
-        view.addItem(.separator());add(view,"Zoom In",#selector(zoomIn),"+");add(view,"Zoom Out",#selector(zoomOut),"-");add(view,"Zoom to Fit",#selector(fit),"0")
+        add(view,"Corrected Preview",#selector(togglePreview),"p",plain)
+        view.addItem(.separator());add(view,"Zoom In",#selector(zoomIn),"=",plain);add(view,"Zoom Out",#selector(zoomOut),"-",plain);add(view,"Zoom to Fit",#selector(fit),"f",plain)
         view.addItem(.separator());add(view,"Show Deviations",#selector(showDeviations),"j")
         view.addItem(.separator());add(view,"Show Sidebar",#selector(toggleSidebarPane),"s",[.command,.control]);add(view,"Show Inspector",#selector(toggleInspector),"i",[.command,.option])
         view.addItem(.separator());add(view,"Enter Full Screen",#selector(NSWindow.toggleFullScreen(_:)),"f",[.command,.control],own:false)
@@ -113,7 +119,7 @@ extension AppDelegate: NSMenuItemValidation, NSMenuDelegate {
         let windows=menu("Window")
         add(windows,"Minimize",#selector(NSWindow.performMiniaturize(_:)),"m",own:false);add(windows,"Zoom",#selector(NSWindow.performZoom(_:)),own:false)
         windows.addItem(.separator());add(windows,"Bring All to Front",#selector(NSApplication.arrangeInFront(_:)),own:false)
-        let help=menu("Help");add(help,"KettleStitch Keyboard Shortcuts",#selector(self.help),"?")
+        let help=menu("Help");add(help,"KettleStitch Keyboard Shortcuts",#selector(self.help),"/",plain)
         NSApp.mainMenu=main;NSApp.windowsMenu=windows;NSApp.helpMenu=help
     }
     /// Rebuilds Open Recent from the system's list each time it opens.

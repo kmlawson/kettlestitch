@@ -24,11 +24,24 @@ final class PreviewThumbnail {
     init(_ image:NSImage,_ look:String){self.image=image;self.look=look}
     static func look(_ p:Page)->String {"\(p.quad)|\(p.rotation)|\(String(describing:p.adjustments))|\(String(describing:p.split))|\(String(describing:p.deskew))|\(String(describing:p.pictureZones))|\(String(describing:p.smudges))"}
 }
+/// A small rounded label, used for a photograph's file type beside its name.
+final class PillLabel: NSTextField {
+    convenience init(){
+        self.init(labelWithString:"");font = .systemFont(ofSize:8.5,weight:.semibold);textColor = .secondaryLabelColor;alignment = .center
+        setContentHuggingPriority(.required,for:.horizontal);setContentCompressionResistancePriority(.required,for:.horizontal)
+    }
+    override var intrinsicContentSize: NSSize {let size=super.intrinsicContentSize;return stringValue.isEmpty ? .zero:NSSize(width:size.width+7,height:size.height+1)}
+    override func draw(_ dirtyRect:NSRect){
+        NSColor.labelColor.withAlphaComponent(0.12).setFill();NSBezierPath(roundedRect:bounds,xRadius:3.5,yRadius:3.5).fill()
+        super.draw(dirtyRect)
+    }
+}
 final class PageCell: NSTableCellView {
     static let identifier=NSUserInterfaceItemIdentifier("page")
     let thumb=NSImageView()
     let title=NSTextField(labelWithString:"")
     let subtitle=NSTextField(labelWithString:"")
+    let kind=PillLabel()
     let flag=NSImageView()
     let spinner=NSProgressIndicator()
     init(){
@@ -38,11 +51,11 @@ final class PageCell: NSTableCellView {
         subtitle.font = .systemFont(ofSize:11);subtitle.lineBreakMode = .byTruncatingTail
         flag.image=symbol("flag.fill");flag.contentTintColor = .systemOrange
         spinner.style = .spinning;spinner.controlSize = .small;spinner.isDisplayedWhenStopped=false
-        for v in [thumb,title,subtitle,flag,spinner] as [NSView] {v.translatesAutoresizingMaskIntoConstraints=false;addSubview(v)}
+        for v in [thumb,title,subtitle,kind,flag,spinner] as [NSView] {v.translatesAutoresizingMaskIntoConstraints=false;addSubview(v)}
         for label in [title,subtitle] {label.setContentCompressionResistancePriority(.defaultLow,for:.horizontal)}
         NSLayoutConstraint.activate([
             thumb.leadingAnchor.constraint(equalTo:leadingAnchor,constant:2),thumb.centerYAnchor.constraint(equalTo:centerYAnchor),thumb.widthAnchor.constraint(equalToConstant:44),thumb.heightAnchor.constraint(equalToConstant:46),
-            title.leadingAnchor.constraint(equalTo:thumb.trailingAnchor,constant:8),title.bottomAnchor.constraint(equalTo:centerYAnchor,constant:-1),title.trailingAnchor.constraint(lessThanOrEqualTo:flag.leadingAnchor,constant:-4),
+            title.leadingAnchor.constraint(equalTo:thumb.trailingAnchor,constant:8),title.bottomAnchor.constraint(equalTo:centerYAnchor,constant:-1),kind.leadingAnchor.constraint(equalTo:title.trailingAnchor,constant:5),kind.centerYAnchor.constraint(equalTo:title.centerYAnchor),kind.trailingAnchor.constraint(lessThanOrEqualTo:flag.leadingAnchor,constant:-4),
             subtitle.leadingAnchor.constraint(equalTo:title.leadingAnchor),subtitle.topAnchor.constraint(equalTo:centerYAnchor,constant:1),subtitle.trailingAnchor.constraint(lessThanOrEqualTo:flag.leadingAnchor,constant:-4),
             spinner.centerXAnchor.constraint(equalTo:thumb.centerXAnchor),spinner.centerYAnchor.constraint(equalTo:thumb.centerYAnchor),
             flag.trailingAnchor.constraint(equalTo:trailingAnchor,constant:-2),flag.centerYAnchor.constraint(equalTo:centerYAnchor),flag.widthAnchor.constraint(equalToConstant:13),flag.heightAnchor.constraint(equalToConstant:13)])
@@ -53,7 +66,10 @@ final class PageCell: NSTableCellView {
         // The photograph Claude is looking at dims under a spinner; queued ones only say so.
         thumb.alphaValue=review == nil ? 1:0.35
         if review == .active {spinner.startAnimation(nil)} else {spinner.stopAnimation(nil)}
-        title.stringValue="\(number). \(URL(fileURLWithPath:page.path).lastPathComponent)"
+        // The file type sits in a pill, so the name itself has more room.
+        let file=URL(fileURLWithPath:page.path)
+        title.stringValue="\(number). \(file.deletingPathExtension().lastPathComponent)"
+        kind.stringValue=file.pathExtension.uppercased();kind.invalidateIntrinsicContentSize();kind.isHidden=kind.stringValue.isEmpty
         let proposed=page.candidates.contains{$0.source==Candidate.claudeSource}
         subtitle.stringValue=review?.label ?? (page.reviewed ? "✓ Reviewed":page.status)+(proposed ? " · Claude fix":"")+(page.split != nil ? " · split":"")+(unusual.map{" · ⚠︎ "+$0} ?? "")
         subtitle.textColor=review != nil ? .controlAccentColor:page.reviewed ? .systemGreen:.secondaryLabelColor

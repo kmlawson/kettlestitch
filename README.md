@@ -4,6 +4,8 @@ A native macOS cropper for large collections of photographed book pages and spre
 
 The app was called PageCrop until version 0.3, and briefly ScanSeamstress. Projects saved as `.pagecrop` or `.scanseamstress` still open; new projects are saved as `.kettlestitch`. On first launch, sessions, preferences and the API key saved under an earlier name are carried over.
 
+Commands that have a key of their own show just that key in the menus (P for the preview, T for a split, and so on); only the standard file and edit commands keep a Command shortcut. A mouse wheel zooms the canvas about the pointer; a trackpad scrolls it and zooms by pinching. The inspector's sections fold away under their headings, and its last section lists the keys used most.
+
 ## Start
 
 Open `dist/KettleStitch.app`. It opens empty: nothing is reopened on its own. Give it something to work on in any of these ways:
@@ -13,7 +15,7 @@ Open `dist/KettleStitch.app`. It opens empty: nothing is reopened on its own. Gi
 - choose **File ▸ Import Photographs…** (**I**) or **File ▸ Open Project…** (**O**);
 - double-click a `.kettlestitch` project, or pick one from **File ▸ Open Recent**.
 
-Photographs are added to the project that is open, skipping any already in it; a project file replaces it. Subfolders are not followed. Crops are proposed for the new photographs as they arrive; **B** detects any that are still pending. Inspect each crop, adjust the four corners, and press **Return** to mark it reviewed and move on. Press **P** to see the perspective-corrected, adjusted result; preview stays on as you move between photographs, and the sidebar pictures show the corrected pages while it is on. **E** opens the export sheet.
+A long import shows a notice over the canvas until the pages appear. Photographs are added to the project that is open, skipping any already in it; a project file replaces it. Subfolders are not followed. Crops are proposed for the new photographs as they arrive; **B** detects any that are still pending. Inspect each crop, adjust the four corners, and press **Return** to mark it reviewed and move on. Press **P** to see the perspective-corrected, adjusted result; preview stays on as you move between photographs, and the sidebar pictures show the corrected pages while it is on. **E** opens the export sheet.
 
 A project file is written when you save it: **S** or File ▸ Save (⌘S) updates the current file, and **Shift-S** saves it under a new name. With "Save changes automatically every 5 minutes" on in Settings (the default), a project file with unsaved changes is also written every five minutes. A dot in the window's close button marks unsaved changes, and quitting, closing or opening another project saves them if automatic saving is on and otherwise asks before discarding them. Exports carry no metadata from the photographs (no location, camera or owner), and an exported PDF has no producer, creator or dates. Until you name a project with **G** (new project at a chosen path) or **S**, every completed edit is kept in `~/Library/Application Support/KettleStitch/` as `Untitled <date and time>.kettlestitch`, a new file for each session, and it appears under Open Recent. A session nothing was added to leaves no file. Source photographs are referenced by absolute path and never modified. If some cannot be found when a project is opened, KettleStitch looks in the project file's own folder and then asks for the folder they are in now; they are matched by file name, and choosing a folder above several moved folders works too. **File ▸ Locate Missing Photographs…** asks again later. Save a named project for each book.
 
@@ -48,10 +50,11 @@ Single-key commands are suspended in text-entry fields and file dialogs.
 | Rotate output clockwise / counterclockwise | R / Shift + R |
 | Add or remove a flag | M |
 | Send to Claude | A |
-| Propose page split / remove it | T / Shift + T (also V / Shift + V; ⌘T / ⇧⌘T) |
+| Propose page split / remove it | T / Shift + T (also V / Shift + V) |
 | Move split left / right | , / . |
 | Larger split movement | Add Shift |
-| Deskew / remove deskew | Q / Shift + Q (⌘K / ⇧⌘K) |
+| Deskew / remove deskew | Q / Shift + Q |
+| Next photograph, taking this crop along | Shift + → |
 | Turn the page by 0.1° | Option + , / Option + . |
 | Draw a picture zone / remove the zones | W / Shift + W |
 | Next unusual page | U |
@@ -120,7 +123,7 @@ The inspector's **Image Adjustments** apply to the corrected output, not the sou
 
 - **Cleanup** has four modes. *None* leaves the photograph as it is. *Color* evens out lighting and whitens the paper. *Grayscale* does the same and removes colour. *Black & White* then reduces the page to pure black and white.
 - **Despeckle** (Off, 1, 2, 3) removes specks from Black & White output: 1 takes only the smallest, 3 larger ones too, scaled to the page's resolution. A small mark beside print, such as a dot or a voicing mark, is kept. It has no effect in the other modes or inside picture zones.
-- The **Smudge** brush blurs print you do not want readable. Choose **Paint** in the inspector (**Shift-B**, or Crop ▸ Smudge Brush), set **Brush** (width) and **Strength**, and drag over the photograph; each drag is one stroke, undone with ⌘Z. A little gray grain is laid over the blur when a stroke is finished. Escape puts the brush down, and **Clear** (**Option-Shift-B**) removes the page's smudges. Smudges lie on the photograph, so they stay on the same print when the crop or split changes, and they appear in the preview and in every export.
+- The **Smudge** brush blurs print you do not want readable. Choose **Paint** in the inspector (**Shift-B**), set **Brush** (width) and **Strength**, and drag over the photograph; each drag is one stroke, undone with ⌘Z. A little gray grain is laid over the blur when a stroke is finished. Escape puts the brush down, and **Clear** (**Option-Shift-B**) removes the page's smudges. Smudges lie on the photograph, so they stay on the same print when the crop or split changes, and they appear in the preview and in every export.
 - **Brightness** and **Contrast** apply in every mode; each slider is neutral in the middle and shows its value, from −100 to +100, beside it. **Sharpness** runs from 0 to 100 and strengthens edges. In Black & White, brightness moves the black/white cut-off.
 - The arrow beside the heading resets all three.
 

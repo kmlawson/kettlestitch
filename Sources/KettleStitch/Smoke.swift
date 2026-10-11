@@ -29,6 +29,10 @@ extension AppDelegate {
             precondition(enabled(#selector(self.removePages)) && enabled(#selector(self.next)) && !enabled(#selector(self.previous)) && !enabled(#selector(self.stop)) && !enabled(#selector(self.undo)))
             let flagItem=NSMenuItem(title:"",action:#selector(self.toggleFlag),keyEquivalent:"");_=self.validateMenuItem(flagItem);precondition(flagItem.title=="Add Flag")
             self.window.makeFirstResponder(self.widthField);precondition(self.editedText != nil && !enabled(#selector(self.removePages)) && !enabled(#selector(self.accept)))
+            // A menu shortcut that is a bare letter must leave that letter to the text being typed.
+            let bare=NSMenuItem(title:"",action:#selector(self.locatePhotographs),keyEquivalent:"p");bare.keyEquivalentModifierMask=[];bare.target=self
+            precondition(!self.validateMenuItem(bare),"A plain-key shortcut is off while a field is edited")
+            self.window.makeFirstResponder(self.canvas);precondition(self.validateMenuItem(bare));self.window.makeFirstResponder(self.widthField)
             self.window.makeFirstResponder(self.canvas);precondition(self.editedText==nil && enabled(#selector(self.removePages)))
             self.help();snapshot(self.shortcuts!.window.contentView!,"shortcuts.png");self.shortcuts!.window.close()
             print("MENU_RULES_AND_SHORTCUTS_WINDOW passed")
