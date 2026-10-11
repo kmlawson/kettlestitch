@@ -177,6 +177,7 @@ Single keys act on the main window and are off while you type in a field. Letter
 | ⇧⌘A | Select all pages |
 | ⇧⌘U | Next flagged page |
 | ⌘⌫ | Remove the selected pages from the project |
+| ⌥⌘↑ / ⌥⌘↓ | Move the selected pages up or down (or drag them in the sidebar) |
 | ⌘J | Show deviations: pages whose crop is unlike the rest |
 | ⌘. | Stop background work |
 | ⌃⌘S / ⌥⌘I | Show or hide the sidebar / inspector |
@@ -221,8 +222,8 @@ The second-opinion feature is optional and off until you add a key. You choose a
 **Where a key goes**
 
 - A key is read from the keychain at one moment only: when you choose Send. It is put in a single header of an HTTPS request to that provider's own address, and nowhere else. It is never part of the address or the body of the request.
-- The app contacts no other server on its own. It has no analytics, no telemetry and no automatic update check.
-- **KettleStitch ▸ Check for Updates…** is the one other thing that uses the network, and only when you choose it: it asks GitHub (`api.github.com`) which release is the latest. That request carries no key, no identifier and nothing about your work. See `UpdateCheck` in [`Sources/CropCore/Launch.swift`](Sources/CropCore/Launch.swift) and `checkForUpdates` in `Sources/KettleStitch/main.swift`.
+- The app contacts no other server on its own. It has no analytics and no telemetry, and it does not check for updates unless you ask it to.
+- **KettleStitch ▸ Check for Updates…** is the one other thing that uses the network: it asks GitHub (`api.github.com`) which release is the latest. It runs when you choose it, and once at launch if you turn on **Check for updates on startup** in Settings, which is off by default. That request carries no key, no identifier and nothing about your work. See `UpdateCheck` in [`Sources/CropCore/Launch.swift`](Sources/CropCore/Launch.swift) and `checkForUpdates` in `Sources/KettleStitch/main.swift`.
 - The connection keeps nothing on disk (no cache, no cookies) and refuses redirects, so a request cannot be passed on to another address with the key attached.
 
 **What is sent with it**

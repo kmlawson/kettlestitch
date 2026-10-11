@@ -198,6 +198,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
             if self.write() {self.status.stringValue="Auto-saved \(self.projectURL.lastPathComponent)"}
         }
         status.stringValue=project.pages.isEmpty ? "Drop photographs here, or choose File ▸ Import Photographs":"Press ? for keyboard shortcuts"
+        checkForUpdatesAtStartup()
         window.delegate=self;window.registerForDraggedTypes([.fileURL])
         let waiting=pendingOpen;pendingOpen=[];if !waiting.isEmpty {receive(waiting)} else if !project.pages.isEmpty {DispatchQueue.main.async{self.findMissingPhotographs()}}
         // Test hook for files handed over by the system at launch: report what arrived, then quit.
@@ -255,6 +256,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
         sidebarLayoutItem?.image=sidebarLayoutSymbol;sidebarLayoutMenuItem?.state=on ? .on:.off
         status.stringValue=on ? "Sidebar shows large pictures":"Sidebar shows compact rows"
     }
+    // MARK: Reordering pages
+    static let rowType=NSPasteboard.PasteboardType("local.kettlestitch.sidebar-row")
+    /// Dragging rows in the sidebar reorders the pages. A row carries only its number; the order is saved with the project.
+    func tableView(_ tableView:NSTableView,pasteboardWriterForRow row:Int)->NSPasteboardWriting? {
+        guard MenuPolicy.isEnabled(.reversePages,menuState) else{return nil}
+        let item=NSPasteboardItem();item.setString(String(row),forType:AppDelegate.rowType);return item
+    }
+    func tableView(_ tableView:NSTableView,validateDrop info:NSDraggingInfo,proposedRow row:Int,proposedDropOperation operation:NSTableView.DropOperation)->NSDragOperation {
+        guard info.draggingSource as? NSTableView === table,info.draggingPasteboard.availableType(from:[AppDelegate.rowType]) != nil else{return []}
+        // Pages go between rows, never onto one.
+        tableView.setDropRow(row,dropOperation:.above);return .move
+    }
+    func tableView(_ tableView:NSTableView,acceptDrop info:NSDraggingInfo,row:Int,dropOperation:NSTableView.DropOperation)->Bool {
+        let rows=IndexSet((info.draggingPasteboard.pasteboardItems ?? []).compactMap{$0.string(forType:AppDelegate.rowType)}.compactMap(Int.init))
+        return movePages(rows,to:row)
+    }
+    /// Moves pages to before row `destination`, as one change that Undo reverses. The photograph on screen stays on
+    /// screen, and the moved pages are left selected.
+    @discardableResult func movePages(_ rows:IndexSet,to destination:Int)->Bool {
+        let moved=Project.moving(project.pages,rows:rows,to:destination)
+        guard moved.map({$0.id}) != project.pages.map({$0.id}) else{return false}
+        let shown=current.map{project.pages[$0].id},ids=Set(rows.filter{project.pages.indices.contains($0)}.map{project.pages[$0].id})
+        restructure{project.pages=moved;if let shown,let i=moved.firstIndex(where:{$0.id==shown}) {project.selected=i}}
+        let now=IndexSet(project.pages.indices.filter{ids.contains(project.pages[$0].id)})
+        if now.contains(project.selected) {reloading=true;table.selectRowIndexes(now,byExtendingSelection:false);reloading=false}
+        status.stringValue="Moved \(ids.count) page\(ids.count==1 ? "":"s") · Undo puts \(ids.count==1 ? "it":"them") back"
+        return true
+    }
+    @objc func movePagesUp(){let rows=IndexSet(targetIndexes);guard let first=rows.first,first>0 else{NSSound.beep();return};movePages(rows,to:first-1)}
+    @objc func movePagesDown(){let rows=IndexSet(targetIndexes);guard let last=rows.last,last<project.pages.count-1 else{NSSound.beep();return};movePages(rows,to:last+2)}
     /// True when the photograph is missing, or has failed to load as often as is worth trying.
     func thumbnailUnreadable(_ path:String)->Bool {
         (thumbnailFailures[path] ?? 0)>=ThumbnailPolicy.attempts || !FileManager.default.fileExists(atPath:path)
@@ -1114,31 +1145,46 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
             if testDirectory == nil {NSWorkspace.shared.activateFileViewerSelecting([folder])}
         }catch{showError(error)}
     }
-    /// Asks GitHub for the latest release and says whether it is newer than this copy. Only ever run from the menu.
-    @objc func checkForUpdates(){
-        let current=Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0"
-        status.stringValue="Checking for updates…"
-        ReviewAPI.session.dataTask(with:UpdateCheck.request()){[weak self] data,response,error in
+    var currentVersion:String {Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0"}
+    /// Asks GitHub for the latest release. `done` gets it on the main thread, or nil with the reason it could not be had.
+    func fetchLatestRelease(_ done:@escaping(UpdateCheck.Release?,String)->Void){
+        ReviewAPI.session.dataTask(with:UpdateCheck.request()){data,response,error in
             let code=(response as? HTTPURLResponse)?.statusCode ?? 0
             let release=code==200 ? data.flatMap(UpdateCheck.latest(from:)):nil
-            DispatchQueue.main.async{guard let self else{return}
-                let alert=NSAlert()
-                if let release,UpdateCheck.isNewer(release.version,than:current) {
-                    self.status.stringValue="KettleStitch \(release.version) is available"
-                    alert.messageText="KettleStitch \(release.version) is available";alert.informativeText="You have \(current). The download page says what is new and has the disk images."
-                    alert.addButton(withTitle:"Open Download Page");alert.addButton(withTitle:"Later")
-                    if alert.runModal() == .alertFirstButtonReturn {NSWorkspace.shared.open(release.page)}
-                } else if release != nil {
-                    self.status.stringValue="KettleStitch \(current) is the latest version"
-                    alert.messageText="You have the latest version";alert.informativeText="KettleStitch \(current) is the newest release.";alert.runModal()
-                } else {
-                    self.status.stringValue="Could not check for updates"
-                    alert.messageText="Could not check for updates";alert.informativeText=(error?.localizedDescription ?? "GitHub did not answer as expected (\(code)).")+" You can look at the releases page yourself."
-                    alert.addButton(withTitle:"Open Releases Page");alert.addButton(withTitle:"Cancel")
-                    if alert.runModal() == .alertFirstButtonReturn,let page=URL(string:UpdateCheck.releasesPage) {NSWorkspace.shared.open(page)}
-                }
-            }
+            DispatchQueue.main.async{done(release,error?.localizedDescription ?? "GitHub did not answer as expected (\(code)).")}
         }.resume()
+    }
+    /// Asks for the latest release and says whether it is newer than this copy, from the menu.
+    @objc func checkForUpdates(){
+        let current=currentVersion
+        status.stringValue="Checking for updates…"
+        fetchLatestRelease{[weak self] release,problem in guard let self else{return}
+            let alert=NSAlert()
+            if let release,UpdateCheck.isNewer(release.version,than:current) {
+                self.status.stringValue="KettleStitch \(release.version) is available"
+                alert.messageText="KettleStitch \(release.version) is available";alert.informativeText="You have \(current). The download page says what is new and has the disk images."
+                alert.addButton(withTitle:"Open Download Page");alert.addButton(withTitle:"Later")
+                if alert.runModal() == .alertFirstButtonReturn {NSWorkspace.shared.open(release.page)}
+            } else if release != nil {
+                self.status.stringValue="KettleStitch \(current) is the latest version"
+                alert.messageText="You have the latest version";alert.informativeText="KettleStitch \(current) is the newest release.";alert.runModal()
+            } else {
+                self.status.stringValue="Could not check for updates"
+                alert.messageText="Could not check for updates";alert.informativeText=problem+" You can look at the releases page yourself."
+                alert.addButton(withTitle:"Open Releases Page");alert.addButton(withTitle:"Cancel")
+                if alert.runModal() == .alertFirstButtonReturn,let page=URL(string:UpdateCheck.releasesPage) {NSWorkspace.shared.open(page)}
+            }
+        }
+    }
+    /// With "Check for updates on startup" on in Settings, one quiet check at launch. A newer version is mentioned
+    /// in the status bar and nothing else happens; a failure, or being up to date, says nothing.
+    func checkForUpdatesAtStartup(){
+        guard testDirectory == nil,UserDefaults.standard.bool(forKey:SettingsController.startupUpdateKey) else{return}
+        let current=currentVersion
+        fetchLatestRelease{[weak self] release,_ in
+            guard let self,let release,UpdateCheck.isNewer(release.version,than:current) else{return}
+            self.status.stringValue="KettleStitch \(release.version) is available · KettleStitch ▸ Check for Updates… opens the download page"
+        }
     }
     @objc func showUsageLog(){
         if usageLog == nil {usageLog=UsageLogController(url:usageURL)}

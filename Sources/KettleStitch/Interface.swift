@@ -188,6 +188,7 @@ extension AppDelegate: NSToolbarDelegate {
         let scroll=NSScrollView();scroll.hasVerticalScroller=true;scroll.drawsBackground=false;scroll.documentView=table
         table.addTableColumn(NSTableColumn(identifier:NSUserInterfaceItemIdentifier("page")));table.headerView=nil;table.rowHeight=ThumbnailPolicy.rowHeight;table.style = .sourceList
         table.delegate=self;table.dataSource=self;table.allowsEmptySelection=false;table.allowsMultipleSelection=true
+        table.registerForDraggedTypes([AppDelegate.rowType]);table.setDraggingSourceOperationMask(.move,forLocal:true)
         let menu=NSMenu()
         for (title,action) in [("Add or Remove Flag",#selector(toggleFlag)),("Detect Cropping Frame",#selector(detectCurrent)),("Send to Claude",#selector(sendToClaude)),("Copy Settings",#selector(copySettings)),("Paste Settings",#selector(pasteSettings)),("Remove from Project",#selector(removePages))] {menu.addItem(withTitle:title,action:action,keyEquivalent:"").target=self}
         table.menu=menu

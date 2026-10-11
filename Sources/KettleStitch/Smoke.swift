@@ -337,6 +337,14 @@ extension AppDelegate {
             self.undo();precondition(self.project.pages[1].rotation==0 && self.project.pages[2].rotation==0)
             self.project.pages[0].rotation=0;self.project.selected=0;self.selectCurrent();self.refreshDetail()
             print("TURNED_VIEW passed")
+            // Pages are reordered by moving their rows; the page on screen stays on screen and Undo puts them back.
+            let order=self.project.pages.map{$0.id}
+            self.project.selected=0;self.selectCurrent();self.table.selectRowIndexes(IndexSet(integer:0),byExtendingSelection:false)
+            precondition(self.movePages(IndexSet([0]),to:3) && self.project.pages.map{$0.id}==[order[1],order[2],order[0]]+order[3...] && self.project.selected==2 && self.table.selectedRow==2,"The first page dropped before the fourth becomes the third")
+            self.movePagesUp();precondition(self.project.pages[1].id==order[0] && self.project.selected==1)
+            self.undo();self.undo();precondition(self.project.pages.map{$0.id}==order,"Two Undos restore the order")
+            precondition(!self.movePages(IndexSet([2]),to:2),"Dropping a page where it is changes nothing")
+            print("REORDER passed")
             // A project file is written by Save, not by each edit.
             if self.hasProjectFile {
                 func onDisk()->Project? {try? Project.read(self.projectURL)}

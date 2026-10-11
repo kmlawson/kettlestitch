@@ -81,7 +81,9 @@ Shift-click or ⌘-click in the sidebar, or choose **Page ▸ Select All Pages**
 
 Right-clicking a row acts on that row, or on the whole selection if the row is part of it.
 
-**Page ▸ Reverse Pages Order** and **Remove from Project** (⌘⌫) change the project only; the photographs on disk are untouched. Both can be undone, as can an import.
+To reorder pages, drag them up or down in the sidebar; several selected pages move together. **Page ▸ Move Up** (⌥⌘↑) and **Move Down** (⌥⌘↓) do the same from the keyboard. The order is saved with the project and is the order of the exported pages.
+
+**Page ▸ Reverse Pages Order** and **Remove from Project** (⌘⌫) change the project only; the photographs on disk are untouched. All of these can be undone, as can an import.
 
 ## Splitting facing pages
 
@@ -248,7 +250,7 @@ A model's corners are estimates; treat them like any other proposal.
 
 **Moving between pages feels slow.** Detection of a newly imported book runs in the background for a while and competes for the processor; **Esc** stops it, and **b** resumes it for the pages still pending.
 
-**Is there a newer version?** Choose **KettleStitch ▸ Check for Updates…**. It asks GitHub for the latest release and offers to open the download page. Nothing is checked unless you ask.
+**Is there a newer version?** Choose **KettleStitch ▸ Check for Updates…**. It asks GitHub for the latest release and offers to open the download page. Nothing is checked unless you ask. To be told at launch instead, turn on **Check for updates on startup** in Settings: a newer version is then mentioned in the status bar at the bottom of the window.
 
 ## What it cannot do
 

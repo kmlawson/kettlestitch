@@ -52,6 +52,20 @@ final class ReviewRecordingTests:XCTestCase {
 }
 
 final class StructuralUndoTests:XCTestCase {
+    func testPagesMoveToWhereTheyAreDroppedKeepingTheirOrder() {
+        let pages=["a","b","c","d","e"].map{page($0)},names={(list:[Page]) in list.map{URL(fileURLWithPath:$0.path).deletingPathExtension().lastPathComponent}}
+        // The row number is where the insertion line was drawn, counted in the list as it stood.
+        XCTAssertEqual(names(Project.moving(pages,rows:IndexSet([0]),to:3)),["b","c","a","d","e"],"One page moved down")
+        XCTAssertEqual(names(Project.moving(pages,rows:IndexSet([4]),to:0)),["e","a","b","c","d"],"The last page moved to the top")
+        XCTAssertEqual(names(Project.moving(pages,rows:IndexSet([1,3]),to:5)),["a","c","e","b","d"],"Two separate pages moved to the end, in their own order")
+        XCTAssertEqual(names(Project.moving(pages,rows:IndexSet([1,2]),to:2)),["a","b","c","d","e"],"Dropped inside itself, nothing moves")
+        XCTAssertEqual(names(Project.moving(pages,rows:IndexSet([2]),to:99)),["a","b","d","e","c"],"A place past the end is the end")
+        XCTAssertEqual(names(Project.moving(pages,rows:IndexSet([7]),to:0)),["a","b","c","d","e"],"A row that is not there moves nothing")
+        // Every page is still there, with what was done to it.
+        var edited=pages;edited[1].flagged=true
+        let moved=Project.moving(edited,rows:IndexSet([1]),to:5)
+        XCTAssertEqual(Set(moved.map{$0.id}),Set(pages.map{$0.id}));XCTAssertEqual(moved.last?.flagged,true)
+    }
     func testRestoringOrderKeepsWorkDoneSince() {
         var a=page("a"),b=page("b"),c=page("c")
         let before=[a,b,c]

@@ -7,7 +7,7 @@ extension AppDelegate: NSMenuItemValidation, NSMenuDelegate {
         #selector(newProject):.newProject,#selector(openProject):.openProject,#selector(importImages):.importPhotographs,#selector(locatePhotographs):.locatePhotographs,#selector(saveProject):.save,#selector(saveAs):.saveAs,#selector(exportImages):.export,#selector(showSettings):.settings,#selector(help):.help,
         #selector(undo):.undo,#selector(redo):.redo,#selector(copySettings):.copySettings,#selector(copyRotation):.copyRotation,#selector(pasteRotation):.pasteRotation,#selector(pasteSettings):.pasteSettings,#selector(applySettingsToAll):.applySettingsToAll,#selector(resetAdjustments):.resetAdjustments,
         #selector(next):.nextPage,#selector(previous):.previousPage,#selector(firstPage):.firstPage,#selector(lastPage):.lastPage,#selector(nextReview):.nextUnreviewed,#selector(nextFlagged):.nextFlagged,#selector(accept):.accept,
-        #selector(selectAllPages):.selectAllPages,#selector(toggleFlag):.flag,#selector(reversePages):.reversePages,#selector(removePages):.removePages,#selector(rotateLeft):.rotateLeft,#selector(rotate):.rotateRight,
+        #selector(selectAllPages):.selectAllPages,#selector(toggleFlag):.flag,#selector(reversePages):.reversePages,#selector(movePagesUp):.reversePages,#selector(movePagesDown):.reversePages,#selector(removePages):.removePages,#selector(rotateLeft):.rotateLeft,#selector(rotate):.rotateRight,
         #selector(detectCurrent):.detect,#selector(detectPending):.detectPending,#selector(nextCandidate):.nextProposal,#selector(previousCandidate):.previousProposal,#selector(resetCrop):.fullImage,#selector(copyPrevious):.copyPreviousCrop,
         #selector(proposeSplit):.proposeSplit,#selector(removeSplit):.removeSplit,#selector(moveSplitLeft):.moveSplitLeft,#selector(moveSplitRight):.moveSplitRight,#selector(sendToClaude):.sendToClaude,#selector(stop):.stop,
         #selector(deskew):.deskew,#selector(removeDeskew):.removeDeskew,#selector(deskewClockwise):.deskewClockwise,#selector(deskewCounterclockwise):.deskewCounterclockwise,#selector(addZone):.addPictureZone,#selector(removeZones):.removePictureZones,#selector(showDeviations):.showDeviations,#selector(nextOutlier):.nextOutlier,
@@ -91,6 +91,7 @@ extension AppDelegate: NSMenuItemValidation, NSMenuDelegate {
         page.addItem(.separator())
         add(page,"Rotate Left",#selector(rotateLeft),"r",[.shift]);add(page,"Rotate Right",#selector(rotate),"r",plain)
         page.addItem(.separator())
+        add(page,"Move Up",#selector(movePagesUp),arrow(NSUpArrowFunctionKey),[.command,.option]);add(page,"Move Down",#selector(movePagesDown),arrow(NSDownArrowFunctionKey),[.command,.option])
         add(page,"Reverse Pages Order",#selector(reversePages));add(page,"Remove from Project",#selector(removePages),"\u{8}")
 
         let crop=menu("Tools")

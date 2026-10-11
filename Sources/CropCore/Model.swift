@@ -206,6 +206,16 @@ public struct Project: Codable {
         for i in p.pages.indices {p.pages[i].filterProposals()}
         return p
     }
+    /// The page list after `rows` are taken out and put back together before row `destination`, both counted in the
+    /// list as it stands. The moved pages keep their own order.
+    public static func moving(_ pages: [Page], rows: IndexSet, to destination: Int) -> [Page] {
+        let taken=rows.filter{pages.indices.contains($0)};guard !taken.isEmpty else {return pages}
+        let moved=taken.map{pages[$0]},kept=pages.indices.filter{!taken.contains($0)}.map{pages[$0]}
+        let place=min(max(0,destination),pages.count)
+        // Rows above the place leave before it is reached, so it moves up by as many.
+        let at=place-taken.filter{$0<place}.count
+        return Array(kept[..<at])+moved+Array(kept[at...])
+    }
     /// Undoes or redoes a change to the page list. The snapshot decides which pages exist and in what order;
     /// each surviving page keeps whatever has been done to it since.
     public static func restoringStructure(_ snapshot: [Page], current: [Page]) -> [Page] {
