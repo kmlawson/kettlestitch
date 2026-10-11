@@ -6,5 +6,5 @@ Installation, the full list of shortcuts and the section on API keys and securit
 
 The rest is for people working on the app itself:
 
-- [`development/`](development/) — how the code is organised, how to build and release it, and how the detectors work.
+- [`development/`](development/) — start with the [developer overview](development/Developer-overview.md); then how to [build and release](development/Building.md), the [architecture](development/Architecture.md), and [how the detectors work](development/Detection.md).
 - [`validation/`](validation/) — test and benchmark results, with the logs they came from.
