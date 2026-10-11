@@ -9,21 +9,21 @@
   A native macOS app for working through hundreds of photographed pages and spreads, quickly and from the keyboard.
 </p>
 
-KettleStitch finds the edge of each photographed page or two-page spread, lets you correct it in a keystroke or a drag, and exports perspective-corrected pages as a PDF or as images. It can split a spread into its two pages, level the lines of text, clean up the paper, and make the PDF searchable. Your photographs are never changed: a project is a small file that records what to do with them.
+KettleStitch is a Claude Code (Opus 5.5) vibe coded application which help you find the edge of each photographed page or two-page spread, lets you correct it in a keystroke or a drag, and exports perspective-corrected pages as a PDF or as images. It can propose a page split for a spread, and offers other ways to clean up the images. Your photographs are never changed: a project is a small file that records what to do with them via a reference to the original files.
 
-It is named after the kettle stitch, the knot that links one sewn section of a book to the next.
+It is named after the kettle stitch, a knot that links one sewn section of a book to the next.
 
 ## What it does
 
 - **Crop detection.** Each imported photograph gets several proposed crops; pick one with **[** and **]**, adjust its corners and edges, or copy the crop from the page before.
 - **Page splitting.** The fold between facing pages is found in the gutter between their print, starting from where you put the split on the previous page. Press **T** again to step through other candidates.
-- **Deskew** to level the lines of text, separately for each half of a split spread.
+- **Deskew** to level the lines of text, separately for each half of a split spread. Currently does not work very well.
 - **Cleanup**: grayscale, black and white with speck removal, brightness, contrast and sharpness, with picture zones that keep their tones on a black-and-white page.
 - **Smudge brush** to blur text that should not be readable in the output.
 - **Preview** of exactly what will be exported, kept on as you move from page to page.
-- **Export** to PDF, optionally searchable and password-protected, or to JPEG, PNG or TIFF. Exports carry no metadata from the photographs (no location, camera or owner), and PDFs carry no producer, creator or dates.
+- **Export** to PDF or to JPEG, PNG or TIFF. Exports carry no metadata from the photographs (no location, camera or owner), and PDFs carry no producer, creator or dates. OCR via Apple Vision is offered.
 - **Review tools**: accept pages as you go, flag ones to return to, and jump to pages whose crop is unlike the rest of the book.
-- **Send to Claude** (optional) asks Anthropic's Claude for a second opinion on a crop and split. It is the only feature that uses the network, and needs your own API key and the `claude` command-line tool.
+- **Send to Claude** (optional) asks Anthropic's Claude for a second opinion on a crop and split. It is the only feature that uses the network, and needs your own API key and the `claude` command-line tool installed. Your key is saved in your keychain. 
 
 The [manual](docs/Manual.md) describes each of these in detail.
 
