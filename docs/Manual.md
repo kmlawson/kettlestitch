@@ -60,7 +60,8 @@ Each photograph gets several proposed crops, best first. **[** and **]** step th
 
 To adjust a crop:
 
-- Drag a corner, or drag a green edge to move both its ends. **Shift-drag** a corner keeps the crop's angles. **Option-drag** moves the whole crop. Dragging elsewhere moves the picture.
+- Drag a corner, or drag a green edge to move both its ends. **Shift-drag** a corner keeps the crop's angles. **Drag inside the crop** to move the whole crop; **Option-drag** does the same from anywhere.
+- **Hold the space bar and drag** to move the picture in the window, wherever the pointer is; the pointer becomes a hand. Dragging outside the crop also moves the picture, as it does in the preview.
 - **1 2 3 4** select a corner and **5 6 7 8** an edge; the arrow keys then nudge it (with Shift, farther). **Esc** releases it and gives the arrow keys back to moving between photographs.
 - **h j k l** push the left, bottom, top and right side outward; with **Shift** they pull it in; with **Option** they move the whole crop.
 - **;** and **'** shrink and expand the whole crop. A side that reaches the edge of the photograph stops there while the others keep growing.

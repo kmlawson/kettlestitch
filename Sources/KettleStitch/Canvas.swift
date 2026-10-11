@@ -74,6 +74,24 @@ final class CropCanvas: NSView {
     private var start=CGPoint.zero
     private var oldPan=CGPoint.zero
     private var moving=false
+    /// True while the space bar is down: a drag then moves the picture in the window, whatever is under the pointer.
+    var spaceHeld=false {didSet{if spaceHeld != oldValue {window?.invalidateCursorRects(for:self)}}}
+    private var panning=false
+    private var spaceMonitor: Any?
+    /// True while a drag begun inside the crop is moving the crop.
+    var isMovingCrop: Bool {moving}
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        if let spaceMonitor {NSEvent.removeMonitor(spaceMonitor)};spaceMonitor=nil
+        guard window != nil else {return}
+        // The space bar is watched wherever the keyboard is in this window, except while text is being typed.
+        spaceMonitor=NSEvent.addLocalMonitorForEvents(matching:[.keyDown,.keyUp]){[weak self] event in
+            guard let self,event.keyCode==49,event.window===self.window,event.modifierFlags.isDisjoint(with:[.command,.control]) else {return event}
+            if event.type == .keyUp {self.spaceHeld=false;return event}
+            guard !(self.window?.firstResponder is NSText) else {return event}
+            self.spaceHeld=true;return nil
+        }
+    }
     override var isFlipped: Bool {true}
     override var acceptsFirstResponder: Bool {true}
     /// How the photograph is turned on screen: by the page's output rotation, so the crop is adjusted the way round
@@ -187,7 +205,12 @@ final class CropCanvas: NSView {
     override func rightMouseDown(with event:NSEvent){
         if let index=zone(at:convert(event.locationInWindow,from:nil)) {onZoneRemove?(index)} else {super.rightMouseDown(with:event)}
     }
-    override func resetCursorRects(){if zoneMode || smudgeMode || cloneMode {addCursorRect(bounds,cursor:.crosshair)}}
+    override func resetCursorRects(){if spaceHeld {addCursorRect(bounds,cursor:.openHand)} else if zoneMode || smudgeMode || cloneMode {addCursorRect(bounds,cursor:.crosshair)}}
+    /// True when a point of the view lies within the cropping frame.
+    func cropContains(_ point: CGPoint) -> Bool {
+        let outline=NSBezierPath();outline.move(to:position(quad.points[0]));for p in quad.points.dropFirst() {outline.line(to:position(p))};outline.close()
+        return outline.contains(point)
+    }
     /// The split's two ends in view coordinates while the photograph is shown.
     var splitEnds: (CGPoint,CGPoint)? {
         guard image != nil,let split,let line=SplitGeometry.line(split,quad:quad,rotation:rotation) else{return nil}
@@ -212,8 +235,10 @@ final class CropCanvas: NSView {
     }
     private func across(_ p:CGPoint)->Double? {SplitGeometry.position(of:normalized(p),quad:quad,rotation:rotation)?.u}
     override func mouseDown(with event: NSEvent) {
-        keyboardSelection=false;window?.makeFirstResponder(self);start=convert(event.locationInWindow,from:nil);oldPan=pan;before=quad;showMagnifier=false;magnifierOpposite=false;edge=nil;corner=nil;splitGrip=nil;splitBefore=split
-        guard !preview else {return}
+        keyboardSelection=false;window?.makeFirstResponder(self);start=convert(event.locationInWindow,from:nil);oldPan=pan;before=quad;showMagnifier=false;magnifierOpposite=false;edge=nil;corner=nil;splitGrip=nil;splitBefore=split;moving=false
+        // With the space bar down a drag moves the picture, in any mode.
+        panning=spaceHeld
+        guard !preview,!panning else {return}
         if zoneMode {zoneStart=outputPosition(start);zoneDraft=nil;return}
         if smudgeMode {if image != nil,imageRect.contains(start) {smudgeDraft=[normalized(start)];needsDisplay=true};return}
         if cloneMode {
@@ -238,11 +263,14 @@ final class CropCanvas: NSView {
                 return hypot(start.x-a.x-t*dx,start.y-a.y-t*dy)
             }
             if let nearest=(0..<4).min(by:{distanceToEdge($0)<distanceToEdge($1)}),distanceToEdge(nearest)<=10 {edge=nearest}
+            // Inside the crop, away from its corners, edges and split line, a drag moves the crop.
+            else if image != nil,cropContains(start) {moving=true}
         }
         showMagnifier=corner != nil;needsDisplay=true
     }
     override func mouseDragged(with event: NSEvent) {
         let p=convert(event.locationInWindow,from:nil)
+        if panning {pan=CGPoint(x:oldPan.x+p.x-start.x,y:oldPan.y+p.y-start.y);needsDisplay=true;return}
         if zoneMode,!preview {if let a=zoneStart,let b=outputPosition(p){zoneDraft=PictureZone(from:a,to:b);needsDisplay=true};return}
         if smudgeMode,!preview {
             // Points closer together than a few pixels add nothing to the stroke.
@@ -276,6 +304,8 @@ final class CropCanvas: NSView {
     }
     override func mouseUp(with event: NSEvent) {
         showMagnifier=false
+        if panning {panning=false;needsDisplay=true;return}
+        defer {moving=false}
         if zoneMode {
             // One drag draws one zone; a slip of the mouse draws none.
             let drawn=zoneDraft;zoneMode=false;zoneStart=nil;zoneDraft=nil

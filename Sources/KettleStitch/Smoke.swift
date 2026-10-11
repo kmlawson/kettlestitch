@@ -414,6 +414,24 @@ extension AppDelegate {
                 self.project.selected=0;self.selectCurrent();self.table.selectRowIndexes(IndexSet(integer:0),byExtendingSelection:false)
                 print("LATE_RESULTS passed")
             }
+            // A drag inside the crop moves the crop; with the space bar down it moves the picture instead.
+            do {
+                self.project.selected=0;self.selectCurrent();self.setPreview(false);canvas.fit()
+                let kept=self.project.pages[0]
+                let inner=Quad([Point(0.3,0.3),Point(0.7,0.3),Point(0.7,0.7),Point(0.3,0.7)]);self.edit{$0.setManualCrop(inner)}
+                let centre=canvas.position(Point(0.5,0.5)),away=CGPoint(x:centre.x+20,y:centre.y+10),pan=canvas.pan
+                precondition(canvas.cropContains(centre) && !canvas.cropContains(canvas.position(Point(0.1,0.1))))
+                canvas.mouseDown(with:mouse(.leftMouseDown,centre));precondition(canvas.isMovingCrop);canvas.mouseDragged(with:mouse(.leftMouseDragged,away));canvas.mouseUp(with:mouse(.leftMouseUp,away))
+                let moved=self.project.pages[0].quad
+                precondition(moved != inner && canvas.pan==pan && abs((moved.points[1].x-moved.points[0].x)-0.4)<1e-9 && !canvas.isMovingCrop,"The crop moved whole and the picture stayed")
+                canvas.spaceHeld=true;canvas.mouseDown(with:mouse(.leftMouseDown,centre));canvas.mouseDragged(with:mouse(.leftMouseDragged,away));canvas.mouseUp(with:mouse(.leftMouseUp,away));canvas.spaceHeld=false
+                precondition(self.project.pages[0].quad==moved && canvas.pan != pan,"With the space bar the picture moves and the crop stays")
+                let outside=canvas.position(Point(0.1,0.1));let before=canvas.pan
+                canvas.mouseDown(with:mouse(.leftMouseDown,outside));canvas.mouseDragged(with:mouse(.leftMouseDragged,CGPoint(x:outside.x+15,y:outside.y)));canvas.mouseUp(with:mouse(.leftMouseUp,CGPoint(x:outside.x+15,y:outside.y)))
+                precondition(self.project.pages[0].quad==moved && canvas.pan != before,"Outside the crop a drag still moves the picture")
+                self.project.pages[0]=kept;self.undoStack.removeAll();self.redoStack.removeAll();self.loadCurrent();canvas.fit()
+                print("DRAG_CROP passed")
+            }
             // Pages are reordered by moving their rows; the page on screen stays on screen and Undo puts them back.
             let order=self.project.pages.map{$0.id}
             self.project.selected=0;self.selectCurrent();self.table.selectRowIndexes(IndexSet(integer:0),byExtendingSelection:false)

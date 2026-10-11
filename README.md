@@ -195,7 +195,8 @@ Single keys act on the main window and are off while you type in a field. Letter
 | --- | --- |
 | Drag a corner or edge | Move it |
 | Shift-drag a corner | Move it keeping the crop's angles |
-| Option-drag | Move the whole crop |
+| Drag inside the crop | Move the whole crop (Option-drag does the same from anywhere) |
+| Space-drag | Move the picture in the window |
 | Drag the split line or its ends | Move or tilt the split |
 | Drag elsewhere | Move the picture |
 | Mouse wheel | Zoom about the pointer |

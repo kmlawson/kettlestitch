@@ -135,7 +135,7 @@ public enum ShortcutReference {
         section("Smudge",[("Shift B","Pick up or put down the smudge brush, which blurs print to make it hard to read; Escape also puts it down"),("Option Shift B","Remove the smudges"),("Shift C","Pick up or put down the clone brush: Option-click the place to copy from, then paint"),("Option Shift C","Remove what the clone brush painted")]),
         section("Output and view",[("P","Corrected preview"),("V","Copy the previous photograph's image settings: cleanup, exposure, brightness, contrast, sharpness"),("R","Turn the page clockwise"),("Shift R","Turn the page counterclockwise"),("+ / −","Zoom in / out"),("F or 0","Zoom to fit"),("A","Send to Claude, OpenAI or Gemini for a second opinion"),("Z","Undo"),("Shift Z","Redo"),("?","Show this reference")]),
     ]
-    public static let notes = "Single keys are off while you type in a field. Only 1–8 hand the arrow keys to a corner or edge; Escape gives them back. Drag a corner, any green edge, or the pink split line. Shift-drag a corner keeps the crop's angles; Option-drag moves the whole crop. Every command is also in the menus. Originals are never modified."
+    public static let notes = "Single keys are off while you type in a field. Only 1–8 hand the arrow keys to a corner or edge; Escape gives them back. Drag a corner, any green edge, or the pink split line. Shift-drag a corner keeps the crop's angles. Drag inside the crop to move the whole crop; hold the space bar and drag to move the picture in the window. Every command is also in the menus. Originals are never modified."
 }
 
 public enum SelectionPolicy {
