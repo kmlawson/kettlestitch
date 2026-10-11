@@ -39,6 +39,14 @@ public enum UsageLog {
     }
     public static func append(_ entry: UsageEntry, to url: URL) throws {
         let encoder=JSONEncoder();encoder.dateEncodingStrategy = .iso8601;encoder.outputFormatting=[.prettyPrinted,.sortedKeys]
+        // A log that is there but cannot be read is set aside under another name, not written over.
+        if let data=try? Data(contentsOf:url),!data.isEmpty {
+            let decoder=JSONDecoder();decoder.dateDecodingStrategy = .iso8601
+            if (try? decoder.decode([UsageEntry].self,from:data)) == nil {
+                let stamp=Int(Date().timeIntervalSince1970)
+                try FileManager.default.moveItem(at:url,to:url.deletingLastPathComponent().appendingPathComponent(url.deletingPathExtension().lastPathComponent+" unreadable \(stamp)."+url.pathExtension))
+            }
+        }
         try encoder.encode(read(url)+[entry]).write(to:url,options:.atomic)
     }
     /// The log as text, newest request first, under a line of totals.
@@ -220,7 +228,8 @@ public enum ClaudeReview {
     /// The two reduced JPEGs that are sent: the photograph, and the same with the crop and split drawn on it.
     /// The original photograph is not altered or sent at full size.
     public static func images(for page: Page) throws -> (photo: Data, overlay: Data) {
-        let photo=try Imaging.load(URL(fileURLWithPath:page.path),maxPixel:1568)
+        // What the user smudged or cloned over is hidden in what is sent, as it is on screen and in the export.
+        let photo=try Imaging.retouched(Imaging.load(URL(fileURLWithPath:page.path),maxPixel:1568),smudges:page.smudges ?? [],clones:page.clones ?? [])
         return (try Exporter.encode(photo,as:.jpeg,quality:0.82,dpi:nil),try Exporter.encode(overlay(photo,quad:page.quad,split:splitEnds(page)),as:.jpeg,quality:0.82,dpi:nil))
     }
     /// Writes those two images to a folder, to inspect what would be sent.

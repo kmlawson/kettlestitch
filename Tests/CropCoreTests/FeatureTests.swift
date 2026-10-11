@@ -287,6 +287,31 @@ final class PictureZoneTests:XCTestCase {
         let gray=try Exporter.render(p,options:options).image
         XCTAssertEqual(gray.bitsPerPixel,8);let tone=colour(gray,100,150);XCTAssertLessThan(abs(tone.0-tone.2),3,"\(tone)")
         XCTAssertLessThan(colour(gray,290,150).0,5)
+        // An export keeps the mode it began with, whatever Settings is changed to while it runs.
+        options.zoneMode = .color
+        let held=colour(try Exporter.render(p,options:options).image,100,150);XCTAssertGreaterThan(held.0-held.2,30,"\(held)")
+        options.zoneMode=nil;XCTAssertEqual(try Exporter.render(p,options:options).image.bitsPerPixel,8)
+    }
+    func testWhatIsSmudgedOrClonedOverIsNotSentForASecondOpinion() throws {
+        // A black bar of "print" on white paper, smudged over.
+        let w=400,h=300
+        let c=CGContext(data:nil,width:w,height:h,bitsPerComponent:8,bytesPerRow:0,space:CGColorSpaceCreateDeviceRGB(),bitmapInfo:CGImageAlphaInfo.premultipliedLast.rawValue)!
+        c.setFillColor(CGColor(gray:1,alpha:1));c.fill(CGRect(x:0,y:0,width:w,height:h));c.setFillColor(CGColor(gray:0,alpha:1));c.fill(CGRect(x:196,y:60,width:8,height:180))
+        let photo=try temporaryPhoto(c.makeImage()!);defer{try? FileManager.default.removeItem(at:photo)}
+        func darkest(_ data:Data)throws->Int {
+            let image=try XCTUnwrap(CGImageSourceCreateWithData(data as CFData,nil).flatMap{CGImageSourceCreateImageAtIndex($0,0,nil)})
+            var px=[UInt8](repeating:0,count:image.width*image.height)
+            let g=CGContext(data:&px,width:image.width,height:image.height,bitsPerComponent:8,bytesPerRow:image.width,space:CGColorSpaceCreateDeviceGray(),bitmapInfo:CGImageAlphaInfo.none.rawValue)!
+            g.draw(image,in:CGRect(x:0,y:0,width:image.width,height:image.height))
+            let row=image.height/2;return Int(px[row*image.width..<(row+1)*image.width].min()!)
+        }
+        var p=Page(path:photo.path)
+        XCTAssertLessThan(try darkest(ClaudeReview.images(for:p).photo),40,"Unretouched, the bar is sent as it is")
+        p.smudges=[Smudge(points:[Point(0.5,0.1),Point(0.5,0.9)],radius:0.08,strength:1,grain:0)]
+        let sent=try ClaudeReview.images(for:p)
+        XCTAssertGreaterThan(try darkest(sent.photo),90,"The photograph sent has the smudge");XCTAssertGreaterThan(try darkest(sent.overlay),90,"and so has the copy with the crop drawn on it")
+        p.smudges=nil;p.clones=[CloneStroke(points:[Point(0.5,0.1),Point(0.5,0.9)],radius:0.06,offset:Point(0.3,0))]
+        XCTAssertGreaterThan(try darkest(ClaudeReview.images(for:p).photo),200,"Paper cloned over the bar is what is sent")
     }
     func testZoneStaysOnItsPictureWhenThePageIsSplit() throws {
         var g=[Double](repeating:0.85,count:800*300)

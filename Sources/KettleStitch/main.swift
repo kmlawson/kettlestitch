@@ -193,7 +193,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
         supportURL=support
         // The app opens empty. Each session gets its own untitled file, so unnamed work from an earlier
         // session is never overwritten; it stays reachable under File ▸ Open Recent.
-        projectURL=support.appendingPathComponent(LaunchPolicy.untitledName(Date()));usageURL=support.appendingPathComponent(UsageLog.fileName)
+        projectURL=support.appendingPathComponent(LaunchPolicy.untitledName(Date()))
+        // Another copy of the app begun in the same second has that name; this session takes one of its own.
+        if FileManager.default.fileExists(atPath:projectURL.path) {projectURL=support.appendingPathComponent(LaunchPolicy.untitledName(Date(),unique:String(UUID().uuidString.prefix(4))))}
+        usageURL=support.appendingPathComponent(UsageLog.fileName)
         if let asked=LaunchPolicy.projectToOpen(arguments:CommandLine.arguments,testDirectory:testDirectory),FileManager.default.fileExists(atPath:asked.path) {
             do {project=try Project.read(asked);project.selected=min(max(0,project.selected),max(0,project.pages.count-1));projectURL=asked} catch {showError(error)}
         }
@@ -260,7 +263,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
     }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication)->Bool {true}
     func applicationShouldTerminate(_ sender: NSApplication)->NSApplication.TerminateReply {confirmUnsaved(leaving:true) ? .terminateNow:.terminateCancel}
-    func applicationWillTerminate(_ notification: Notification){queue.cancelAllOperations();reviewTask?.cancel();writeUntitled();writeRecoveryCopy()}
+    func applicationWillTerminate(_ notification: Notification){queue.cancelAllOperations();reviewTask?.cancel();commitAdjustments();writeUntitled();writeRecoveryCopy()}
 
     // MARK: Page list
     func numberOfRows(in tableView:NSTableView)->Int {project.pages.count}
@@ -414,6 +417,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
     func reloadPages(){reloading=true;table.reloadData();reloading=false}
     func tableViewSelectionDidChange(_ notification:Notification){
         guard !reloading else{return}
+        // A slider change still waiting to be recorded belongs to the pages that were selected.
+        commitAdjustments()
         // Extending the selection keeps the photograph on screen.
         let row=table.selectedRow
         guard project.pages.indices.contains(row),!table.selectedRowIndexes.contains(project.selected) || table.selectedRowIndexes.count==1 else{return}
@@ -490,7 +495,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
         resolutionLabel.stringValue=size == .zero ? "":"Resolution is \(Int(layout.dpi.rounded())) DPI"+(fitted || p.format?.widthCM != nil ? "":" (assumed)")
     }
     /// False for a session that was never given a name; its file in Application Support is a recovery copy.
-    var hasProjectFile: Bool {!LaunchPolicy.isUntitled(projectURL)}
+    var hasProjectFile: Bool {supportURL.map{!LaunchPolicy.isUntitled(projectURL,in:$0)} ?? !LaunchPolicy.isUntitled(projectURL)}
     func updateTitle(){
         let name=projectURL.deletingPathExtension().lastPathComponent,untitled = !hasProjectFile
         window?.title=untitled ? "Untitled":name;window?.representedURL=untitled ? nil:projectURL;window?.isDocumentEdited=unsaved
@@ -514,11 +519,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
         NSObject.cancelPreviousPerformRequests(withTarget:self,selector:#selector(writeUntitled),object:nil)
         perform(#selector(writeUntitled),with:nil,afterDelay:1)
     }
-    @objc func writeUntitled(){
+    /// Writes an untitled session's file now. False when it could not be written.
+    @objc @discardableResult func writeUntitled()->Bool {
         NSObject.cancelPreviousPerformRequests(withTarget:self,selector:#selector(writeUntitled),object:nil)
-        if !hasProjectFile {write()}
+        return hasProjectFile ? true:write()
+    }
+    /// Before the project on screen is replaced by another: untitled work must be safely in its file, or the user
+    /// must have said it can go. Its file is the only copy there is.
+    func readyToReplace()->Bool {
+        commitAdjustments()
+        guard !hasProjectFile,!project.pages.isEmpty,!writeUntitled(),testDirectory == nil else{return true}
+        let alert=NSAlert();alert.alertStyle = .warning;alert.messageText="This untitled work could not be kept"
+        alert.informativeText="\(saveFailure ?? "Its file could not be written.")\n\nIf you carry on, the work on screen is lost. Cancel to stay with it and save it somewhere else with File ▸ Save Project As."
+        alert.addButton(withTitle:"Cancel");alert.addButton(withTitle:"Discard It")
+        return alert.runModal() == .alertSecondButtonReturn
     }
     @discardableResult func write()->Bool {
+        commitAdjustments()
         // An untitled project nothing was added to leaves no file behind.
         guard LaunchPolicy.shouldWrite(pageCount:project.pages.count,fileExists:FileManager.default.fileExists(atPath:projectURL.path)) else{unsaved=false;updateTitle();return true}
         do{try project.save(projectURL);unsaved=false;saveFailure=nil;dropRecoveryCopy();updateTitle();refreshDetail();noteRecent();return true}
@@ -557,6 +574,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
             do {
                 let copy=try RecoverySnapshot.read(entry.file)
                 guard let original=copy.originalPath else{throw CropError.message("This recovery copy does not say which project it belongs to")}
+                guard readyToReplace() else{return}
                 show(copy.project,at:URL(fileURLWithPath:original))
                 // The copy stays this session's own until the project is saved.
                 sessionID=copy.id;unsaved=true;updateTitle()
@@ -579,6 +597,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
     /// `leaving` is true when the app is quitting or its window closing. Work that was never given a file is then
     /// asked about too; replacing it by opening something else is not, since it stays under Open Recent.
     func confirmUnsaved(leaving:Bool=false)->Bool {
+        // A slider change still waiting to be recorded counts as a change.
+        commitAdjustments()
         let action=LaunchPolicy.onQuit(hasProjectFile:hasProjectFile,unsaved:unsaved,untitledChanged:untitledChanged,pageCount:project.pages.count,autosave:UserDefaults.standard.bool(forKey:SettingsController.autosaveKey))
         // A test run has nobody to answer.
         if testDirectory != nil {return action == .nothing || action == .askToName ? true:write()}
@@ -588,9 +608,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
         case .askToSave:break
         case .askToName:
             guard leaving else{return true}
-            writeUntitled()
+            let kept=writeUntitled()
             let alert=NSAlert();alert.messageText="Do you want to save this project?"
-            alert.informativeText="It has not been saved to a file yet. If you don’t save it, it is kept as an untitled session that you can find again under File ▸ Open Recent."
+            alert.informativeText=kept ? "It has not been saved to a file yet. If you don’t save it, it is kept as an untitled session that you can find again under File ▸ Recovery or Open Recent.":"It has not been saved to a file yet, and it could not be kept as an untitled session (\(saveFailure ?? "its file could not be written")). If you don’t save it, it will be lost."
             alert.addButton(withTitle:"Save…");alert.addButton(withTitle:"Cancel");alert.addButton(withTitle:"Don’t Save")
             switch alert.runModal() {
             case .alertFirstButtonReturn:return saveAs(nil)
@@ -681,7 +701,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
         let changing=indexes.filter{((quarters(project.pages[$0])%4)+4)%4 != 0};guard !changing.isEmpty else{return}
         // A split is measured across the output, so a quarter turn leaves nothing to keep: propose it afresh.
         let split=changing.filter{project.pages[$0].split != nil}
-        edit(changing){let by=quarters($0);$0.rotation=((($0.rotation+by)%4)+4)%4;$0.split=$0.split?.rotated(quarterTurns:by);if $0.split == nil {$0.splitByHand=nil}}
+        edit(changing){let by=quarters($0);$0.rotation=((($0.rotation+by)%4)+4)%4;$0.split=$0.split?.rotated(quarterTurns:by);if $0.split == nil {$0.splitByHand=nil}
+            // The tilt of one page turns with it; the two pages of a spread change places, or stop being the pages measured.
+            $0.deskew=Page.deskew(Page.deskew($0.deskew,afterQuarterTurns:by,parts:$0.deskew?.count ?? 1),fitting:$0.split == nil ? 1:2)}
         let lost=split.filter{project.pages[$0].split == nil}
         if !lost.isEmpty {proposeSplits(lost,record:false)}
         // The photograph is shown turned as well as the preview, so the view stays as it was.
@@ -726,7 +748,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
         if record {undoStack.append(.pages(pages));redoStack.removeAll()}
         status.stringValue=pages.count==1 ? "Looking for the fold…":"Looking for the fold on \(pages.count) pages…"
         if pages.count>1 {beginProgress(.split,pages.count)}
-        var found=0,finished=0,guided=0
+        var found=0,finished=0,guided=0,failed=0,stale=0,trouble=""
         for page in pages {
             splitQueue.addOperation{[weak self] in
                 // Read when this page's turn comes, so each page of a batch goes by the one just done before it.
@@ -740,17 +762,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
                 let result:Result<SplitProposal,Error>=autoreleasepool{Result{try SplitDetector.detect(Imaging.load(URL(fileURLWithPath:page.path),maxPixel:1600),quad:page.quad,rotation:page.rotation,guide:guide,trusted:trusted)}}
                 DispatchQueue.main.async{guard let self,self.generation==token else{return}
                     finished+=1
-                    // The crop or rotation may have changed while this ran; a proposal for the old shape is not applied.
-                    if let i=self.project.pages.firstIndex(where:{$0.id==page.id}),self.project.pages[i].quad==page.quad,self.project.pages[i].rotation==page.rotation,case .success(let proposal)=result {
+                    // The crop, the turn or the split itself may have changed while this ran, by hand or by Undo; a
+                    // proposal for the page as it was is not laid over what the user has done since.
+                    if case .failure(let error)=result {failed+=1;trouble=error.localizedDescription}
+                    else if let i=self.project.pages.firstIndex(where:{$0.id==page.id}),page.splitResultApplies(to:self.project.pages[i]),case .success(let proposal)=result {
                         self.project.pages[i].split=proposal.split;self.project.pages[i].splitByHand=nil;if trusted,guide != nil{guided+=1}else if proposal.confident{found+=1}else if guide != nil{guided+=1}
+                        self.project.pages[i].deskew=Page.deskew(self.project.pages[i].deskew,fitting:2)
                         self.splitOptions[page.id]=(proposal.alternatives,0,page.quad,page.rotation)
                         self.save();self.table.reloadData(forRowIndexes:IndexSet(integer:i),columnIndexes:IndexSet(integer:0))
-                        if self.current==i {self.refreshDetail()}
-                    }
+                        if self.current==i {self.refreshDetail();if self.canvas.preview {self.renderPreview()}}
+                    } else {stale+=1}
                     self.stepProgress(.split,finished)
                     if finished==pages.count {
                         self.endProgress(.split)
-                        self.status.stringValue=pages.count==1 ? (found==1 ? "Split proposed at the fold — t again tries another place; drag it, or press y and u to move it":guided==1 ? "Split placed by the page before, adjusted to this page — t again tries another place; drag it, or press y and u to move it":"No clear fold found; split placed at the centre — drag it, or press y and u to move it"):"Split proposed on \(pages.count) pages: \(found) at a fold, \(guided) where the page before has it, \(pages.count-found-guided) at the centre"
+                        if pages.count==1,failed+stale==1 {self.status.stringValue=failed==1 ? "Could not look for the fold: \(trouble)":"The page changed while the fold was looked for; nothing was applied"} else {self.status.stringValue=pages.count==1 ? (found==1 ? "Split proposed at the fold — t again tries another place; drag it, or press y and u to move it":guided==1 ? "Split placed by the page before, adjusted to this page — t again tries another place; drag it, or press y and u to move it":"No clear fold found; split placed at the centre — drag it, or press y and u to move it"):"Split proposed on \(pages.count) pages: \(found) at a fold, \(guided) where the page before has it, \(pages.count-failed-stale-found-guided) at the centre";if failed+stale>0 {self.status.stringValue+=(failed>0 ? " · \(failed) could not be read (\(trouble))":"")+(stale>0 ? " · \(stale) changed meanwhile and \(stale==1 ? "was":"were") left alone":"")}}
                     }
                 }
             }
@@ -765,23 +790,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
         undoStack.append(.pages(pages));redoStack.removeAll()
         status.stringValue=pages.count==1 ? "Measuring the tilt of the text…":"Measuring the tilt on \(pages.count) pages…"
         if pages.count>1 {beginProgress(.split,pages.count)}
-        var found=0,finished=0
+        var found=0,finished=0,failed=0,stale=0,trouble=""
         for page in pages {
             splitQueue.addOperation{[weak self] in
                 let result:Result<[Double]?,Error>=autoreleasepool{Result{try SkewDetector.detect(Imaging.load(URL(fileURLWithPath:page.path),maxPixel:1600),page:page)}}
                 DispatchQueue.main.async{guard let self,self.generation==token else{return}
                     finished+=1
-                    // Measured on the crop as it was; a crop, rotation or split changed since would not match.
-                    if let i=self.project.pages.firstIndex(where:{$0.id==page.id}),self.project.pages[i].quad==page.quad,self.project.pages[i].rotation==page.rotation,self.project.pages[i].split==page.split,case .success(let angles)=result {
-                        let before=self.project.pages[i].deskew
-                        self.project.pages[i].deskew=Page.deskew(before,setting:angles,parts:Exporter.previewParts(page),only:only);if angles != nil{found+=1}
-                        self.save();self.table.reloadData(forRowIndexes:IndexSet(integer:i),columnIndexes:IndexSet(integer:0))
-                        if self.current==i {self.refreshDetail();if self.canvas.preview{self.renderPreview()}else if angles != nil{self.setPreview(true)}}
-                    }
+                    // Measured on the page as it was; a crop, turn, split or deskew changed since, by hand or by
+                    // Undo, would not match. A measurement that found no clear tilt leaves the page as it is.
+                    if case .failure(let error)=result {failed+=1;trouble=error.localizedDescription}
+                    else if let i=self.project.pages.firstIndex(where:{$0.id==page.id}),page.deskewResultApplies(to:self.project.pages[i]),case .success(let angles)=result {
+                        if let angles {
+                            found+=1
+                            self.project.pages[i].deskew=Page.deskew(self.project.pages[i].deskew,setting:angles,parts:Exporter.previewParts(page),only:only)
+                            self.save();self.table.reloadData(forRowIndexes:IndexSet(integer:i),columnIndexes:IndexSet(integer:0))
+                            if self.current==i {self.refreshDetail();if self.canvas.preview{self.renderPreview()}else{self.setPreview(true)}}
+                        }
+                    } else {stale+=1}
                     if pages.count>1 {self.stepProgress(.split,finished)}
                     if finished==pages.count {
                         if pages.count>1 {self.endProgress(.split)}
-                        self.status.stringValue=pages.count==1 ? (found==1 ? "Deskewed — Option-, and Option-. turn it by 0.1°":"No clear tilt found; the page is left as it is"):"Deskewed \(found) of \(pages.count) pages; the rest showed no clear tilt"
+                        let unclear=pages.count-found-failed-stale
+                        let notes=(failed>0 ? " · \(failed) could not be read (\(trouble))":"")+(stale>0 ? " · \(stale) changed meanwhile and \(stale==1 ? "was":"were") left alone":"")
+                        self.status.stringValue=pages.count==1 ? (found==1 ? "Deskewed — Option-, and Option-. turn it by 0.1°":failed==1 ? "Could not measure the tilt: \(trouble)":stale==1 ? "The page changed while its tilt was measured; nothing was applied":"No clear tilt found; the page is left as it is"):"Deskewed \(found) of \(pages.count) pages; \(unclear) showed no clear tilt"+notes
                     }
                 }
             }
@@ -886,7 +917,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
     }
     @objc func removeSplit(){
         let targets=targetIndexes.filter{project.pages[$0].split != nil};guard !targets.isEmpty else{return}
-        edit(targets,geometry:false){$0.split=nil;$0.splitByHand=nil};status.stringValue=targets.count==1 ? "Split removed; this photograph exports as one page":"Split removed from \(targets.count) pages"
+        edit(targets,geometry:false){$0.split=nil;$0.splitByHand=nil;$0.deskew=Page.deskew($0.deskew,fitting:1)};status.stringValue=targets.count==1 ? "Split removed; this photograph exports as one page":"Split removed from \(targets.count) pages"
     }
     func moveSplit(_ delta:Double){
         guard let i=current,let split=project.pages[i].split else{NSSound.beep();return}
@@ -1071,7 +1102,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
         // Said before the work, which on a long project takes a moment, and confirmed after it on the button itself.
         applyAllButton.title="Applying to \(project.pages.count) Pages…";applyAllButton.isEnabled=false;status.stringValue="Applying this page's adjustments and format to all \(project.pages.count) pages…";showBanner("Applying settings to \(project.pages.count) pages…")
         // A moment first, so the notice is on screen before the main thread is busy.
+        let token=sessionID
         DispatchQueue.main.asyncAfter(deadline:.now()+0.05){[weak self] in guard let self else{return}
+            // Another project opened in that moment is not given this one's settings.
+            guard self.sessionID==token else{self.showBanner(nil);self.applyAllButton.title="Apply Settings to All Pages";self.applyAllButton.isEnabled=self.current != nil;return}
             self.edit(Array(self.project.pages.indices),geometry:false){$0.adjustments=a;$0.format=f}
             DispatchQueue.main.asyncAfter(deadline:.now()+0.6){[weak self] in if self?.importing==false {self?.showBanner(nil)}};self.status.stringValue="Applied this page's adjustments and format to all \(self.project.pages.count) pages · Undo puts them back"
             self.applyAllButton.title="✓ Applied to All \(self.project.pages.count) Pages"
@@ -1084,7 +1118,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
         guard confirmUnsaved() else{return}
         let panel=NSSavePanel();panel.nameFieldStringValue="Book.kettlestitch";panel.message="Choose where to save the new project."
         guard panel.runModal() == .OK,let url=panel.url else{return}
-        do{let fresh=Project();try fresh.save(url);writeUntitled();stop();dropRecoveryCopy();sessionID=UUID();decoded=[:];project=fresh;projectURL=url;undoStack=[];redoStack=[];unsaved=false;untitledChanged=false;noteRecent();updateTitle();reloadPages();selectCurrent()}catch{showError(error)}
+        guard readyToReplace() else{return}
+        do{let fresh=Project();try fresh.save(url);writeUntitled();stop();dropRecoveryCopy();sessionID=UUID();deviationCache=nil;decoded=[:];project=fresh;projectURL=url;undoStack=[];redoStack=[];unsaved=false;untitledChanged=false;noteRecent();updateTitle();reloadPages();selectCurrent()}catch{showError(error)}
     }
     @objc func importImages(){
         let panel=NSOpenPanel();panel.canChooseFiles=true;panel.canChooseDirectories=true;panel.allowsMultipleSelection=true;panel.message="Choose photographs or a folder. Subfolders are not imported."
@@ -1100,7 +1135,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
         // Listing folders and reading each photograph's size takes a while for a long book, so it happens off the
         // main thread with a notice over the canvas. This is separate from detection, which follows.
         importing=true;showBanner("Importing photographs…")
-        let existing=Set(project.pages.map{$0.path}),target=projectURL
+        // The session, not the file's address, says whether the project is still the one the import began in: Save As keeps it.
+        let existing=Set(project.pages.map{$0.path}),target=sessionID
         DispatchQueue.global(qos:.userInitiated).async{[weak self] in
             let incoming=ImportPolicy.sort(urls,existing:existing){url in
                 var directory:ObjCBool=false
@@ -1113,7 +1149,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
             DispatchQueue.main.async{guard let self else{return}
                 self.importing=false;self.showBanner(nil)
                 // Another project was opened meanwhile; these photographs were meant for the one before.
-                guard self.projectURL==target else{return}
+                guard self.sessionID==target else{return}
                 guard !added.isEmpty else{self.status.stringValue="Nothing new to import";return}
                 let wasEmpty=self.project.pages.isEmpty
                 self.restructure{self.project.pages += added;if wasEmpty{self.project.selected=0}}
@@ -1130,11 +1166,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
     @objc func openProject(){let panel=NSOpenPanel();panel.allowedContentTypes=ImportPolicy.projectExtensions.compactMap{UTType(filenameExtension:$0)}+[.json];guard confirmUnsaved(),panel.runModal() == .OK,let url=panel.url else{return};open(url)}
     @objc func openRecent(_ sender:NSMenuItem){if let url=sender.representedObject as? URL,confirmUnsaved(){open(url)}}
     func open(_ url:URL){
-        do{show(try Project.read(url),at:url);status.stringValue="Opened \(url.lastPathComponent)"}catch{showError(error)}
+        do{let loaded=try Project.read(url);guard readyToReplace() else{return};show(loaded,at:url);status.stringValue="Opened \(url.lastPathComponent)"}catch{showError(error)}
     }
     /// Replaces the project on screen with another. What was open has been saved or let go by now.
     func show(_ loaded:Project,at url:URL){
-        do{writeUntitled();stop();dropRecoveryCopy();sessionID=UUID();saveFailure=nil;generation=UUID();decoded=[:];project=loaded;project.selected=min(max(0,project.selected),max(0,project.pages.count-1));projectURL=url;unsaved=false;untitledChanged=false;noteRecent();updateTitle();undoStack=[];redoStack=[];thumbs=[:];previewThumbs=[:];turnedThumbs=[:];thumbnailPending=[:];thumbnailFailures=[:];pixelSizes=[:];reloadPages();selectCurrent();DispatchQueue.main.async{self.findMissingPhotographs()}}
+        do{writeUntitled();stop();dropRecoveryCopy();sessionID=UUID();saveFailure=nil;deviationCache=nil;generation=UUID();decoded=[:];project=loaded;project.selected=min(max(0,project.selected),max(0,project.pages.count-1));projectURL=url;unsaved=false;untitledChanged=false;noteRecent();updateTitle();undoStack=[];redoStack=[];thumbs=[:];previewThumbs=[:];turnedThumbs=[:];thumbnailPending=[:];thumbnailFailures=[:];pixelSizes=[:];reloadPages();selectCurrent();DispatchQueue.main.async{self.findMissingPhotographs()}}
     }
     @objc func locatePhotographs(){findMissingPhotographs();if Relink.missing(project.pages,exists:FileManager.default.fileExists(atPath:)).isEmpty {status.stringValue="Every photograph is where the project expects it"}}
     /// A project holds each photograph's full path. When some are gone, the project's own folder is tried first;
@@ -1155,7 +1191,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
             panel.message="Choose the folder that holds “\(first.lastPathComponent)”, or a folder above it."
             guard panel.runModal() == .OK,let folder=panel.url else{break}
             let here=Relink.relink(&project.pages,in:folder,exists:exists);found+=here;missing=Relink.missing(project.pages,exists:exists)
-            if here==0 {
+            let unsure=Relink.ambiguous(project.pages,in:folder,exists:exists)
+            if unsure>0 {
+                let doubt=NSAlert();doubt.messageText="\(unsure) photograph\(unsure==1 ? " was":"s were") left alone because \(unsure==1 ? "its name fits":"their names fit") more than one page"
+                doubt.informativeText="Several pages expect a photograph with the same file name from different folders, and “\(folder.lastPathComponent)” has only one of that name, so KettleStitch cannot tell whose it is. Choose a folder that still holds the photographs in the folders they were in, or the folder above those.";doubt.runModal()
+            } else if here==0 {
                 let none=NSAlert();none.messageText="None of the missing photographs are in “\(folder.lastPathComponent)”";none.informativeText="They are matched by file name, so they must still be called what they were.";none.runModal()
             }
         }
@@ -1180,11 +1220,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
         else {progress.stopAnimation(nil);progress.isIndeterminate=false;progress.maxValue=1;progress.doubleValue=tracker.fraction}
     }
     @objc func detectCurrent(){guard let i=current else{return};runDetection([i])}
-    @objc func detectPending(){runDetection(project.pages.indices.filter{project.pages[$0].status=="Pending"})}
+    /// Pages nothing has been proposed for yet, and those whose photograph could not be read the last time.
+    @objc func detectPending(){runDetection(project.pages.indices.filter{project.pages[$0].status=="Pending" || project.pages[$0].status==AppDelegate.detectionError})}
+    static let detectionError="Detection error"
     func runDetection(_ indexes:[Int]){
         guard !detecting,!indexes.isEmpty else{return};detecting=true;let token=generation
         let snapshots=indexes.map{($0,project.pages[$0])}
         beginProgress(.detect,snapshots.count)
+        var failures=0,trouble=""
         for (number,item) in snapshots.enumerated(){let (index,page)=item
             queue.addOperation{[weak self] in
                 let result:Result<[Candidate],Error>=autoreleasepool{Result {try Detector().detect(Imaging.load(URL(fileURLWithPath:page.path),maxPixel:1600))}}
@@ -1193,21 +1236,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
                         switch result {
                         case .success(let found):
                             self.project.pages[i].candidates=Candidate.merging(detected:found,into:self.project.pages[i].candidates)
-                            if self.project.pages[i].status=="Pending" {
+                            if self.project.pages[i].status=="Pending" || self.project.pages[i].status==AppDelegate.detectionError {
                                 if let best=found.first {self.project.pages[i].quad=best.quad;self.project.pages[i].status="Check proposal"}else{self.project.pages[i].status="No boundary — crop manually"}
                             }
-                        case .failure(let error):self.project.pages[i].status="Detection error";self.status.stringValue=error.localizedDescription
+                        // A crop the user made stands, and keeps saying what it is, when detection cannot read the photograph.
+                        case .failure(let error):if self.project.pages[i].status=="Pending" {self.project.pages[i].status=AppDelegate.detectionError};failures+=1;trouble=error.localizedDescription
                         }
                         self.save();self.table.reloadData(forRowIndexes:IndexSet(integer:index),columnIndexes:IndexSet(integer:0))
-                        if self.current==i {self.canvas.quad=self.project.pages[i].quad;self.refreshDetail()}
+                        if self.current==i {self.canvas.quad=self.project.pages[i].quad;self.refreshDetail();if self.canvas.preview {self.renderPreview()}}
                     }
                     self.status.stringValue="Detection \(number+1)/\(snapshots.count) · review every proposal";self.stepProgress(.detect,number+1)
-                    if number==snapshots.count-1 {self.detecting=false;self.endProgress(.detect)}
+                    if number==snapshots.count-1 {
+                        self.detecting=false;self.endProgress(.detect)
+                        if failures>0 {self.status.stringValue="\(failures) photograph\(failures==1 ? "":"s") could not be read (\(trouble)) · Detect All Pending Pages tries \(failures==1 ? "it":"them") again"}
+                    }
                 }
             }
         }
     }
-    @objc func stop(){invalidateWork();exportCancelled=true;reviewCancelled=true;reviewTask?.cancel();status.stringValue="Stopped; completed edits are saved"}
+    @objc func stop(){invalidateWork();exportCancelled=true;reviewCancelled=true;reviewTask?.cancel();status.stringValue="Stopped; what was finished is kept in the project"}
     @objc func exportImages(){
         guard !exporting,!project.pages.isEmpty else{return}
         let selected=targetIndexes
@@ -1217,7 +1264,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
             guard let options else{return}
             self.exportOptions=options;if let data=try? JSONEncoder().encode(options){UserDefaults.standard.set(data,forKey:"exportOptions")}
             let pages=selectedOnly ? selected.filter{self.project.pages.indices.contains($0)}.map{self.project.pages[$0]}:self.project.pages
-            DispatchQueue.main.async{self.chooseDestination(pages,options)}
+            // How picture zones are kept is fixed now, so a change in Settings while the export runs cannot divide it.
+            var fixed=options;fixed.zoneMode=Imaging.pictureZoneMode
+            DispatchQueue.main.async{self.chooseDestination(pages,fixed)}
         }
     }
     func chooseDestination(_ pages:[Page],_ options:ExportOptions){
@@ -1255,8 +1304,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
                         if finished {DispatchQueue.main.async{self?.status.stringValue="Finishing the PDF…";self?.beginProgress(.export,1)}}
                         try writer.close()
                         if finished {
-                            if FileManager.default.fileExists(atPath:destination.path){try FileManager.default.removeItem(at:destination)}
-                            try FileManager.default.moveItem(at:temp,to:destination)
+                            // An existing PDF is exchanged for the new one in a single step, so it is never gone without its replacement.
+                            if FileManager.default.fileExists(atPath:destination.path) {_=try FileManager.default.replaceItemAt(destination,withItemAt:temp)}
+                            else {try FileManager.default.moveItem(at:temp,to:destination)}
                         } else {try? FileManager.default.removeItem(at:temp)}
                     }catch{try? FileManager.default.removeItem(at:temp);throw error}
                 } else {
@@ -1438,7 +1488,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
         guard let i=project.pages.firstIndex(where:{$0.id==page.id}) else{return}
         // Claude saw the crop as it was when sent; a verdict on a crop edited since would mislead.
         let before=project.pages[i]
-        guard project.pages[i].record(review,sentQuad:page.quad,sentSplit:page.split,reviewer:reviewer) else{
+        guard project.pages[i].record(review,sentQuad:page.quad,sentSplit:page.split,sentRotation:page.rotation,reviewer:reviewer) else{
             if total==1 {status.stringValue="The crop changed while \(reviewer) was looking, so its answer was not kept"}
             return
         }

@@ -153,6 +153,25 @@ public struct Page: Codable, Identifiable {
         guard let deskew,deskew.count == count,deskew.indices.contains(part) else {return 0}
         return deskew[part]
     }
+    /// True when a split proposal worked out for this page as it was may still be given to the page as it is `now`.
+    /// Anything the user did to the crop, the turn or the split meanwhile, Undo included, makes the proposal stale.
+    public func splitResultApplies(to now: Page) -> Bool {
+        now.id == id && now.quad == quad && now.rotation == rotation && now.revision == revision && now.split == split && now.splitByHand == splitByHand
+    }
+    /// The same for a measured tilt, which a deskew set or removed by hand also makes stale.
+    public func deskewResultApplies(to now: Page) -> Bool {
+        now.id == id && now.quad == quad && now.rotation == rotation && now.revision == revision && now.split == split && now.deskew == deskew
+    }
+    /// The deskew after the page is turned by quarter turns. One page keeps its tilt; the two pages of a spread
+    /// change places on a half turn, and on a quarter turn are no longer the pages that were measured.
+    public static func deskew(_ current: [Double]?, afterQuarterTurns turns: Int, parts: Int) -> [Double]? {
+        guard let current,current.count == parts else {return nil}
+        let turn=((turns%4)+4)%4
+        if parts == 1 || turn == 0 {return current}
+        return turn == 2 ? Array(current.reversed()):nil
+    }
+    /// The deskew if it is for this many output pages, and otherwise none.
+    public static func deskew(_ current: [Double]?, fitting parts: Int) -> [Double]? {current?.count == parts ? current:nil}
     /// Turns every part by `delta` degrees, or just part `only`. A list for a different number of parts starts again from level.
     public static func nudged(_ current: [Double]?, by delta: Double, parts: Int, only: Int? = nil) -> [Double]? {
         let base=current?.count == parts ? current!:[Double](repeating:0,count:parts)
@@ -174,8 +193,9 @@ public struct Page: Codable, Identifiable {
     /// Stores Claude's verdict on the crop that was sent and selects its fix, if it made one. Returns false, changing nothing, if the crop has been edited since.
     /// A moved split line is applied, provided the line is still the one that was sent.
     /// `reviewer` is what the model that answered is called: Claude, OpenAI or Gemini.
-    @discardableResult public mutating func record(_ review: CropReview, sentQuad: Quad, sentSplit: PageSplit? = nil, reviewer: String = Candidate.claudeSource) -> Bool {
-        guard quad == sentQuad else {return false}
+    /// A page turned since it was sent is left alone too: the same numbers then mean another place.
+    @discardableResult public mutating func record(_ review: CropReview, sentQuad: Quad, sentSplit: PageSplit? = nil, sentRotation: Int? = nil, reviewer: String = Candidate.claudeSource) -> Bool {
+        guard quad == sentQuad,sentRotation == nil || rotation == sentRotation else {return false}
         let moved=review.split != nil && split != nil && split == sentSplit
         if moved {split=review.split}
         candidates.removeAll{$0.isReview}
@@ -184,6 +204,44 @@ public struct Page: Codable, Identifiable {
         let verdict=(review.quad != nil ? "\(reviewer)'s fix selected":review.good ? "\(reviewer): crop looks right":"\(reviewer): no usable fix")+(moved ? "; split line moved":"")
         reviewNote=review.comment.isEmpty ? verdict:verdict+" — "+review.comment
         return true
+    }
+    /// Brings everything a project file says about the page within what the app itself would write. A value that
+    /// can only mean one thing is put right; a number that cannot be a place on a photograph is refused.
+    mutating func normalize() throws {
+        let name=URL(fileURLWithPath:path).lastPathComponent
+        func refuse(_ what: String) -> CropError {.message("\(name): the project file gives \(what) that cannot be right, so it was not opened.")}
+        func plausible(_ values: [Double]) -> Bool {values.allSatisfy{$0.isFinite && abs($0)<=1000}}
+        func unit(_ v: Double, _ low: Double = -1) -> Double {v.isFinite ? min(1,max(low,v)):0}
+        rotation=((rotation%4)+4)%4;revision=max(0,revision)
+        if let ratio=imageAspectRatio,!(ratio.isFinite && ratio>0) {imageAspectRatio=nil}
+        if let s=split {split=s.clamped}
+        if let angles=deskew {
+            guard plausible(angles) else {throw refuse("a deskew")}
+            deskew=angles.count == 1 || angles.count == 2 ? angles.map{min(SkewDetector.limit,max(-SkewDetector.limit,$0))}:nil
+        }
+        if var a=adjustments {
+            a.brightness=unit(a.brightness);a.contrast=unit(a.contrast);a.exposure=a.exposure.map{unit($0)};a.sharpness=a.sharpness.map{unit($0,0)}
+            a.despeckle=a.despeckle.flatMap{$0<1 ? nil:min(3,$0)}
+            adjustments=a
+        }
+        if let width=format?.widthCM {
+            guard plausible([width]) else {throw refuse("a page width")}
+            if width<=0 {format?.widthCM=nil}
+        }
+        if let zones=pictureZones {
+            guard plausible(zones.flatMap{[$0.minU,$0.minV,$0.maxU,$0.maxV]}) else {throw refuse("a picture zone")}
+            pictureZones=zones.map{PictureZone(from:($0.minU,$0.minV),to:($0.maxU,$0.maxV))}
+        }
+        if let strokes=smudges {
+            guard plausible(strokes.flatMap{$0.points.flatMap{[$0.x,$0.y]}}) else {throw refuse("a smudge")}
+            let kept=strokes.filter{!$0.points.isEmpty}.map{Smudge(points:$0.points,radius:$0.radius,strength:$0.strength,grain:$0.grain)}
+            smudges=kept.isEmpty ? nil:kept
+        }
+        if let strokes=clones {
+            guard plausible(strokes.flatMap{$0.points.flatMap{[$0.x,$0.y]}+[$0.offset.x,$0.offset.y]}) else {throw refuse("a cloned area")}
+            let kept=strokes.filter{!$0.points.isEmpty}.map{CloneStroke(points:$0.points,radius:$0.radius,offset:$0.offset)}
+            clones=kept.isEmpty ? nil:kept
+        }
     }
     public mutating func filterProposals() {
         if imageAspectRatio == nil {imageAspectRatio=Imaging.aspectRatio(URL(fileURLWithPath:path))}
@@ -216,7 +274,9 @@ public struct Project: Codable {
     public func checked() throws -> Project {
         var p=self
         guard p.version == 1, p.pages.allSatisfy({$0.quad.valid && $0.candidates.allSatisfy{$0.quad.valid}}) else {throw CropError.message("Unsupported or invalid project geometry")}
-        for i in p.pages.indices {p.pages[i].filterProposals()}
+        guard Set(p.pages.map{$0.id}).count == p.pages.count else {throw CropError.message("This project lists the same page more than once under one identity, so it cannot be opened safely.")}
+        for i in p.pages.indices {try p.pages[i].normalize();p.pages[i].filterProposals()}
+        p.selected=min(max(0,p.selected),max(0,p.pages.count-1))
         return p
     }
     /// The page list after `rows` are taken out and put back together before row `destination`, both counted in the

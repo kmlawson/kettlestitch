@@ -25,6 +25,9 @@ public struct ExportOptions: Codable, Equatable {
     /// How split spreads are written; nil means left page first.
     public var splitOrder: SplitOrder?
     public var password: String?
+    /// How picture zones are rendered for this export, fixed when it begins so that every page of it agrees;
+    /// nil goes by the app's setting at the time each page is rendered.
+    public var zoneMode: Cleanup?
     public init() {}
     /// Why Core Graphics cannot protect a PDF with this password, or nil if it can.
     public static func passwordProblem(_ password: String) -> String? {
@@ -86,7 +89,7 @@ public enum Exporter {
                 partDPI=OutputGeometry.layout(pixelWidth:Double(size.width),pixelHeight:Double(size.height),format:page.format).dpi
             }
             let scale=options.maxDPI.map{min(1,$0/partDPI)} ?? 1
-            var image=try Imaging.corrected(source,quad:quad,rotation:page.rotation,adjustments:settings,scale:scale,deskew:page.deskewAngle(part:part,of:crops.count),zones:zones,smudges:page.smudges ?? [],clones:page.clones ?? [])
+            var image=try Imaging.corrected(source,quad:quad,rotation:page.rotation,adjustments:settings,scale:scale,deskew:page.deskewAngle(part:part,of:crops.count),zones:zones,smudges:page.smudges ?? [],clones:page.clones ?? [],zoneMode:options.zoneMode)
             // A page with a picture on it needs its gray levels; pure text packs into one bit.
             if settings.cleanup == .blackAndWhite,options.format != .jpeg,!Imaging.hasPictures(zones,quad:quad,rotation:page.rotation) {image=try Imaging.bilevel(image)}
             let width=Double(image.width)/scale,height=Double(image.height)/scale

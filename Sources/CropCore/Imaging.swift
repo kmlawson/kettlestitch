@@ -154,7 +154,7 @@ public enum Imaging {
         return result
     }
     public static func smudged(_ image: CGImage, _ smudges: [Smudge]) throws -> CGImage {try retouched(image,smudges:smudges,clones:[])}
-    public static func corrected(_ image: CGImage, quad: Quad, rotation: Int = 0, adjustments: Adjustments = Adjustments(), scale: Double = 1, deskew: Double = 0, zones: [[Point]] = [], smudges: [Smudge] = [], clones: [CloneStroke] = []) throws -> CGImage {
+    public static func corrected(_ image: CGImage, quad: Quad, rotation: Int = 0, adjustments: Adjustments = Adjustments(), scale: Double = 1, deskew: Double = 0, zones: [[Point]] = [], smudges: [Smudge] = [], clones: [CloneStroke] = [], zoneMode: Cleanup? = nil) throws -> CGImage {
         guard quad.valid else {throw CropError.message("Invalid crop corners")}
         let input=retouched(CIImage(cgImage:image),smudges:smudges,clones:clones), w=Double(image.width), h=Double(image.height)
         func vector(_ p: Point) -> CIVector {CIVector(x:p.x*w, y:(1-p.y)*h)}
@@ -177,7 +177,7 @@ public enum Imaging {
             let pictures=zonePolygons(zones,quad:quad,rotation:rotation,deskew:deskew,width:pw,height:ph)
             if !pictures.isEmpty {
                 // Inside a zone the page is shown as a photograph: no paper whitening, no threshold.
-                let mode=pictureZoneMode == .blackAndWhite ? Cleanup.grayscale:pictureZoneMode
+                let chosen=zoneMode ?? pictureZoneMode,mode=chosen == .blackAndWhite ? Cleanup.grayscale:chosen
                 var plain=adjustments;plain.cleanup = .none;plain.despeckle=nil
                 let tones=mode == .none ? rotated:process(rotated,plain)
                 if mode != .grayscale {

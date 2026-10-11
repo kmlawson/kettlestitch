@@ -83,7 +83,7 @@ extension AppDelegate {
         let pictures=segments(["Add Zone","Clear"],#selector(zoneSegment(_:)),tips:["Draw a picture zone that keeps its gray tones on a black-and-white page (w)","Remove the picture zones (Shift-W)"])
         // Two buttons: the brush, lit while it is in hand, and the same picture crossed out to remove the smudges.
         smudgeButton.image=SmudgeIcon.brush;smudgeButton.setButtonType(.pushOnPushOff);smudgeButton.bezelStyle = .rounded;smudgeButton.controlSize = .small;smudgeButton.imagePosition = .imageOnly
-        smudgeButton.target=self;smudgeButton.action=#selector(toggleSmudge);smudgeButton.toolTip="Pick up or put down the smudge brush, which blurs print so it cannot be read (Shift-B)"
+        smudgeButton.target=self;smudgeButton.action=#selector(toggleSmudge);smudgeButton.toolTip="Pick up or put down the smudge brush, which blurs print to make it hard to read (Shift-B)"
         clearSmudgeButton.image=SmudgeIcon.erase;clearSmudgeButton.bezelStyle = .rounded;clearSmudgeButton.controlSize = .small;clearSmudgeButton.imagePosition = .imageOnly
         clearSmudgeButton.target=self;clearSmudgeButton.action=#selector(removeSmudges);clearSmudgeButton.toolTip="Remove the smudges (Option-Shift-B)"
         // The clone brush has the same pair: copy from one place to another, and remove what was copied.

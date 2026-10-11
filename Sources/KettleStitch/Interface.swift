@@ -59,7 +59,7 @@ enum ThumbnailPolicy {
 final class PreviewThumbnail {
     let image:NSImage,look:String
     init(_ image:NSImage,_ look:String){self.image=image;self.look=look}
-    static func look(_ p:Page)->String {"\(p.quad)|\(p.rotation)|\(String(describing:p.adjustments))|\(String(describing:p.split))|\(String(describing:p.deskew))|\(String(describing:p.pictureZones))|\(String(describing:p.smudges))|\(String(describing:p.clones))"}
+    static func look(_ p:Page)->String {"\(p.quad)|\(p.rotation)|\(String(describing:p.adjustments))|\(String(describing:p.split))|\(String(describing:p.deskew))|\(String(describing:p.pictureZones))|\(String(describing:p.smudges))|\(String(describing:p.clones))|\(Imaging.pictureZoneMode.rawValue)"}
 }
 /// A small rounded label, used for a photograph's file type beside its name.
 final class PillLabel: NSTextField {

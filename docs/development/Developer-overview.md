@@ -138,7 +138,9 @@ open -n dist/KettleStitch.app
 - Crop detection: shadows, backing boards and the stack of pages beyond the spread can remain in a crop; small covers conflict with the 65% minimum.
 - Split detection on real books is unmeasured; ragged folds with staples or stains read as print rather than as a line.
 - AppDelegate is very large; operations and state are not separated.
-- The second opinion sends the page without its smudges.
+- The second opinion sends the photograph with its smudges and clone strokes applied, but whole, not cropped.
+- A late split or deskew result is applied only if `Page.splitResultApplies` / `deskewResultApplies` say the page is still as it was when the work began.
+- `Project.checked()` is the one gate a project file passes: it refuses duplicate page identities and implausible numbers and brings the rest within range.
 - No notarization, so every downloaded copy meets Gatekeeper.
 
 ## Ideas, not authorised work

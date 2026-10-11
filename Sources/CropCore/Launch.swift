@@ -8,9 +8,15 @@ public enum LaunchPolicy {
         return testDirectory.map{URL(fileURLWithPath:$0).appendingPathComponent("Recovery.kettlestitch")}
     }
     /// A new name per session, so work that was never given a name is not overwritten by the next launch.
-    public static func untitledName(_ date: Date) -> String {
+    /// `unique` tells apart two sessions begun in the same second.
+    public static func untitledName(_ date: Date, unique: String? = nil) -> String {
         let formatter=DateFormatter();formatter.locale=Locale(identifier:"en_US_POSIX");formatter.dateFormat="yyyy-MM-dd HH.mm.ss"
-        return "Untitled "+formatter.string(from:date)+".kettlestitch"
+        return "Untitled "+formatter.string(from:date)+(unique.map{" "+$0} ?? "")+".kettlestitch"
+    }
+    /// A session file that was never given a name: one with such a name in the app's own folder. A project the
+    /// user saved elsewhere under a name beginning "Untitled" is a project file like any other.
+    public static func isUntitled(_ url: URL, in support: URL) -> Bool {
+        isUntitled(url) && url.deletingLastPathComponent().standardizedFileURL.path == support.standardizedFileURL.path
     }
     /// A session file that was never given a name. It is a recovery copy, not a project file the user saves to.
     public static func isUntitled(_ url: URL) -> Bool {url.deletingPathExtension().lastPathComponent.hasPrefix("Untitled ")}
@@ -62,21 +68,30 @@ public enum ImportPolicy {
 /// Finds photographs again after they, or the project, were moved. A project stores each photograph's full path.
 public enum Relink {
     public static func missing(_ pages: [Page], exists: (String) -> Bool) -> [Int] {pages.indices.filter{!exists(pages[$0].path)}}
-    /// Where a missing photograph might be inside `folder`: under its own name, then inside up to three of
-    /// the folders that used to enclose it, so a parent of several moved folders can be chosen at once.
+    /// Where a missing photograph might be inside `folder`: inside up to three of the folders that used to enclose
+    /// it, so a parent of several moved folders can be chosen at once, and last under its own name alone. The
+    /// fullest match comes first, since a bare name is the likeliest to belong to some other photograph.
     public static func candidates(for path: String, in folder: URL) -> [URL] {
         let parts=URL(fileURLWithPath:path).pathComponents.filter{$0 != "/"}
         guard !parts.isEmpty else {return []}
-        return (1...min(4,parts.count)).map{count in parts.suffix(count).reduce(folder){$0.appendingPathComponent($1)}}
+        return (1...min(4,parts.count)).reversed().map{count in parts.suffix(count).reduce(folder){$0.appendingPathComponent($1)}}
     }
-    /// Points each missing page at its photograph in `folder` when it is there. Returns how many were found.
+    /// For each missing page, the photograph in `folder` it would be pointed at, and whether that can be trusted:
+    /// not when pages that had different photographs would end up sharing one, or sharing with a page that is not missing.
+    static func matches(_ pages: [Page], in folder: URL, exists: (String) -> Bool) -> [(index: Int, path: String, sure: Bool)] {
+        let present=Set(pages.map{$0.path}.filter(exists))
+        let found=pages.indices.filter{!present.contains(pages[$0].path)}.compactMap{i in candidates(for:pages[i].path,in:folder).first{exists($0.path)}.map{(i,$0.path)}}
+        let claims=Dictionary(grouping:found,by:{$0.1}).mapValues{Set($0.map{pages[$0.0].path})}
+        return found.map{(index:$0.0,path:$0.1,sure:claims[$0.1]!.count == 1 && !present.contains($0.1))}
+    }
+    /// Points each missing page at its photograph in `folder` when it is there and is certainly its own. Returns how many were found.
     @discardableResult public static func relink(_ pages: inout [Page], in folder: URL, exists: (String) -> Bool) -> Int {
-        var found=0
-        for i in pages.indices where !exists(pages[i].path) {
-            if let match=candidates(for:pages[i].path,in:folder).first(where:{exists($0.path)}) {pages[i].path=match.path;found+=1}
-        }
-        return found
+        let sure=matches(pages,in:folder,exists:exists).filter{$0.sure}
+        for match in sure {pages[match.index].path=match.path}
+        return sure.count
     }
+    /// How many missing pages have a photograph of their name in `folder` that could as well be another page's.
+    public static func ambiguous(_ pages: [Page], in folder: URL, exists: (String) -> Bool) -> Int {matches(pages,in:folder,exists:exists).filter{!$0.sure}.count}
 }
 /// The app was called PageCrop, then briefly ScanSeamstress, before KettleStitch. Sessions, preferences and the
 /// stored API key saved under an earlier name are carried over once. Each list has the most recent name first.

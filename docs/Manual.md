@@ -165,7 +165,7 @@ The **clone brush** paints a copy of one part of the page over another, for cove
 - Drag where the copy should go. The copy keeps the same distance and direction from the source for every stroke, so you can build up an area in several strokes; Option-click again to copy from somewhere else.
 - **Esc** puts the brush down. The crossed-out button, or **Option Shift C**, removes everything cloned on the selected pages.
 
-Smudges and cloned areas lie on the photograph, so they stay on the same text when the crop or split changes, and they appear in the preview and in every export. It is a blur, not a black box: at low strength large print may still be guessable, so use a high strength for anything that must not be read. A page sent for a [second opinion](#a-second-opinion-from-claude-openai-or-gemini) is sent without its smudges.
+Smudges and cloned areas lie on the photograph, so they stay on the same text when the crop or split changes, and they appear in the preview and in every export. It is a blur, not a black box: at low strength large print may still be guessable, so use a high strength and a wide brush for anything that must not be read, and look at the preview to judge. It is not a guarantee that the text cannot be recovered. A page sent for a [second opinion](#a-second-opinion-from-claude-openai-or-gemini) is sent with its smudges and cloned areas, as you see it; the rest of the photograph, including what lies outside the crop, is sent as it is.
 
 ## Page format
 
@@ -242,7 +242,7 @@ A model's corners are estimates; treat them like any other proposal.
 - **Quitting with work never saved to a file:** you are asked whether to save it, and where. If you choose not to, it is not lost: see the next point.
 - **Untitled work** is kept as you go in `~/Library/Application Support/KettleStitch/`, as `Untitled <date and time>.kettlestitch`, and appears under Open Recent.
 - **After a crash:** unsaved changes to a project file are also kept aside, a couple of seconds after you stop editing. If KettleStitch closes without saving them, the **Recovery** window opens the next time and lists them. Opening a copy shows the project with those changes still unsaved; the project file changes only when you save. **File ▸ Recovery…** shows the same list at any time, with untitled work too, and is where to delete copies you no longer want. Nothing is deleted on its own.
-- **Moved photographs:** if a project cannot find its photographs, it looks in its own folder and then asks where they are now. They are matched by file name, and you can choose a folder above several moved folders. **File ▸ Locate Missing Photographs…** asks again later.
+- **Moved photographs:** if a project cannot find its photographs, it looks in its own folder and then asks where they are now. They are matched by file name and by as many of their old folders as still enclose them, so you can choose a folder above several moved folders. When pages expect photographs of the same name from different folders and only one of that name is found, none is attached and you are told, since a wrong photograph is worse than a missing one. **File ▸ Locate Missing Photographs…** asks again later.
 - **API keys** are in your login keychain, one for each provider.
 - **The usage log** for second opinions is `claude-usage.json` in the same Application Support folder.
 - Projects from the app's earlier names, `.pagecrop` and `.scanseamstress`, still open.

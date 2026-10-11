@@ -22,7 +22,7 @@ It is named after the kettle stitch, a knot that links one sewn section of a boo
 - **Keys you can change**: every single-key command can be given another key in Settings ▸ Shortcuts.
 - **Named presets** for image settings, applied to any selection of pages.
 - **Smudge brush** to blur text that should not be readable in the output, with adjustable grain so the patch stands out less, and a **clone brush** to paint a copy of one part of the page over another.
-- **Preview** of exactly what will be exported, kept on as you move from page to page.
+- **Preview** of the corrected page as it will be exported, kept on as you move from page to page.
 - **Export** to PDF or to JPEG, PNG or TIFF. Exports carry no metadata from the photographs (no location, camera or owner), and PDFs carry no producer, creator or dates. OCR via Apple Vision is offered.
 - **Review tools**: accept pages as you go, flag ones to return to, and jump to pages whose crop is unlike the rest of the book.
 - **A second opinion** (optional): send a page to Claude, OpenAI or Gemini to have its crop and split checked. It is the only feature that uses the network. It talks to the provider directly with your own API key, which is kept in your keychain; nothing else needs to be installed. See [API keys and security](#api-keys-and-security).

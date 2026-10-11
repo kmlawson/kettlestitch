@@ -391,6 +391,29 @@ extension AppDelegate {
                 self.settings!.tabs.selectTabViewItem(at:0);self.settings!.window.close()
                 print("KEY_BINDINGS passed")
             }
+            // A measurement that finishes late does not undo what the user did while it ran (review R01, R02, R14).
+            do {
+                func settle(){let end=Date()+30;while self.splitQueue.operationCount>0 && Date()<end {RunLoop.current.run(until:Date()+0.05)};RunLoop.current.run(until:Date()+0.4)}
+                self.project.selected=0;self.selectCurrent();self.table.selectRowIndexes(IndexSet(integer:0),byExtendingSelection:false)
+                let kept=self.project.pages[0]
+                self.edit{$0.split=PageSplit(top:0.5,bottom:0.5);$0.splitByHand=nil;$0.deskew=nil}
+                self.proposeSplits([0],record:true);self.moveSplit(0.01)
+                let mine=self.project.pages[0].split;precondition(mine != PageSplit(top:0.5,bottom:0.5) && self.project.pages[0].splitByHand==true)
+                settle();precondition(self.project.pages[0].split==mine && self.project.pages[0].splitByHand==true,"The line the user moved stays where it was put: \(String(describing:self.project.pages[0].split))")
+                precondition(self.status.stringValue.contains("nothing was applied"),self.status.stringValue)
+                self.edit{$0.deskew=[0.3,0.3]};self.deskew();self.turnDeskew(0.1)
+                settle();precondition(self.project.pages[0].deskew==[0.4,0.4],"A turn by hand is not replaced by a measurement begun before it: \(String(describing:self.project.pages[0].deskew))")
+                self.removeSplit();precondition(self.project.pages[0].deskew==nil,"Two pages' tilts do not outlive the split")
+                // A slider change waiting to be recorded is recorded when the selection moves (R09).
+                self.project.pages[0]=kept;self.unsaved=false;self.loadCurrent()
+                var brighter=self.project.pages[0].adjustments ?? Adjustments();brighter.brightness=0.15;self.setAdjustments(brighter);precondition(self.adjusting && !self.unsaved)
+                self.table.selectRowIndexes(IndexSet(integer:1),byExtendingSelection:false)
+                precondition(!self.adjusting && self.unsaved,"Moving to another page records the change")
+                self.undo();precondition(self.project.pages[0].adjustments==kept.adjustments,"and one Undo takes it back")
+                self.project.pages[0]=kept;self.undoStack.removeAll();self.redoStack.removeAll();self.setPreview(false)
+                self.project.selected=0;self.selectCurrent();self.table.selectRowIndexes(IndexSet(integer:0),byExtendingSelection:false)
+                print("LATE_RESULTS passed")
+            }
             // Pages are reordered by moving their rows; the page on screen stays on screen and Undo puts them back.
             let order=self.project.pages.map{$0.id}
             self.project.selected=0;self.selectCurrent();self.table.selectRowIndexes(IndexSet(integer:0),byExtendingSelection:false)
