@@ -190,9 +190,16 @@ final class SplitDetectorTests:XCTestCase {
         XCTAssertEqual((try SplitDetector.detect(two,quad:.full,rotation:0,guide:PageSplit(top:0.465,bottom:0.465))).split.top,0.46,accuracy:0.012)
         // A frame border beside the guide is still not a fold.
         XCTAssertEqual((try SplitDetector.detect(spread(fold:0.5,rule:0.46),quad:.full,rotation:0,guide:PageSplit(top:0.47,bottom:0.47))).split.top,0.5,accuracy:0.012)
+        // A split the user placed on the page before is kept, moved only onto a fold seen right beside it.
+        let clear=spread(fold:0.5)
+        let nudged=try SplitDetector.detect(clear,quad:.full,rotation:0,guide:PageSplit(top:0.49,bottom:0.49),trusted:true)
+        XCTAssertTrue(nudged.confident);XCTAssertEqual((nudged.split.top+nudged.split.bottom)/2,0.5,accuracy:0.008,"One percent away, the split moves onto the fold")
+        let kept=try SplitDetector.detect(clear,quad:.full,rotation:0,guide:PageSplit(top:0.465,bottom:0.465),trusted:true)
+        XCTAssertEqual(kept.split,PageSplit(top:0.465,bottom:0.465),"Three and a half percent away, the fold does not pull it over")
+        XCTAssertTrue(kept.alternatives.contains{abs(($0.top+$0.bottom)/2-0.5)<0.012},"but the fold is there to step to: \(kept.alternatives)")
         // The guide is the nearest earlier page with a split, turned the same way.
         var pages=(0..<4).map{Page(path:"/photos/\($0).jpg")};pages[0].split=before;pages[1].split = .centre;pages[1].rotation=2
-        XCTAssertEqual(SplitDetector.guide(for:3,in:pages),before);XCTAssertNil(SplitDetector.guide(for:0,in:pages))
+        XCTAssertEqual(SplitDetector.guide(for:3,in:pages),before);XCTAssertNil(SplitDetector.guide(for:0,in:pages));XCTAssertEqual(SplitDetector.guidePage(for:3,in:pages),0)
         pages[2].split=PageSplit(top:0.6,bottom:0.6);XCTAssertEqual(SplitDetector.guide(for:3,in:pages),pages[2].split)
     }
     func testBlankSheetFallsBackToCentre() throws {

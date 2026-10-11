@@ -107,7 +107,14 @@ public enum SplitDetector {
         guard pages.indices.contains(index) else {return nil}
         return pages[..<index].last{$0.split != nil && $0.rotation == pages[index].rotation}?.split
     }
-    public static func detect(_ image: CGImage, quad: Quad, rotation: Int, guide: PageSplit? = nil) throws -> SplitProposal {
+    /// The page whose split guides the one at `index`, as above.
+    public static func guidePage(for index: Int, in pages: [Page]) -> Int? {
+        guard pages.indices.contains(index) else {return nil}
+        return pages[..<index].lastIndex{$0.split != nil && $0.rotation == pages[index].rotation}
+    }
+    /// A `trusted` guide is a split the user has seen and left or set by hand. The book moves only a little from one
+    /// photograph to the next, so the proposal is that split, shifted at most slightly onto a fold seen right beside it.
+    public static func detect(_ image: CGImage, quad: Quad, rotation: Int, guide: PageSplit? = nil, trusted: Bool = false) throws -> SplitProposal {
         let corrected=try Imaging.corrected(image,quad:quad,rotation:rotation)
         let w=min(640,corrected.width),h=max(8,Int((Double(corrected.height)*Double(w)/Double(corrected.width)).rounded()))
         var bytes=[UInt8](repeating:0,count:w*h)
@@ -116,7 +123,16 @@ public enum SplitDetector {
                 c.interpolationQuality = .medium;c.draw(corrected,in:CGRect(x:0,y:0,width:w,height:h))
             }
         }
-        return analyse(bytes.map{Double($0)/255},width:w,height:h,guide:guide)
+        let gray=bytes.map{Double($0)/255}
+        var proposal=analyse(gray,width:w,height:h,guide:guide,trusted:trusted)
+        if trusted,guide != nil {
+            // What the detector would have said without being told, for the user to step to if the page before misleads.
+            for other in analyse(gray,width:w,height:h,guide:guide).alternatives where proposal.alternatives.count<4 {
+                let at=(other.top+other.bottom)/2
+                if !proposal.alternatives.contains(where:{abs(($0.top+$0.bottom)/2-at)<0.015}) {proposal.alternatives.append(other)}
+            }
+        }
+        return proposal
     }
     /// The band of columns free of print that the fold lies in, as first and last column.
     ///
@@ -160,7 +176,7 @@ public enum SplitDetector {
         return fit.max{score($0)<score($1)}
     }
     /// `gray` is row-major from the top, 0 black to 1 white.
-    public static func analyse(_ gray: [Double], width w: Int, height h: Int, guide: PageSplit? = nil) -> SplitProposal {
+    public static func analyse(_ gray: [Double], width w: Int, height h: Int, guide: PageSplit? = nil, trusted: Bool = false) -> SplitProposal {
         let guide=guide?.clamped,fallback=SplitProposal(split:guide ?? .centre,confident:false)
         guard w>=40,h>=20,gray.count == w*h else {return fallback}
         // Where the fold is expected, and how far from it the search reaches.
@@ -280,6 +296,19 @@ public enum SplitDetector {
             if let guide {offer(guide)}
             offer(.centre)
             var result=chosen;result.alternatives=options;return result
+        }
+        if let guide,trusted {
+            // Only a line right beside the trusted place moves the split off it, and one a few percent of the width
+            // away, such as a frame's border, counts for nothing however dark it is.
+            let target=expected*Double(w),near=0.012*Double(w)
+            var best:(x:Int,score:Double)?
+            for x in first...last where abs((features[x].bottom-x)-expectedShift)<=max(2,w/40) {
+                let distance=(Double(x+features[x].bottom)/2-target)/near
+                let score=features[x].strength*exp(-distance*distance)
+                if score>=0.1,score>(best?.score ?? 0) {best=(x,score)}
+            }
+            if let best {return finish(SplitProposal(split:PageSplit(top:(Double(best.x)+0.5)/Double(w),bottom:(Double(features[best.x].bottom)+0.5)/Double(w)).clamped,confident:true))}
+            return finish(SplitProposal(split:guide,confident:true))
         }
         if let gutter {
             // The fold lies in the band free of print between the two pages. A band that wide open on one side says

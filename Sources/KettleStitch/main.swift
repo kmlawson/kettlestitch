@@ -148,7 +148,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
         if let data=UserDefaults.standard.data(forKey:"exportOptions"),let saved=try? JSONDecoder().decode(ExportOptions.self,from:data) {exportOptions=saved}
         buildUI();buildMenus();window.makeKeyAndOrderFront(nil);NSApp.activate(ignoringOtherApps:true)
         canvas.onCommit={[weak self] q in self?.edit{$0.setManualCrop(q)}}
-        canvas.onSplitCommit={[weak self] s in self?.edit(geometry:false){$0.split=s}}
+        canvas.onSplitCommit={[weak self] s in self?.edit(geometry:false){$0.split=s;$0.splitByHand=true}}
         canvas.onZoneCommit={[weak self] z in self?.edit(geometry:false){$0.pictureZones=($0.pictureZones ?? [])+[z]};self?.zoneDrawn()}
         canvas.onSmudgeCommit={[weak self] points in guard let self else{return};let radius=self.smudgeSizeSlider.doubleValue,strength=self.smudgeStrengthSlider.doubleValue
             self.edit(geometry:false){$0.smudges=($0.smudges ?? [])+[Smudge(points:points,radius:radius,strength:strength)]}
@@ -441,7 +441,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
         if targets.count==1,let i=targets.first,let kept=splitOptions[project.pages[i].id],kept.options.count>1,kept.quad==project.pages[i].quad,kept.rotation==project.pages[i].rotation,project.pages[i].split==kept.options[kept.index] {
             let next=(kept.index+1)%kept.options.count
             splitOptions[project.pages[i].id]?.index=next
-            edit([i],geometry:false){$0.split=kept.options[next]}
+            edit([i],geometry:false){$0.split=kept.options[next];$0.splitByHand=true}
             status.stringValue=next==0 ? "Back to the first split proposal (1 of \(kept.options.count)) · T for the next":"Split candidate \(next+1) of \(kept.options.count) · T for the next"
             return
         }
@@ -458,16 +458,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
         for page in pages {
             splitQueue.addOperation{[weak self] in
                 // Read when this page's turn comes, so each page of a batch goes by the one just done before it.
-                let guide=DispatchQueue.main.sync{()->PageSplit? in
-                    guard let self,self.generation==token,let i=self.project.pages.firstIndex(where:{$0.id==page.id}) else{return nil}
-                    return SplitDetector.guide(for:i,in:self.project.pages)
+                // The page before is trusted when the user has placed or accepted its split, or is working through
+                // the book one page at a time and so has just seen it. In a batch, a split nobody has looked at is only a hint.
+                let (guide,trusted)=DispatchQueue.main.sync{()->(PageSplit?,Bool) in
+                    guard let self,self.generation==token,let i=self.project.pages.firstIndex(where:{$0.id==page.id}),let before=SplitDetector.guidePage(for:i,in:self.project.pages) else{return (nil,false)}
+                    let earlier=self.project.pages[before]
+                    return (earlier.split,pages.count==1 || earlier.splitByHand==true || earlier.reviewed)
                 }
-                let result:Result<SplitProposal,Error>=autoreleasepool{Result{try SplitDetector.detect(Imaging.load(URL(fileURLWithPath:page.path),maxPixel:1600),quad:page.quad,rotation:page.rotation,guide:guide)}}
+                let result:Result<SplitProposal,Error>=autoreleasepool{Result{try SplitDetector.detect(Imaging.load(URL(fileURLWithPath:page.path),maxPixel:1600),quad:page.quad,rotation:page.rotation,guide:guide,trusted:trusted)}}
                 DispatchQueue.main.async{guard let self,self.generation==token else{return}
                     finished+=1
                     // The crop or rotation may have changed while this ran; a proposal for the old shape is not applied.
                     if let i=self.project.pages.firstIndex(where:{$0.id==page.id}),self.project.pages[i].quad==page.quad,self.project.pages[i].rotation==page.rotation,case .success(let proposal)=result {
-                        self.project.pages[i].split=proposal.split;if proposal.confident{found+=1}else if guide != nil{guided+=1}
+                        self.project.pages[i].split=proposal.split;self.project.pages[i].splitByHand=nil;if trusted,guide != nil{guided+=1}else if proposal.confident{found+=1}else if guide != nil{guided+=1}
                         self.splitOptions[page.id]=(proposal.alternatives,0,page.quad,page.rotation)
                         self.save();self.table.reloadData(forRowIndexes:IndexSet(integer:i),columnIndexes:IndexSet(integer:0))
                         if self.current==i {self.refreshDetail()}
@@ -475,7 +478,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
                     self.stepProgress(.split,finished)
                     if finished==pages.count {
                         self.endProgress(.split)
-                        self.status.stringValue=pages.count==1 ? (found==1 ? "Split proposed at the fold — T again tries another place; drag it, or press , and . to move it":guided==1 ? "No clear fold found; split placed where the page before has it — drag it, or press , and . to move it":"No clear fold found; split placed at the centre — drag it, or press , and . to move it"):"Split proposed on \(pages.count) pages: \(found) at a fold, \(guided) where the page before has it, \(pages.count-found-guided) at the centre"
+                        self.status.stringValue=pages.count==1 ? (found==1 ? "Split proposed at the fold — T again tries another place; drag it, or press , and . to move it":guided==1 ? "Split placed by the page before, adjusted to this page — T again tries another place; drag it, or press , and . to move it":"No clear fold found; split placed at the centre — drag it, or press , and . to move it"):"Split proposed on \(pages.count) pages: \(found) at a fold, \(guided) where the page before has it, \(pages.count-found-guided) at the centre"
                     }
                 }
             }
@@ -583,11 +586,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
     }
     @objc func removeSplit(){
         let targets=targetIndexes.filter{project.pages[$0].split != nil};guard !targets.isEmpty else{return}
-        edit(targets,geometry:false){$0.split=nil};status.stringValue=targets.count==1 ? "Split removed; this photograph exports as one page":"Split removed from \(targets.count) pages"
+        edit(targets,geometry:false){$0.split=nil;$0.splitByHand=nil};status.stringValue=targets.count==1 ? "Split removed; this photograph exports as one page":"Split removed from \(targets.count) pages"
     }
     func moveSplit(_ delta:Double){
         guard let i=current,let split=project.pages[i].split else{NSSound.beep();return}
-        let moved=split.moved(by:delta);if moved != split {edit(geometry:false){$0.split=moved}}
+        let moved=split.moved(by:delta);if moved != split {edit(geometry:false){$0.split=moved;$0.splitByHand=true}}
     }
     @objc func moveSplitLeft(){moveSplit(-0.002)}
     @objc func moveSplitRight(){moveSplit(0.002)}

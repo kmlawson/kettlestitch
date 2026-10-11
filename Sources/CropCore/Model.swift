@@ -138,6 +138,8 @@ public struct Page: Codable, Identifiable {
     /// Degrees each output part is turned clockwise as seen: one value for the whole crop, or left then right page.
     public var deskew: [Double]?
     public var pictureZones: [PictureZone]?
+    /// True once the user has placed the split: dragged it, moved it with the keys or chosen another candidate.
+    public var splitByHand: Bool?
     public var smudges: [Smudge]?
     /// Claude's latest comment on this crop.
     public var reviewNote: String?
