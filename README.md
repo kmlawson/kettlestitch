@@ -19,6 +19,7 @@ It is named after the kettle stitch, a knot that links one sewn section of a boo
 - **Page splitting.** The fold between facing pages is found in the gutter between their print, starting from where you put the split on the previous page. Press **t** again to step through other candidates.
 - **Deskew** to level the lines of text, separately for each half of a split spread. Currently does not work very well.
 - **Cleanup**: grayscale, black and white with speck removal, exposure, brightness, contrast and sharpness, with picture zones that keep their tones on a black-and-white page.
+- **Keys you can change**: every single-key command can be given another key in Settings ▸ Shortcuts.
 - **Named presets** for image settings, applied to any selection of pages.
 - **Smudge brush** to blur text that should not be readable in the output, with adjustable grain so the patch stands out less, and a **clone brush** to paint a copy of one part of the page over another.
 - **Preview** of exactly what will be exported, kept on as you move from page to page.

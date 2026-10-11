@@ -20,6 +20,7 @@ Keys are written as they are typed: **t** on its own, **Shift T** with Shift hel
 - [Finding unusual pages](#finding-unusual-pages)
 - [Export](#export)
 - [A second opinion from Claude, OpenAI or Gemini](#a-second-opinion-from-claude-openai-or-gemini)
+- [Changing the keys](#changing-the-keys)
 - [Projects and where things are kept](#projects-and-where-things-are-kept)
 - [Troubleshooting](#troubleshooting)
 - [What it cannot do](#what-it-cannot-do)
@@ -223,6 +224,15 @@ Then **a**, or the toolbar's Second Opinion button, sends the page on screen, or
 - **Failures:** a busy service is retried up to three times. A rejected key, or a model declining a page, is reported once and stops a batch.
 
 A model's corners are estimates; treat them like any other proposal.
+
+## Changing the keys
+
+**Settings ▸ Shortcuts** lists every command that has a key of its own. Select one, choose **Change Key…** (or double-click it) and press the key you want, alone or with Shift or Option; **Esc** cancels.
+
+- A key that another command already has is exchanged with it, after asking, so no command is left without a key.
+- **Reset** gives the selected command its original key back; **Reset All** restores them all. A changed key is shown in bold.
+- The menus, the short list in the inspector and the shortcuts window (**/**) show the keys as you have set them. The keys in this manual and in tool tips are the original ones.
+- Shortcuts with Command, the arrow keys, Return, Esc and **h j k l** cannot be changed.
 
 ## Projects and where things are kept
 

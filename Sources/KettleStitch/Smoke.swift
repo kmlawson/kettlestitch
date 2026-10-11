@@ -367,6 +367,30 @@ extension AppDelegate {
             key("/",44,.option);precondition(self.deskewPart==nil);self.removeDeskew();precondition(self.project.pages[0].deskew==nil)
             for _ in 0..<7 {self.undo()};self.setPreview(false)
             print("DESKEW_HALF passed")
+            // A key given to another command in Settings takes effect at once, in the keys, the menus and the lists.
+            do {
+                precondition(self.keyBindings==KeyBindings(),"The smoke run starts from the default keys")
+                func menuKey(_ action:Selector)->String? {
+                    func find(_ menu:NSMenu)->NSMenuItem? {for item in menu.items {if item.action==action && item.target === self {return item};if let sub=item.submenu,let found=find(sub) {return found}};return nil}
+                    return find(NSApp.mainMenu!)?.keyEquivalent
+                }
+                self.showSettings();let pane=self.settings!.keys
+                self.settings!.tabs.selectTabViewItem(at:1);snapshot(self.settings!.window.contentView!,"shortcut-settings.png")
+                let was=canvas.preview
+                precondition(pane.assign(KeyStroke(key:"9"),to:"preview"){_,_ in preconditionFailure("9 is free")} && self.keyBindings.stroke(for:"preview")==KeyStroke(key:"9") && menuKey(#selector(AppDelegate.togglePreview))=="9")
+                key("9",25);precondition(canvas.preview != was,"9 now toggles the preview")
+                let freed=NSEvent.keyEvent(with:.keyDown,location:.zero,modifierFlags:[],timestamp:0,windowNumber:self.window.windowNumber,context:nil,characters:"p",charactersIgnoringModifiers:"p",isARepeat:false,keyCode:35)!
+                precondition(!self.handleKey(freed) && canvas.preview != was,"and p no longer does anything")
+                key("9",25);precondition(canvas.preview==was)
+                // A key in use is exchanged, once the user agrees.
+                precondition(!pane.assign(KeyStroke(key:"c"),to:"preview"){other,_ in other.id=="copyCrop" ? false:true} && self.keyBindings.stroke(for:"preview")==KeyStroke(key:"9"),"Declined, nothing changes")
+                precondition(pane.assign(KeyStroke(key:"c"),to:"preview"){_,_ in true} && self.keyBindings.stroke(for:"copyCrop")==KeyStroke(key:"9") && self.shortcutKeyLabels[1].0.stringValue=="9","The inspector's list follows")
+                precondition(!pane.assign(KeyStroke(key:"h"),to:"preview"){_,_ in true} && pane.note.stringValue.contains("h, j, k and l"),"A reserved key is refused with the reason")
+                pane.resetAll();precondition(self.keyBindings==KeyBindings() && menuKey(#selector(AppDelegate.togglePreview))=="p" && self.shortcutKeyLabels[1].0.stringValue=="c")
+                key("p",35);precondition(canvas.preview != was);key("p",35)
+                self.settings!.tabs.selectTabViewItem(at:0);self.settings!.window.close()
+                print("KEY_BINDINGS passed")
+            }
             // Pages are reordered by moving their rows; the page on screen stays on screen and Undo puts them back.
             let order=self.project.pages.map{$0.id}
             self.project.selected=0;self.selectCurrent();self.table.selectRowIndexes(IndexSet(integer:0),byExtendingSelection:false)

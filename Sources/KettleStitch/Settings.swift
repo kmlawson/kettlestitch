@@ -91,6 +91,10 @@ final class SettingsController: NSObject {
     static var zoneMode:Cleanup {zoneModes.first{$0.mode.rawValue==UserDefaults.standard.string(forKey:zoneKey)}?.mode ?? .grayscale}
     let zones=NSPopUpButton()
     let autosave=NSButton(checkboxWithTitle:"Save changes automatically every 5 minutes",target:nil,action:nil)
+    /// The Shortcuts tab.
+    let keys=ShortcutSettings()
+    let tabs=NSTabView()
+    var general:NSView!
     /// Called when the provider changes, so the main window's command can say who it sends to.
     var onChange:(()->Void)?
     var chosen:ReviewProvider {ReviewProvider.allCases[max(0,provider.indexOfSelectedItem)]}
@@ -132,9 +136,14 @@ final class SettingsController: NSObject {
         let stack=NSStackView(views:[message,grid]);stack.orientation = .vertical;stack.alignment = .leading;stack.spacing=14;stack.translatesAutoresizingMaskIntoConstraints=false
         let content=NSView();content.addSubview(stack)
         NSLayoutConstraint.activate([stack.topAnchor.constraint(equalTo:content.topAnchor,constant:22),stack.leadingAnchor.constraint(equalTo:content.leadingAnchor,constant:24),stack.trailingAnchor.constraint(equalTo:content.trailingAnchor,constant:-24),stack.bottomAnchor.constraint(equalTo:content.bottomAnchor,constant:-22)])
-        window.contentView=content
+        general=content
+        let first=NSTabViewItem(identifier:"general");first.label="General";first.view=content
+        let second=NSTabViewItem(identifier:"shortcuts");second.label="Shortcuts";second.view=keys.view
+        tabs.addTabViewItem(first);tabs.addTabViewItem(second)
+        let holder=NSView(frame:NSRect(x:0,y:0,width:600,height:500));tabs.frame=holder.bounds.insetBy(dx:8,dy:8);tabs.autoresizingMask=[.width,.height];holder.addSubview(tabs)
+        window.contentView=holder
         showProvider()
-        window.setContentSize(content.fittingSize);window.center()
+        resize();window.center()
     }
     /// Fills the key and model rows for the provider chosen.
     func showProvider(){
@@ -154,9 +163,14 @@ final class SettingsController: NSObject {
         // A key may be there and yet unreadable by this copy of the app; say why instead of "No key saved".
         if !saved,Keychain.replacedSinceLaunch {state.stringValue="Cannot read the keychain until reopened";state.textColor = .systemOrange;explain(Keychain.reopenAdvice)}
     }
-    func explain(_ text:String){message.stringValue=text;message.isHidden=false;window.setContentSize(window.contentView!.fittingSize)}
+    func explain(_ text:String){message.stringValue=text;message.isHidden=false;resize()}
     func show(){provider.selectItem(at:ReviewProvider.allCases.firstIndex(of:ReviewChoice.provider) ?? 0);showProvider();window.makeKeyAndOrderFront(nil);window.makeFirstResponder(key)}
-    @objc func providerChanged(){ReviewChoice.provider=chosen;message.isHidden=true;showProvider();window.setContentSize(window.contentView!.fittingSize);onChange?()}
+    /// Sizes the window to the General tab, which is the taller; the Shortcuts tab's list fills whatever that gives it.
+    func resize(){
+        let fit=general.fittingSize,chrome=NSSize(width:tabs.frame.width-tabs.contentRect.width+16,height:tabs.frame.height-tabs.contentRect.height+16)
+        window.setContentSize(NSSize(width:max(fit.width,560)+chrome.width,height:max(fit.height,380)+chrome.height))
+    }
+    @objc func providerChanged(){ReviewChoice.provider=chosen;message.isHidden=true;showProvider();resize();onChange?()}
     @objc func saveKey(){
         let value=key.stringValue.trimmingCharacters(in:.whitespacesAndNewlines);guard !value.isEmpty else{return}
         guard Keychain.write(value,chosen) else{state.stringValue="The keychain refused the key";state.textColor = .systemRed;return}
@@ -172,4 +186,102 @@ final class SettingsController: NSObject {
     @objc func startupUpdatesChanged(){UserDefaults.standard.set(startupUpdates.state == .on,forKey:Self.startupUpdateKey)}
     @objc func autosaveChanged(){UserDefaults.standard.set(autosave.state == .on,forKey:Self.autosaveKey)}
     @objc func modelChanged(){UserDefaults.standard.set(ReviewModel.models(for:chosen)[max(0,model.indexOfSelectedItem)].id,forKey:ReviewChoice.modelKey(chosen))}
+}
+
+/// Settings ▸ Shortcuts: every command that has a key of its own, with the key it has now, and a way to change it.
+final class ShortcutSettings: NSObject, NSTableViewDataSource, NSTableViewDelegate, NSSearchFieldDelegate {
+    let view=NSView()
+    let table=NSTableView(),search=NSSearchField(),note=NSTextField(wrappingLabelWithString:"")
+    let changeButton=NSButton(title:"Change Key…",target:nil,action:nil),resetButton=NSButton(title:"Reset",target:nil,action:nil),resetAllButton=NSButton(title:"Reset All",target:nil,action:nil)
+    var bindings:(()->KeyBindings)?
+    var change:((KeyBindings)->Void)?
+    private(set) var rows:[KeyCommand]=KeyCommands.all
+    /// The command whose new key is being waited for.
+    private(set) var capturing:String?
+    private var monitor:Any?
+    static let standing="Select a command and choose Change Key, then press the key you want, with Shift or Option if you like. A key already in use is exchanged with the command that had it. Command shortcuts, the arrow keys and h j k l are fixed."
+    override init(){
+        super.init()
+        for (id,title,width) in [("command","Command",250),("group","Group",130),("key","Key",130)] as [(String,String,CGFloat)] {
+            let column=NSTableColumn(identifier:NSUserInterfaceItemIdentifier(id));column.title=title;column.width=width;table.addTableColumn(column)
+        }
+        table.dataSource=self;table.delegate=self;table.usesAlternatingRowBackgroundColors=true;table.allowsMultipleSelection=false;table.target=self;table.doubleAction=#selector(startChange)
+        table.columnAutoresizingStyle = .firstColumnOnlyAutoresizingStyle
+        let scroll=NSScrollView();scroll.hasVerticalScroller=true;scroll.documentView=table;scroll.borderType = .bezelBorder
+        search.placeholderString="Search commands and keys";search.delegate=self;search.target=self;search.action=#selector(filter)
+        note.font = .systemFont(ofSize:11);note.textColor = .secondaryLabelColor;note.stringValue=Self.standing
+        changeButton.target=self;changeButton.action=#selector(startChange);resetButton.target=self;resetButton.action=#selector(resetSelected);resetAllButton.target=self;resetAllButton.action=#selector(resetAll)
+        let buttons=NSStackView(views:[changeButton,resetButton,NSView(),resetAllButton])
+        let stack=NSStackView(views:[search,scroll,note,buttons]);stack.orientation = .vertical;stack.alignment = .leading;stack.spacing=10;stack.translatesAutoresizingMaskIntoConstraints=false
+        view.addSubview(stack)
+        for item in [search,scroll,note,buttons] as [NSView] {item.translatesAutoresizingMaskIntoConstraints=false;item.widthAnchor.constraint(equalTo:stack.widthAnchor).isActive=true}
+        NSLayoutConstraint.activate([stack.topAnchor.constraint(equalTo:view.topAnchor,constant:16),stack.leadingAnchor.constraint(equalTo:view.leadingAnchor,constant:16),stack.trailingAnchor.constraint(equalTo:view.trailingAnchor,constant:-16),stack.bottomAnchor.constraint(equalTo:view.bottomAnchor,constant:-16)])
+        showSelection()
+    }
+    var current:KeyBindings {bindings?() ?? KeyBindings()}
+    var selected:KeyCommand? {rows.indices.contains(table.selectedRow) ? rows[table.selectedRow]:nil}
+    @objc func filter(){
+        let wanted=search.stringValue.trimmingCharacters(in:.whitespaces).lowercased(),now=current
+        rows=KeyCommands.all.filter{wanted.isEmpty || $0.title.lowercased().contains(wanted) || $0.group.lowercased().contains(wanted) || (now.stroke(for:$0.id)?.display.lowercased() ?? "")==wanted}
+        table.reloadData();showSelection()
+    }
+    func controlTextDidChange(_ notification:Notification){filter()}
+    func showSelection(){
+        let chosen=selected,now=current
+        changeButton.isEnabled=chosen != nil;resetButton.isEnabled=chosen.map{now.stroke(for:$0.id) != $0.stroke} ?? false;resetAllButton.isEnabled = !now.changed.isEmpty
+    }
+    func numberOfRows(in tableView:NSTableView)->Int {rows.count}
+    func tableView(_ tableView:NSTableView,viewFor tableColumn:NSTableColumn?,row:Int)->NSView? {
+        let id=tableColumn?.identifier ?? NSUserInterfaceItemIdentifier("command"),command=rows[row],stroke=current.stroke(for:command.id)
+        let cell=tableView.makeView(withIdentifier:id,owner:nil) as? NSTableCellView ?? {
+            let cell=NSTableCellView(),label=NSTextField(labelWithString:"");label.lineBreakMode = .byTruncatingTail;label.translatesAutoresizingMaskIntoConstraints=false
+            cell.identifier=id;cell.addSubview(label);cell.textField=label
+            NSLayoutConstraint.activate([label.leadingAnchor.constraint(equalTo:cell.leadingAnchor,constant:2),label.trailingAnchor.constraint(equalTo:cell.trailingAnchor,constant:-2),label.centerYAnchor.constraint(equalTo:cell.centerYAnchor)])
+            return cell
+        }()
+        let moved=stroke != command.stroke
+        switch id.rawValue {
+        case "group":cell.textField?.stringValue=command.group;cell.textField?.textColor = .secondaryLabelColor;cell.textField?.font = .systemFont(ofSize:12)
+        case "key":
+            cell.textField?.stringValue=capturing==command.id ? "Press a key…":(stroke?.display ?? "")
+            cell.textField?.font = .monospacedSystemFont(ofSize:12,weight:moved ? .bold:.medium);cell.textField?.textColor=capturing==command.id ? .controlAccentColor:.labelColor
+            cell.textField?.toolTip=moved ? "Changed from \(command.stroke.display)":nil
+        default:cell.textField?.stringValue=command.title;cell.textField?.textColor = .labelColor;cell.textField?.font = .systemFont(ofSize:12);cell.textField?.toolTip=command.title
+        }
+        return cell
+    }
+    func tableViewSelectionDidChange(_ notification:Notification){if capturing != nil {stopCapture()};showSelection()}
+    /// Waits for the next key press in this window and gives it to the selected command. Escape cancels.
+    @objc func startChange(){
+        guard let command=selected else{return}
+        stopCapture();capturing=command.id;note.stringValue="Press the new key for “\(command.title)”. Escape cancels.";note.textColor = .controlAccentColor
+        view.window?.makeFirstResponder(table);table.reloadData(forRowIndexes:IndexSet(integer:table.selectedRow),columnIndexes:IndexSet(integer:2))
+        monitor=NSEvent.addLocalMonitorForEvents(matching:.keyDown){[weak self] event in
+            guard let self,let id=self.capturing,event.window===self.view.window else{return event}
+            if event.keyCode==53 {self.stopCapture();return nil}
+            guard event.modifierFlags.isDisjoint(with:[.command,.control]),let typed=event.charactersIgnoringModifiers?.lowercased() else{self.stopCapture("Shortcuts with Command or Control are fixed. Choose a key on its own, or with Shift or Option.");return nil}
+            self.stopCapture()
+            self.assign(KeyStroke(key:typed,shift:event.modifierFlags.contains(.shift),option:event.modifierFlags.contains(.option)),to:id){other,stroke in
+                let alert=NSAlert();alert.messageText="“\(stroke.display)” is the key for “\(other.title)”";alert.informativeText="Exchange the two? “\(other.title)” would take the key this command has now."
+                alert.addButton(withTitle:"Exchange");alert.addButton(withTitle:"Cancel");return alert.runModal() == .alertFirstButtonReturn
+            }
+            return nil
+        }
+    }
+    func stopCapture(_ message:String?=nil){
+        if let monitor {NSEvent.removeMonitor(monitor)};monitor=nil;capturing=nil
+        note.stringValue=message ?? Self.standing;note.textColor=message == nil ? .secondaryLabelColor:.systemOrange;table.reloadData();showSelection()
+    }
+    /// Gives a key to a command. `confirm` is asked before a key is taken from the command that has it.
+    @discardableResult func assign(_ stroke:KeyStroke,to id:String,confirm:(KeyCommand,KeyStroke)->Bool)->Bool {
+        if let refusal=KeyBindings.refusal(stroke) {stopCapture(refusal);return false}
+        var now=current
+        if let other=now.conflict(stroke,with:id),!confirm(other,stroke) {return false}
+        let exchanged=now.assign(stroke,to:id);change?(now)
+        let title=KeyCommands.named(id)?.title ?? id
+        stopCapture();note.stringValue=exchanged.map{"“\(title)” is now \(stroke.display), and “\($0.title)” is \(now.stroke(for:$0.id)?.display ?? "")."} ?? "“\(title)” is now \(stroke.display)."
+        return true
+    }
+    @objc func resetSelected(){guard let command=selected else{return};var now=current;now.reset(command.id);change?(now);stopCapture()}
+    @objc func resetAll(){var now=current;now.resetAll();change?(now);stopCapture()}
 }

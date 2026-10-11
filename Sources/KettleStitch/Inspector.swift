@@ -157,11 +157,11 @@ extension AppDelegate {
         // Outside the sections, because it carries the image settings as well as the page format.
         add(all,after:22)
         // The keys used most, kept in view; the full list is one key away.
-        let keys:[(String,String)]=[("← / →","Previous / next image"),("C","Set crop to same as previous image"),("V","Copy image settings from previous image"),("T","Propose split"),("R","Rotate (Shift-R for reverse)"),("; / '","Decrease / increase current crop"),("H J K L","Increase crop edges (Shift to decrease, Option to move crop)"),("/","See more shortcuts")]
-        let shortcuts=NSGridView(views:keys.map{entry->[NSView] in
-            let key=NSTextField(labelWithString:ShortcutReference.shown(entry.0));key.font = .monospacedSystemFont(ofSize:11,weight:.medium);key.textColor = .secondaryLabelColor;key.alignment = .right
-            let action=NSTextField(wrappingLabelWithString:entry.1);action.font = .systemFont(ofSize:11);action.textColor = .secondaryLabelColor
+        let shortcuts=NSGridView(views:ShortcutReference.brief(with:keyBindings).map{entry->[NSView] in
+            let key=NSTextField(labelWithString:entry.keys);key.font = .monospacedSystemFont(ofSize:11,weight:.medium);key.textColor = .secondaryLabelColor;key.alignment = .right
+            let action=NSTextField(wrappingLabelWithString:entry.action);action.font = .systemFont(ofSize:11);action.textColor = .secondaryLabelColor
             action.setContentCompressionResistancePriority(.defaultLow,for:.horizontal)
+            shortcutKeyLabels.append((key,action))
             return [key,action]
         })
         shortcuts.rowSpacing=4;shortcuts.columnSpacing=8;shortcuts.column(at:0).xPlacement = .trailing;shortcuts.column(at:0).width=58;shortcuts.rowAlignment = .firstBaseline

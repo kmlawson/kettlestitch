@@ -145,6 +145,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
     /// What went wrong the last time the project could not be written, shown until a write succeeds.
     var saveFailure: String?
     var shortcuts: ShortcutsController?
+    /// Which key runs which command: the defaults with the user's changes, made in Settings ▸ Shortcuts.
+    /// A test run starts from the default keys and keeps nothing, so one that stops half way leaves no trace.
+    lazy var keyBindings=testDirectory == nil ? KeyBindings.decode(UserDefaults.standard.data(forKey:KeyBindings.key)):KeyBindings()
+    /// The key and action labels of the inspector's short list, updated when a key changes.
+    var shortcutKeyLabels:[(NSTextField,NSTextField)]=[]
     var usageLog: UsageLogController?
     /// The candidates the last split proposal for each page came with, and which of them is showing.
     var splitOptions:[UUID:(options:[PageSplit],index:Int,quad:Quad,rotation:Int)]=[:]
@@ -195,7 +200,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
         if let data=UserDefaults.standard.data(forKey:"exportOptions"),let saved=try? JSONDecoder().decode(ExportOptions.self,from:data) {exportOptions=saved}
         Keychain.noteLaunch();Imaging.pictureZoneMode=SettingsController.zoneMode
         ThumbnailPolicy.large=UserDefaults.standard.bool(forKey:"sidebarLargePictures")
-        buildUI();buildMenus();window.makeKeyAndOrderFront(nil);NSApp.activate(ignoringOtherApps:true)
+        buildUI();buildMenus();applyKeyBindings();window.makeKeyAndOrderFront(nil);NSApp.activate(ignoringOtherApps:true)
         canvas.onCommit={[weak self] q in self?.edit{$0.setManualCrop(q)}}
         canvas.onSplitCommit={[weak self] s in self?.edit(geometry:false){$0.split=s;$0.splitByHand=true}}
         canvas.onZoneCommit={[weak self] z in self?.edit(geometry:false){$0.pictureZones=($0.pictureZones ?? [])+[z]};self?.zoneDrawn()}
@@ -966,7 +971,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
     }
     // MARK: Presets
     func keepPresets(_ list:[SettingsPreset]){
-        presets=list;if let data=try? PresetStore.encode(list) {UserDefaults.standard.set(data,forKey:PresetStore.key)}
+        presets=list;if testDirectory == nil,let data=try? PresetStore.encode(list) {UserDefaults.standard.set(data,forKey:PresetStore.key)}
         rebuildPresetMenu(presetPopup.menu!,title:true)
     }
     /// Fills a menu with the presets, then the commands to keep the current settings as one and to delete one.
@@ -1344,6 +1349,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
     @objc func showSettings(){
         if settings == nil {
             settings=SettingsController()
+            settings!.keys.bindings={[weak self] in self?.keyBindings ?? KeyBindings()}
+            settings!.keys.change={[weak self] in self?.setKeyBindings($0)}
             // A change to how picture zones are kept shows at once, in the preview and in the sidebar's pictures.
             settings!.onChange={[weak self] in guard let self else{return}
                 self.previewThumbs=[:];self.table.reloadData(forRowIndexes:IndexSet(integersIn:0..<self.project.pages.count),columnIndexes:IndexSet(integer:0))
@@ -1448,40 +1455,48 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
     /// `i` is the corner as seen, clockwise from top-left; the canvas wants the stored one.
     func selectCorner(_ i:Int,keyboard:Bool=false){if canvas.preview{setPreview(false)};canvas.selectCorner(canvas.turn.storedCorner(seenAt:i),keyboard:keyboard);window.makeFirstResponder(canvas)}
     func handleKey(_ e:NSEvent)->Bool {
-        guard !e.modifierFlags.contains(.command),!e.modifierFlags.contains(.control),let key=e.charactersIgnoringModifiers?.lowercased() else{return false}
-        if [123,124,125,126].contains(e.keyCode),canvas.keyboardSelection {let mapping:[UInt16:String]=[123:"a",124:"d",125:"s",126:"w"];canvas.nudge(mapping[e.keyCode]!,large:e.modifierFlags.contains(.shift));return true}
+        guard !e.modifierFlags.contains(.command),!e.modifierFlags.contains(.control),let typed=e.charactersIgnoringModifiers?.lowercased() else{return false}
+        // What follows is written for the default keys. A key the user has given to a command arrives here as that
+        // command's default key; a key whose command has moved away does nothing.
+        var key=typed,shift=e.modifierFlags.contains(.shift),option=e.modifierFlags.contains(.option)
+        switch keyBindings.translate(KeyStroke(key:typed,shift:shift,option:option)) {
+        case .run(let stroke):key=stroke.key;shift=stroke.shift;option=stroke.option
+        case .nothing:return false
+        case .unchanged:break
+        }
+        if [123,124,125,126].contains(e.keyCode),canvas.keyboardSelection {let mapping:[UInt16:String]=[123:"a",124:"d",125:"s",126:"w"];canvas.nudge(mapping[e.keyCode]!,large:shift);return true}
         if ["h","j","k","l"].contains(key) {
-            if e.modifierFlags.contains(.option) {
+            if option {
                 guard let i=current else{return true}
-                let step=e.modifierFlags.contains(.shift) ? 0.02:0.005
+                let step=shift ? 0.02:0.005
                 let delta=ViewTurn(project.pages[i].rotation).photographDelta(Point(key=="h" ? -step:key=="l" ? step:0,key=="k" ? -step:key=="j" ? step:0))
                 if let q=project.pages[i].quad.translated(by:delta),q != project.pages[i].quad {
                     edit{$0.setManualCrop(q)}
                 }
-            } else {resizeSide(key,inward:e.modifierFlags.contains(.shift))}
+            } else {resizeSide(key,inward:shift)}
             return true
         }
         switch key {
-        case "b" where e.modifierFlags.contains(.shift):e.modifierFlags.contains(.option) ? removeSmudges():toggleSmudge()
-        case "c" where e.modifierFlags.contains(.shift):e.modifierFlags.contains(.option) ? removeClones():toggleClone()
-        case "g":newProject();case "i":importImages();case "o":openProject();case "s":if e.modifierFlags.contains(.shift) {saveAs()} else {saveProject()}
+        case "b" where shift:option ? removeSmudges():toggleSmudge()
+        case "c" where shift:option ? removeClones():toggleClone()
+        case "g":newProject();case "i":importImages();case "o":openProject();case "s":if shift {saveAs()} else {saveProject()}
         case "d":targetIndexes.count>1 ? detectPending():detectCurrent();case "b":detectPending();case "e":exportImages()
         case "p":togglePreview()
-        case "r":e.modifierFlags.contains(.shift) ? rotateLeft():rotate()
+        case "r":shift ? rotateLeft():rotate()
         case "a":sendToClaude();case "m":toggleFlag()
-        case "t" where e.modifierFlags.contains(.option) && !e.modifierFlags.contains(.shift):proposeAllSplits()
-        case "t":e.modifierFlags.contains(.shift) ? removeSplit():proposeSplit()
-        case "v" where !e.modifierFlags.contains(.shift):copyPreviousAdjustments()
+        case "t" where option && !shift:proposeAllSplits()
+        case "t":shift ? removeSplit():proposeSplit()
+        case "v" where !shift:copyPreviousAdjustments()
         // The split moves with y and u, which sit side by side; comma is free, and period goes to the next unusual page.
-        case "y":moveSplit(e.modifierFlags.contains(.shift) ? -0.01:-0.002)
-        case "u":moveSplit(e.modifierFlags.contains(.shift) ? 0.01:0.002)
-        case "/" where e.modifierFlags.contains(.option):nextDeskewHalf()
-        case "," where e.modifierFlags.contains(.option):turnDeskew(-0.1)
-        case "." where e.modifierFlags.contains(.option):turnDeskew(0.1)
-        case "." where !e.modifierFlags.contains(.shift):nextOutlier()
-        case "q":e.modifierFlags.contains(.shift) ? removeDeskew():deskew()
-        case "w":e.modifierFlags.contains(.shift) ? removeZones():addZone()
-        case "f","0":fit();case "+","=":zoomIn();case "-":zoomOut();case "c":copyPrevious();case ";":shrinkCrop();case "'":expandCrop();case "x":resetCrop();case "z":if e.modifierFlags.contains(.shift) {redo()} else {undo()}
+        case "y":moveSplit(shift ? -0.01:-0.002)
+        case "u":moveSplit(shift ? 0.01:0.002)
+        case "/" where option:nextDeskewHalf()
+        case "," where option:turnDeskew(-0.1)
+        case "." where option:turnDeskew(0.1)
+        case "." where !shift:nextOutlier()
+        case "q":shift ? removeDeskew():deskew()
+        case "w":shift ? removeZones():addZone()
+        case "f","0":fit();case "+","=":zoomIn();case "-":zoomOut();case "c":copyPrevious();case ";":shrinkCrop();case "'":expandCrop();case "x":resetCrop();case "z":if shift {redo()} else {undo()}
         case "n":nextReview();case "[":cycleCandidate(-1);case "]":cycleCandidate(1)
         case "1","2","3","4":selectCorner([0,1,3,2][Int(key)!-1],keyboard:true)
         case "5","6","7","8":if canvas.preview{setPreview(false)};canvas.selectEdge(canvas.turn.storedEdge(seenAt:[0,3,1,2][Int(key)!-5]),keyboard:true);window.makeFirstResponder(canvas)
@@ -1492,7 +1507,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
             else if e.keyCode==124 {
                 // With Shift the crop comes along: the same as stepping on and pressing C.
                 let from=current;navigate(1)
-                if e.modifierFlags.contains(.shift),current != from {copyPrevious()}
+                if shift,current != from {copyPrevious()}
             }
             else if e.keyCode==36{accept()}
             else if e.keyCode==115 {firstPage()}else if e.keyCode==119{lastPage()}
@@ -1500,7 +1515,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
         }
         return true
     }
-    @objc func help(){if shortcuts == nil {shortcuts=ShortcutsController()};shortcuts!.show()}
+    @objc func help(){if shortcuts == nil {shortcuts=ShortcutsController(bindings:keyBindings)};shortcuts!.show()}
+    /// Takes the user's choice of keys into use everywhere they show: the menus, the inspector's list and the reference.
+    func setKeyBindings(_ bindings:KeyBindings){
+        keyBindings=bindings
+        if testDirectory == nil,let data=try? bindings.encode() {UserDefaults.standard.set(data,forKey:KeyBindings.key)}
+        applyKeyBindings()
+    }
+    func applyKeyBindings(){
+        func visit(_ menu:NSMenu){
+            for item in menu.items {
+                if let sub=item.submenu {visit(sub)}
+                // Only keys shown on their own are the bindings' to set; Command shortcuts stay as they are.
+                guard item.target === self,let action=item.action,let id=AppDelegate.keySelectors[action],item.keyEquivalentModifierMask.isDisjoint(with:[.command,.control]),let stroke=keyBindings.stroke(for:id) else{continue}
+                var mask:NSEvent.ModifierFlags=[];if stroke.shift{mask.insert(.shift)};if stroke.option{mask.insert(.option)}
+                item.keyEquivalent=stroke.key;item.keyEquivalentModifierMask=mask
+            }
+        }
+        if let main=NSApp.mainMenu {visit(main)}
+        for (label,entry) in zip(shortcutKeyLabels,ShortcutReference.brief(with:keyBindings)) {label.0.stringValue=entry.keys;label.1.stringValue=entry.action}
+        shortcuts?.window.close();shortcuts=nil
+    }
+    /// The menu command each changeable key belongs to, where it has one.
+    static let keySelectors:[Selector:String]=[
+        #selector(importImages):"import",#selector(exportImages):"export",#selector(copyPreviousAdjustments):"copyImageSettings",#selector(nextReview):"nextUnreviewed",#selector(nextOutlier):"nextUnusual",#selector(toggleFlag):"flag",
+        #selector(rotateLeft):"rotateLeft",#selector(rotate):"rotateRight",#selector(detectCurrent):"detect",#selector(detectPending):"detectPending",#selector(nextCandidate):"nextProposal",#selector(previousCandidate):"previousProposal",
+        #selector(resetCrop):"fullImage",#selector(copyPrevious):"copyCrop",#selector(proposeSplit):"split",#selector(removeSplit):"removeSplit",#selector(proposeAllSplits):"splitAll",#selector(moveSplitLeft):"splitLeft",#selector(moveSplitRight):"splitRight",
+        #selector(deskew):"deskew",#selector(removeDeskew):"removeDeskew",#selector(deskewCounterclockwise):"deskewCounterclockwise",#selector(deskewClockwise):"deskewClockwise",#selector(nextDeskewHalf):"deskewHalf",#selector(addZone):"zone",#selector(removeZones):"removeZones",
+        #selector(toggleSmudge):"smudge",#selector(removeSmudges):"removeSmudges",#selector(toggleClone):"clone",#selector(removeClones):"removeClones",#selector(sendToClaude):"secondOpinion",#selector(togglePreview):"preview",
+        #selector(zoomIn):"zoomIn",#selector(zoomOut):"zoomOut",#selector(fit):"fit",#selector(help):"help"]
 }
 let app=NSApplication.shared
 app.setActivationPolicy(.regular)

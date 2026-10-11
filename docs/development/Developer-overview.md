@@ -46,6 +46,7 @@ The user steers by small, frequent interaction changes. Follow the newest reques
 | `Sources/CropCore/ClaudeReview.swift` | The second opinion's prompt, reply schema and parsing, overlay drawing, usage log, and `run`, the one network call |
 | `Sources/CropCore/ReviewProviders.swift` | Providers, offered models and list prices, the request for each API, reading each reply, the no-redirect session |
 | `Sources/CropCore/Commands.swift` | Menu enabling and titles (`MenuPolicy`), shortcut reference data, shared progress tracker |
+| `Sources/CropCore/KeyBindings.swift` | The commands with changeable keys, the user's changes, translating a pressed key, the reference that follows them |
 | `Sources/CropCore/Presets.swift` | Named presets of image settings and the list kept in preferences |
 | `Sources/CropCore/Recovery.swift` | Recovery copies of unsaved changes and the list of what can be recovered |
 | `Sources/CropCore/Launch.swift` | What opens at launch, untitled names, auto-save rule, sorting dropped files, relinking moved photographs, legacy names |
@@ -92,6 +93,8 @@ Coordinates are fractions of the **upright, EXIF-oriented photograph**, origin t
 **Second opinion.** `sendToClaude` reads the key for the chosen provider from the keychain and hands it to `ClaudeReview.run`, which sends it in one header over an ephemeral session that refuses redirects. A corrected crop is selected at once and kept as a proposal named after the provider; a corrected split is applied; both are one undo step. **None of the three providers has been exercised against the live service from here**; tests use a scripted `URLProtocol`. The model list in `ReviewModel.all` was checked against each provider's documentation on 2026-10-11 and will go stale.
 
 **Keychain.** One item per provider, service `local.kettlestitch.app.<provider>`. Test mode leaves the keychain alone unless `KETTLESTITCH_TEST_KEYCHAIN` is set. A running copy whose program file has been replaced by a rebuild is refused its keys; `Keychain.replacedSinceLaunch` detects this.
+
+**Keys.** `handleKey` is written for the default keys. `KeyBindings.translate` turns the key pressed into the default key of the command it is bound to, so a new single-key command needs a `KeyCommands` entry, a case in `handleKey`, a row in `ShortcutReference` and its `rowCommands`, and, if it has a menu item, an entry in `AppDelegate.keySelectors`. Test runs start from the default keys and save nothing.
 
 **Retouching.** Smudges (with per-stroke strength and grain) and clone strokes are in photograph coordinates and applied by `Imaging.retouched` before perspective correction: clones first, then smudges. `Imaging.pictureZoneMode` is a single app-wide value set from Settings; a zone is always rendered as a photograph, in gray, in colour, or untouched.
 

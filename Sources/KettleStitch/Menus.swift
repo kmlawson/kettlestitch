@@ -168,11 +168,11 @@ final class UsageLogController: NSObject {
 final class ShortcutsController: NSObject {
     let window=NSPanel(contentRect:NSRect(x:0,y:0,width:560,height:640),styleMask:[.titled,.closable,.resizable,.utilityWindow],backing:.buffered,defer:false)
     private final class Flipped: NSView {override var isFlipped:Bool{true}}
-    override init(){
+    init(bindings:KeyBindings){
         super.init()
         window.title="KettleStitch Keyboard Shortcuts";window.isReleasedWhenClosed=false;window.isFloatingPanel=false;window.hidesOnDeactivate=false;window.minSize=NSSize(width:460,height:320)
         let stack=NSStackView();stack.orientation = .vertical;stack.alignment = .leading;stack.spacing=6;stack.translatesAutoresizingMaskIntoConstraints=false
-        for section in ShortcutReference.sections {
+        for section in ShortcutReference.sections(with:bindings) {
             let title=NSTextField(labelWithString:section.title.uppercased());title.font = .systemFont(ofSize:11,weight:.semibold);title.textColor = .secondaryLabelColor
             let rows=section.entries.map{entry->[NSView] in
                 let keys=NSTextField(labelWithString:entry.keys);keys.font = .monospacedSystemFont(ofSize:12,weight:.medium);keys.alignment = .right
@@ -182,7 +182,7 @@ final class ShortcutsController: NSObject {
             let grid=NSGridView(views:rows);grid.rowSpacing=5;grid.columnSpacing=14;grid.column(at:0).xPlacement = .trailing;grid.column(at:0).width=150
             stack.addArrangedSubview(title);stack.addArrangedSubview(grid);stack.setCustomSpacing(18,after:grid)
         }
-        let notes=NSTextField(wrappingLabelWithString:ShortcutReference.notes);notes.font = .systemFont(ofSize:11);notes.textColor = .secondaryLabelColor;notes.preferredMaxLayoutWidth=500
+        let notes=NSTextField(wrappingLabelWithString:ShortcutReference.notes+" Keys can be changed in Settings ▸ Shortcuts.");notes.font = .systemFont(ofSize:11);notes.textColor = .secondaryLabelColor;notes.preferredMaxLayoutWidth=500
         stack.addArrangedSubview(notes)
         let document=Flipped();document.translatesAutoresizingMaskIntoConstraints=false;document.addSubview(stack)
         let scroll=NSScrollView();scroll.hasVerticalScroller=true;scroll.drawsBackground=false;scroll.documentView=document
