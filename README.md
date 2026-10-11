@@ -138,6 +138,7 @@ Single keys act on the main window and are off while you type in a field. Letter
 | q | Deskew: level the lines of text |
 | Shift Q | Remove the deskew |
 | Option , / . | Turn the page counterclockwise / clockwise by 0.1° |
+| Option / | On a split spread, deskew both pages, the left or the right |
 | w | Draw a picture zone, kept in gray on a black-and-white page |
 | Shift W | Remove the picture zones |
 

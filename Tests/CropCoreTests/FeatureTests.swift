@@ -112,6 +112,14 @@ final class SkewDetectorTests:XCTestCase {
         XCTAssertEqual(p.deskewAngle(part:1,of:2),-2);XCTAssertEqual(p.deskewAngle(part:0,of:1),0)
         XCTAssertEqual(Page.nudged([1,-2],by:0.1,parts:2),[1.1,-1.9]);XCTAssertEqual(Page.nudged(nil,by:-0.1,parts:1),[-0.1])
         XCTAssertEqual(Page.nudged([1.5],by:0.1,parts:2),[0.1,0.1],"A mismatched list starts again from level")
+        // On a split spread one half can be turned, levelled or measured while the other is left alone.
+        XCTAssertEqual(Page.nudged([1,-2],by:0.1,parts:2,only:1),[1,-1.9]);XCTAssertEqual(Page.nudged(nil,by:0.2,parts:2,only:0),[0.2,0])
+        XCTAssertEqual(Page.nudged([1,-2],by:0.1,parts:2,only:5),[1,-2],"A half that is not there turns nothing");XCTAssertEqual(Page.nudged([0.5],by:0.1,parts:1,only:0),[0.6])
+        XCTAssertEqual(Page.deskew([1,-2],setting:nil,parts:2,only:0),[0,-2],"One half levelled");XCTAssertNil(Page.deskew([1,0],setting:nil,parts:2,only:0),"Both level means no deskew")
+        XCTAssertEqual(Page.deskew([1,-2],setting:[0.4,0.7],parts:2,only:1),[1,0.7],"One half takes its new measurement");XCTAssertEqual(Page.deskew(nil,setting:[0.4,0.7],parts:2,only:0),[0.4,0])
+        XCTAssertEqual(Page.deskew([1,-2],setting:nil,parts:2,only:1),[1,0],"An unclear measurement levels only the half asked about")
+        XCTAssertEqual(Page.deskew([1,-2],setting:[0.3,0.3],parts:2,only:nil),[0.3,0.3]);XCTAssertNil(Page.deskew([1,-2],setting:nil,parts:2,only:nil))
+        XCTAssertEqual(Page.deskew([1.5],setting:[0.4,0.7],parts:2,only:1),[0,0.7],"A list for another number of parts starts again from level")
         XCTAssertEqual(Page.nudged([14.95],by:0.1,parts:1),[15],"Never more than 15 degrees");XCTAssertNil(Page.nudged([0.05],by:-0.05,parts:1),"Level again means no deskew")
         XCTAssertEqual(try JSONDecoder().decode(Page.self,from:JSONEncoder().encode(p)).deskew,[1,-2])
     }

@@ -337,6 +337,18 @@ extension AppDelegate {
             self.undo();precondition(self.project.pages[1].rotation==0 && self.project.pages[2].rotation==0)
             self.project.pages[0].rotation=0;self.project.selected=0;self.selectCurrent();self.refreshDetail()
             print("TURNED_VIEW passed")
+            // On a split spread the deskew turns can act on one page; the choice shows only when there is a split.
+            self.project.selected=0;self.selectCurrent();self.edit{$0.split=nil;$0.deskew=nil}
+            precondition(self.deskewHalfRow?.isHidden==true && self.deskewPart==nil,"No choice of half without a split")
+            self.edit{$0.split=PageSplit(top:0.5,bottom:0.5)};precondition(self.deskewHalfRow?.isHidden==false)
+            self.turnDeskew(0.1);precondition(self.project.pages[0].deskew==[0.1,0.1],"Both pages by default")
+            key("/",44,.option);precondition(self.deskewHalf.selectedSegment==1 && self.deskewPart==0,"Option-/ steps to the left page")
+            self.turnDeskew(0.1);precondition(self.project.pages[0].deskew==[0.2,0.1])
+            key("/",44,.option);self.turnDeskew(-0.3);precondition(self.project.pages[0].deskew==[0.2,-0.2],"then the right")
+            self.removeDeskew();precondition(self.project.pages[0].deskew==[0.2,0],"Reset levels only the chosen page")
+            key("/",44,.option);precondition(self.deskewPart==nil);self.removeDeskew();precondition(self.project.pages[0].deskew==nil)
+            for _ in 0..<7 {self.undo()};self.setPreview(false)
+            print("DESKEW_HALF passed")
             // Pages are reordered by moving their rows; the page on screen stays on screen and Undo puts them back.
             let order=self.project.pages.map{$0.id}
             self.project.selected=0;self.selectCurrent();self.table.selectRowIndexes(IndexSet(integer:0),byExtendingSelection:false)

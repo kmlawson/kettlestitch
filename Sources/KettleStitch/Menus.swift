@@ -10,7 +10,7 @@ extension AppDelegate: NSMenuItemValidation, NSMenuDelegate {
         #selector(selectAllPages):.selectAllPages,#selector(toggleFlag):.flag,#selector(reversePages):.reversePages,#selector(movePagesUp):.reversePages,#selector(movePagesDown):.reversePages,#selector(removePages):.removePages,#selector(rotateLeft):.rotateLeft,#selector(rotate):.rotateRight,
         #selector(detectCurrent):.detect,#selector(detectPending):.detectPending,#selector(nextCandidate):.nextProposal,#selector(previousCandidate):.previousProposal,#selector(resetCrop):.fullImage,#selector(copyPrevious):.copyPreviousCrop,
         #selector(proposeSplit):.proposeSplit,#selector(removeSplit):.removeSplit,#selector(moveSplitLeft):.moveSplitLeft,#selector(moveSplitRight):.moveSplitRight,#selector(sendToClaude):.sendToClaude,#selector(stop):.stop,
-        #selector(deskew):.deskew,#selector(removeDeskew):.removeDeskew,#selector(deskewClockwise):.deskewClockwise,#selector(deskewCounterclockwise):.deskewCounterclockwise,#selector(addZone):.addPictureZone,#selector(removeZones):.removePictureZones,#selector(showDeviations):.showDeviations,#selector(nextOutlier):.nextOutlier,
+        #selector(deskew):.deskew,#selector(removeDeskew):.removeDeskew,#selector(deskewClockwise):.deskewClockwise,#selector(deskewCounterclockwise):.deskewCounterclockwise,#selector(nextDeskewHalf):.deskew,#selector(addZone):.addPictureZone,#selector(removeZones):.removePictureZones,#selector(showDeviations):.showDeviations,#selector(nextOutlier):.nextOutlier,
         #selector(togglePreview):.preview,#selector(zoomIn):.zoomIn,#selector(zoomOut):.zoomOut,#selector(fit):.zoomToFit,#selector(toggleSidebarPane):.toggleSidebar,#selector(toggleInspector):.toggleInspector]
     /// The field editor of whichever window has the keyboard, while a text field is being edited.
     var editedText: NSTextView? {(NSApp.keyWindow ?? window)?.firstResponder as? NSTextView}
@@ -106,6 +106,7 @@ extension AppDelegate: NSMenuItemValidation, NSMenuDelegate {
         crop.addItem(.separator())
         add(crop,"Deskew",#selector(deskew),"q",plain);add(crop,"Remove Deskew",#selector(removeDeskew),"q",[.shift])
         add(crop,"Turn Counterclockwise by 0.1°",#selector(deskewCounterclockwise),",",[.option]);add(crop,"Turn Clockwise by 0.1°",#selector(deskewClockwise),".",[.option])
+        add(crop,"Deskew Both, Left or Right Page",#selector(nextDeskewHalf),"/",[.option])
         crop.addItem(.separator())
         add(crop,"Add Picture Zone",#selector(addZone),"w",plain);add(crop,"Remove Picture Zones",#selector(removeZones),"w",[.shift])
         crop.addItem(.separator());add(crop,"Smudge Brush",#selector(toggleSmudge),"b",[.shift]);add(crop,"Remove Smudges",#selector(removeSmudges),"b",[.option,.shift])

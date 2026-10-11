@@ -48,6 +48,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
     /// How much grain the next smudges get, and its value label.
     let smudgeGrainSlider=NSSlider(value:Imaging.smudgeGrain,minValue:0,maxValue:1,target:nil,action:nil),smudgeGrainValue=NSTextField(labelWithString:"")
     var smudgeRows:[NSGridRow]=[],brushRow:NSGridRow?
+    /// On a split spread, which page the deskew commands act on: both, the left or the right.
+    let deskewHalf=NSSegmentedControl(labels:["Both","Left","Right"],trackingMode:.selectOne,target:nil,action:nil)
+    var deskewHalfRow:NSGridRow?
+    /// The part the deskew commands act on, or nil for all: a choice only a split spread on screen offers.
+    var deskewPart:Int? {
+        guard let i=current,Exporter.previewParts(project.pages[i])==2,deskewHalf.selectedSegment>0 else{return nil}
+        return deskewHalf.selectedSegment-1
+    }
+    static let halfNames=["both pages","the left page","the right page"]
+    @objc func deskewHalfChanged(){
+        status.stringValue="Deskew now acts on \(AppDelegate.halfNames[max(0,deskewHalf.selectedSegment)])"
+    }
+    @objc func nextDeskewHalf(){
+        guard let i=current,Exporter.previewParts(project.pages[i])==2 else{status.stringValue="Split the page first to deskew its two pages separately";NSSound.beep();return}
+        deskewHalf.selectedSegment=(max(0,deskewHalf.selectedSegment)+1)%3;deskewHalfChanged()
+    }
     let brightnessValue=NSTextField(labelWithString:"0"),contrastValue=NSTextField(labelWithString:"0"),sharpnessValue=NSTextField(labelWithString:"0")
     let widthField=NSTextField()
     let heightField=NSTextField()
@@ -441,6 +457,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
         }
         let p=project.pages[i]
         let tilt=p.deskew.map{" · deskew "+$0.map{String(format:"%.1f°",$0)}.joined(separator:" / ")} ?? ""
+        deskewHalfRow?.isHidden=Exporter.previewParts(p) != 2
         detail.stringValue="\(URL(fileURLWithPath:p.path).lastPathComponent)\n\(p.reviewed ? "Reviewed":p.status) · rotation \(p.rotation*90)°\(tilt)"
         let waiting=ReviewProgress.state(p.id,active:reviewActive,pending:reviewPending)
         note.stringValue=waiting?.label ?? p.reviewNote ?? "";note.isHidden=note.stringValue.isEmpty
@@ -733,6 +750,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
     @objc func deskew(){
         let targets=targetIndexes;guard !targets.isEmpty else{return}
         let pages=targets.map{project.pages[$0]},token=generation
+        // One half of a spread is measured alone only for the page on screen; a selection of pages is done whole.
+        let only=targets.count==1 && targets[0]==current ? deskewPart:nil
         undoStack.append(.pages(pages));redoStack.removeAll()
         status.stringValue=pages.count==1 ? "Measuring the tilt of the text…":"Measuring the tilt on \(pages.count) pages…"
         if pages.count>1 {beginProgress(.split,pages.count)}
@@ -744,7 +763,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
                     finished+=1
                     // Measured on the crop as it was; a crop, rotation or split changed since would not match.
                     if let i=self.project.pages.firstIndex(where:{$0.id==page.id}),self.project.pages[i].quad==page.quad,self.project.pages[i].rotation==page.rotation,self.project.pages[i].split==page.split,case .success(let angles)=result {
-                        self.project.pages[i].deskew=angles;if angles != nil{found+=1}
+                        let before=self.project.pages[i].deskew
+                        self.project.pages[i].deskew=Page.deskew(before,setting:angles,parts:Exporter.previewParts(page),only:only);if angles != nil{found+=1}
                         self.save();self.table.reloadData(forRowIndexes:IndexSet(integer:i),columnIndexes:IndexSet(integer:0))
                         if self.current==i {self.refreshDetail();if self.canvas.preview{self.renderPreview()}else if angles != nil{self.setPreview(true)}}
                     }
@@ -759,11 +779,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
     }
     @objc func removeDeskew(){
         let targets=targetIndexes.filter{project.pages[$0].deskew != nil};guard !targets.isEmpty else{return}
+        if targets.count==1,targets[0]==current,let only=deskewPart {
+            edit(geometry:false){$0.deskew=Page.deskew($0.deskew,setting:nil,parts:2,only:only)};status.stringValue="Deskew removed from \(AppDelegate.halfNames[only+1])";return
+        }
         edit(targets,geometry:false){$0.deskew=nil};status.stringValue="Deskew removed"
     }
     func turnDeskew(_ delta:Double){
         guard let i=current else{return}
-        let turned=Page.nudged(project.pages[i].deskew,by:delta,parts:Exporter.previewParts(project.pages[i]))
+        let turned=Page.nudged(project.pages[i].deskew,by:delta,parts:Exporter.previewParts(project.pages[i]),only:deskewPart)
         edit(geometry:false){$0.deskew=turned};if !canvas.preview{setPreview(true)}
     }
     @objc func deskewCounterclockwise(){turnDeskew(-0.1)}
@@ -1391,6 +1414,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
         // The split moves with y and u, which sit side by side; comma is free, and period goes to the next unusual page.
         case "y":moveSplit(e.modifierFlags.contains(.shift) ? -0.01:-0.002)
         case "u":moveSplit(e.modifierFlags.contains(.shift) ? 0.01:0.002)
+        case "/" where e.modifierFlags.contains(.option):nextDeskewHalf()
         case "," where e.modifierFlags.contains(.option):turnDeskew(-0.1)
         case "." where e.modifierFlags.contains(.option):turnDeskew(0.1)
         case "." where !e.modifierFlags.contains(.shift):nextOutlier()

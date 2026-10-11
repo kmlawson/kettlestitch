@@ -111,6 +111,7 @@ Each half is perspective-corrected separately, so a tilted fold still gives two 
 **q** measures the tilt of the lines of text and turns the page level. A split spread gets one angle for each page.
 
 - **Option ,** and **Option .** turn the page by 0.1°, up to 15° either way. **Shift Q** removes the deskew.
+- **Split a spread before deskewing it.** The two pages of an open book rarely tilt the same way, and one angle for the whole spread suits neither. Once the page is split, each half is measured and turned on its own, and a **Deskew Of** row appears in the inspector: *Both*, *Left* or *Right* chooses which page Auto, the 0.1° turns and Reset act on. **Option /** steps through the three.
 - The angle shows under the file name in the inspector.
 - A tilt under 0.15° is within the measurement's error and is not applied. A page needs at least five lines of text to be measured.
 - A page with little text, such as an advertisement, can give a false reading, so check the preview.

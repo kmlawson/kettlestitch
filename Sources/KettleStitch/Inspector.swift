@@ -106,7 +106,11 @@ extension AppDelegate {
         smudgeSizeSlider.toolTip="Width of the smudge and clone brushes";smudgeStrengthSlider.toolTip="How heavily the next strokes blur the print"
         let brushSize=NSStackView(views:[smudgeSizeSlider,smudgeSizeValue]),brushStrength=NSStackView(views:[smudgeStrengthSlider,smudgeStrengthValue])
         smudgeBrushChanged(nil)
-        let frame=NSGridView(views:[[caption("Proposal:"),candidates],[caption("Frame:"),crop],[caption("Corner:"),corners],[caption("Size:"),size],[caption("Split:"),splits],[caption("Deskew:"),tilt],[caption("Pictures:"),pictures],[caption("Smudge:"),smudgeButtons],[caption("Clone:"),cloneButtons],[caption("Brush:"),brushSize],[caption("Strength:"),brushStrength],[caption("Grain:"),brushGrain]])
+        deskewHalf.selectedSegment=0;deskewHalf.segmentDistribution = .fillEqually;deskewHalf.controlSize = .small;deskewHalf.font = .systemFont(ofSize:11);deskewHalf.target=self;deskewHalf.action=#selector(deskewHalfChanged)
+        deskewHalf.toolTip="Which page of a split spread Auto, the turns and Reset act on (Option-/ steps through them)"
+        let frame=NSGridView(views:[[caption("Proposal:"),candidates],[caption("Frame:"),crop],[caption("Corner:"),corners],[caption("Size:"),size],[caption("Split:"),splits],[caption("Deskew:"),tilt],[caption("Deskew Of:"),deskewHalf],[caption("Pictures:"),pictures],[caption("Smudge:"),smudgeButtons],[caption("Clone:"),cloneButtons],[caption("Brush:"),brushSize],[caption("Strength:"),brushStrength],[caption("Grain:"),brushGrain]])
+        // The choice of half shows only for a split spread.
+        deskewHalfRow=frame.row(at:6);deskewHalfRow?.isHidden=true
         // A brush's own settings show only while it is in hand: width for either, strength and grain for the smudge.
         brushRow=frame.row(at:frame.numberOfRows-3);smudgeRows=[frame.row(at:frame.numberOfRows-2),frame.row(at:frame.numberOfRows-1)];showSmudgeState()
         frame.rowSpacing=7;frame.columnSpacing=8;frame.column(at:0).xPlacement = .trailing;frame.column(at:0).width=78;frame.column(at:1).xPlacement = .fill

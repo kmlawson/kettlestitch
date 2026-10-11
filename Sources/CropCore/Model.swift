@@ -153,10 +153,19 @@ public struct Page: Codable, Identifiable {
         guard let deskew,deskew.count == count,deskew.indices.contains(part) else {return 0}
         return deskew[part]
     }
-    /// Turns every part by `delta` degrees. A list for a different number of parts starts again from level.
-    public static func nudged(_ current: [Double]?, by delta: Double, parts: Int) -> [Double]? {
+    /// Turns every part by `delta` degrees, or just part `only`. A list for a different number of parts starts again from level.
+    public static func nudged(_ current: [Double]?, by delta: Double, parts: Int, only: Int? = nil) -> [Double]? {
         let base=current?.count == parts ? current!:[Double](repeating:0,count:parts)
-        let result=base.map{((min(SkewDetector.limit,max(-SkewDetector.limit,$0+delta)))*10000).rounded()/10000}
+        let result=base.enumerated().map{only == nil || only == $0.offset ? ((min(SkewDetector.limit,max(-SkewDetector.limit,$0.element+delta)))*10000).rounded()/10000:$0.element}
+        return result.allSatisfy{abs($0)<1e-9} ? nil:result
+    }
+    /// The deskew after `measured` replaces it: for every part, or for part `only` with the others kept. No
+    /// measurement means level.
+    public static func deskew(_ current: [Double]?, setting measured: [Double]?, parts: Int, only: Int?) -> [Double]? {
+        guard let only else {return measured}
+        var result=current?.count == parts ? current!:[Double](repeating:0,count:parts)
+        guard result.indices.contains(only) else {return current}
+        result[only]=measured?.count == parts ? measured![only]:0
         return result.allSatisfy{abs($0)<1e-9} ? nil:result
     }
     /// A crop set by hand. Claude's comment described the crop it replaces, so it goes.
