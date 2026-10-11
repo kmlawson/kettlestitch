@@ -1,164 +1,198 @@
 # KettleStitch manual
 
-The full description of how each part of the app behaves. For an overview, installation and the list of shortcuts, see the [README](../README.md).
+How each part of the app works. For installation and the complete list of shortcuts, see the [README](../README.md).
 
-A native macOS cropper for large collections of photographed book pages and spreads. It detects the outer boundary of each page or spread, lets you correct it quickly, and exports perspective-corrected pages as a PDF or images, with optional page splitting, deskew, cleanup and searchable text. Editing is non-destructive and the original photographs are never changed.
+Keys are written as they are typed: **t** on its own, **Shift T** with Shift held.
 
-The app was called PageCrop until version 0.3, and briefly ScanSeamstress. Projects saved as `.pagecrop` or `.scanseamstress` still open; new projects are saved as `.kettlestitch`. On first launch, sessions, preferences and the API key saved under an earlier name are carried over.
+## Contents
 
-Commands that have a key of their own show just that key in the menus (P for the preview, T for a split, and so on); only the standard file and edit commands keep a Command shortcut. A mouse wheel zooms the canvas about the pointer; a trackpad scrolls it and zooms by pinching. The inspector's sections fold away under their headings, and its last section lists the keys used most.
+- [Getting started](#getting-started)
+- [The window](#the-window)
+- [Cropping](#cropping)
+- [Working on several pages at once](#working-on-several-pages-at-once)
+- [Splitting facing pages](#splitting-facing-pages)
+- [Deskew](#deskew)
+- [Image settings](#image-settings)
+- [Picture zones](#picture-zones)
+- [Smudging text](#smudging-text)
+- [Page format](#page-format)
+- [Preview](#preview)
+- [Finding unusual pages](#finding-unusual-pages)
+- [Export](#export)
+- [A second opinion from Claude, OpenAI or Gemini](#a-second-opinion-from-claude-openai-or-gemini)
+- [Projects and where things are kept](#projects-and-where-things-are-kept)
+- [Troubleshooting](#troubleshooting)
+- [What it cannot do](#what-it-cannot-do)
 
-## Start
+## Getting started
 
-Open `dist/KettleStitch.app`. It opens empty: nothing is reopened on its own. Give it something to work on in any of these ways:
+KettleStitch opens empty; it does not reopen your last project on its own. Give it something to work on in any of these ways:
 
-- drop photographs, a folder of photographs or a `.kettlestitch` project onto the app's icon;
-- drop them anywhere on the app's window;
-- choose **File ▸ Import Photographs…** (**I**) or **File ▸ Open Project…** (**O**);
+- drop photographs, a folder of photographs or a `.kettlestitch` project onto the window or the app's icon;
+- choose **File ▸ Import Photographs…** (**i**) or **File ▸ Open Project…** (**o**);
 - double-click a `.kettlestitch` project, or pick one from **File ▸ Open Recent**.
 
-A long import shows a notice over the canvas until the pages appear. Photographs are added to the project that is open, skipping any already in it; a project file replaces it. Subfolders are not followed. Crops are proposed for the new photographs as they arrive; **B** detects any that are still pending. Inspect each crop, adjust the four corners, and press **Return** to mark it reviewed and move on. Press **P** to see the perspective-corrected, adjusted result; preview stays on as you move between photographs, and the sidebar pictures show the corrected pages while it is on. **E** opens the export sheet.
+Photographs are added to the project that is open, skipping any already in it; a project file replaces it. Subfolders of a dropped folder are not followed. Supported photographs are JPEG, PNG, HEIC/HEIF, TIFF and BMP. A long import shows a notice over the canvas until the pages appear.
 
-A project file is written when you save it: **S** or File ▸ Save (⌘S) updates the current file, and **Shift-S** saves it under a new name. With "Save changes automatically every 5 minutes" on in Settings (the default), a project file with unsaved changes is also written every five minutes. A dot in the window's close button marks unsaved changes, and quitting, closing or opening another project saves them if automatic saving is on and otherwise asks before discarding them. Exports carry no metadata from the photographs (no location, camera or owner), and an exported PDF has no producer, creator or dates. Until you name a project with **G** (new project at a chosen path) or **S**, every completed edit is kept in `~/Library/Application Support/KettleStitch/` as `Untitled <date and time>.kettlestitch`, a new file for each session, and it appears under Open Recent. A session nothing was added to leaves no file. Source photographs are referenced by absolute path and never modified. If some cannot be found when a project is opened, KettleStitch looks in the project file's own folder and then asks for the folder they are in now; they are matched by file name, and choosing a folder above several moved folders works too. **File ▸ Locate Missing Photographs…** asks again later. Save a named project for each book.
+As soon as photographs arrive, a crop is proposed for each. A typical pass through a book is then:
 
-Every command is in the menus with a Command-key shortcut, and the common ones are in the toolbar. The sidebar lists the photographs; the inspector on the right holds the cropping, image-adjustment and page-format controls. Either side can be hidden from the View menu. The **Page** menu covers moving between photographs, selection, flags, rotation and the page list; the **Crop** menu covers detection, proposals, the page split and Send to Claude. **Help ▸ KettleStitch Keyboard Shortcuts** (or **?**) opens the full key reference. Menu commands that edit a page are unavailable while you type in a field or while a sheet or the Settings window is in front. Drag a corner independently, or drag anywhere on a green edge to move both its endpoints together; drag elsewhere to pan. Option-drag moves the whole crop. The corner magnifier appears during mouse adjustment and disappears on mouse release. Keyboard-selected corners keep it visible for nudging. Crossed or collapsed crops are rejected.
+1. Step through with **→**. Fix a crop by dragging its corners or edges, or with the keys under [Cropping](#cropping).
+2. For a two-page spread, press **t** to split it.
+3. Press **p** to see the corrected result.
+4. Press **Return** to accept the page and move on.
+5. Press **e** to export.
 
-## Keyboard reference
+Your photographs are never changed. Everything you do is recorded in the project.
 
-Escape releases either a corner or an edge.
+## The window
 
-Single-key commands are suspended in text-entry fields and file dialogs.
+- **Sidebar** (left): the photographs in order. A toolbar button beside the sidebar's own, or **View ▸ Large Sidebar Pictures** (⌃⌘L), switches between compact rows (a small picture beside the name and status) and large pictures with only the number, name and file type beneath. A warning triangle in place of a picture means the photograph is missing or cannot be read.
+- **Canvas** (centre): the photograph with its crop in green and, if there is one, the split in pink. A mouse wheel zooms about the pointer; a trackpad scrolls with two fingers and zooms by pinching. **f** or **0** fits the photograph; **=** and **-** zoom.
+- **Inspector** (right): sections for the **Cropping Frame**, **Image Settings** and **Page Format**, which fold away under their headings, and a short list of the most used keys.
+- **Status bar** (bottom): what just happened, and progress for work under way, with a button to stop it. **Esc** also stops it.
 
-| Action | Shortcut |
-|---|---|
-| New / import / open / save / save as | G / I / O / S / Shift-S |
-| Detect current / detect pending | D / B |
-| Stop background detection and export | Escape, when no corner is selected |
-| Previous / next | Left / Right |
-| First / last | Home / End |
-| Move ten photographs | Page Up / Page Down |
-| Accept crop and next | Return |
-| Next unreviewed | N |
-| Cycle alternative proposals | [ / ] |
-| Select top-left / top-right / bottom-left / bottom-right | 1 / 2 / 3 / 4 |
-| Select top / left / right / bottom edge | 5 / 6 / 7 / 8 |
-| Move selected corner or edge | Arrow keys |
-| Larger corner movement | Add Shift |
-| Release corner or edge and restore arrow navigation | Escape |
-| Expand left / bottom / top / right edge | H / J / K / L |
-| Contract left / bottom / top / right edge | Shift + H / J / K / L |
-| Shrink / expand whole crop | ; / ' |
-| Corrected preview | P |
-| Rotate output clockwise / counterclockwise | R / Shift + R |
-| Add or remove a flag | M |
-| Send to Claude | A |
-| Propose page split / remove it | T / Shift + T |
-| Copy the previous photograph's image settings | V |
-| Move split left / right | , / . |
-| Larger split movement | Add Shift |
-| Deskew / remove deskew | Q / Shift + Q |
-| Next photograph, taking this crop along | Shift + → |
-| Turn the page by 0.1° | Option + , / Option + . |
-| Draw a picture zone / remove the zones | W / Shift + W |
-| Next unusual page | U |
-| Zoom in / out / fit | + / − / F or 0 |
-| Copy previous photograph's crop | C |
-| Reset to whole image | X |
-| Undo / redo | Z / Y; Command-Z / Command-Y also available |
-| Export | E |
-| Shortcut reference | ? |
+Every command is in the menus. A command with a key of its own shows just that key there; only the standard file and edit commands use ⌘. Single keys are off while you type in a field. **/** opens the full shortcut reference.
 
-Nudges use preview-pixel increments. The current preview is capped at 3200 pixels along its longest side. Rotation applies to the corrected output; the source-corner editor retains its canonical source orientation.
+## Cropping
 
-## The sidebar's two layouts
+Each photograph gets several proposed crops, best first. **[** and **]** step through them, as does the **Proposal** menu in the inspector.
 
-The button beside the sidebar's own in the toolbar, or **View ▸ Large Sidebar Pictures** (⌃⌘L), switches the sidebar between compact rows (a small picture beside the name and status) and large pictures with only the number, name and file type beneath. The choice is remembered.
+To adjust a crop:
 
-## Selecting several pages
+- Drag a corner, or drag a green edge to move both its ends. **Shift-drag** a corner keeps the crop's angles. **Option-drag** moves the whole crop. Dragging elsewhere moves the picture.
+- **1 2 3 4** select a corner and **5 6 7 8** an edge; the arrow keys then nudge it (with Shift, farther). **Esc** releases it and gives the arrow keys back to moving between photographs.
+- **h j k l** push the left, bottom, top and right side outward; with **Shift** they pull it in; with **Option** they move the whole crop.
+- **;** and **'** shrink and expand the whole crop. A side that reaches the edge of the photograph stops there while the others keep growing.
+- **c** copies the previous photograph's crop. **Shift →** goes to the next photograph and takes the current crop along.
+- **x** sets the crop to the whole photograph. **d** detects again.
 
-Shift-click or Command-click in the sidebar, or choose **Page ▸ Select All Pages**, to select several photographs. The one on screen stays on screen. Flags, image settings, page format, Paste Settings, Remove from Project, the export sheet's **Selected Pages** choice and Send to Claude then apply to the whole selection. Cropping always applies to the photograph on screen only.
+**Return** marks the page reviewed and moves on; **n** jumps to the next unreviewed page. **m** flags a page to come back to. **r** and **Shift R** turn the output a quarter turn. Stepping past the first or last page flashes a red frame instead of moving.
 
-Right-clicking a row in the sidebar acts on that row, or on the whole selection if the row is part of it.
+Things to know about the proposals:
 
-**Page ▸ Reverse Pages Order** and **Remove from Project** change the project only; photographs on disk are never touched. Both can be undone, as can an import, and undoing them keeps any detection, review or editing done to the pages since. They are unavailable while detection, an export or a Claude review is running.
+- A proposal must cover at least 65% of the photograph and be roughly rectangular; anything else is discarded. If nothing qualifies, the crop is the whole photograph and the status says to crop by hand.
+- Detection is a heuristic. Cluttered backgrounds, tight framing, strong shadows, fingers and bent pages can all need correcting, so look at every page.
+- Detecting again on a page you have already edited refreshes its list of proposals without replacing your crop.
+- **b** detects every page still pending; **d** does the same when several pages are selected.
+
+## Working on several pages at once
+
+Shift-click or ⌘-click in the sidebar, or choose **Page ▸ Select All Pages** (⇧⌘A). The photograph on screen stays on screen. Image settings, page format, flags, splits, deskew, smudge removal, Remove from Project, the export window's Selected Pages choice and the second opinion then apply to the whole selection. Cropping always applies to the photograph on screen only.
+
+Right-clicking a row acts on that row, or on the whole selection if the row is part of it.
+
+**Page ▸ Reverse Pages Order** and **Remove from Project** (⌘⌫) change the project only; the photographs on disk are untouched. Both can be undone, as can an import.
 
 ## Splitting facing pages
 
-Many photographs show two facing pages. **V** (or **Page ▸ Propose Page Split**, Command-T, or **Split** in the inspector) looks for the fold inside the crop and draws a pink line there, distinct from the green crop. With several pages selected it proposes a split on each.
+**t** looks for the fold between two facing pages and draws a pink line there. On export, the page becomes two.
 
+- **t again** steps through up to three other candidates and back to the first, as long as you have not moved the line yourself.
 - Drag the line to move it; drag the square at either end to tilt it.
-- **,** and **.** move it left and right by 0.2% of the spread; with Shift, 1%. Option-Command-Left and -Right do the same from the menu.
-- **Shift-V** (or **Remove Page Split**) removes it, and the photograph exports as one page again.
-- The line is stored as a position across the crop, so it follows the crop when you adjust the corners. Neither page can be thinner than 3% of the spread.
-- Pages with a split read "split" in the sidebar, and the corrected preview shows the line.
+- **,** and **.** move it left and right by 0.2% of the spread; with **Shift**, by 1%.
+- **Shift T** removes it.
+- **Option t** proposes a split on every page that has none, working down the book. It never runs unasked, and leaves pages that already have a split alone.
 
-On export, a page whose split is still in place becomes two pages: two PDF pages, or two image files ending `-1` and `-2`. Each half is perspective-corrected separately, so a tilted fold gives two straight pages, and each keeps the spread's resolution. **Split Pages** in the export sheet chooses *Left Page First*, *Right Page First* (for books read right to left) or *Ignore Splits*.
+How the proposal is made:
 
-The split is measured across the rotated output. Turning the output a half turn mirrors it; a quarter turn drops it and looks for the fold again.
+- Working through a book page by page, each proposal starts from the split on the page before, as you left it. It goes at the same place across the new crop, whatever the crop's size, and moves only slightly, onto a fold visible within about a hundredth of the width.
+- Without a page to go by, the fold is looked for in the band of blank paper between the two pages' print. Borders of printed frames and other lines at the edges of that band are ignored, and a faint change in the paper's tone counts as a fold as well as a dark line.
+- A fold runs the whole height of the page; a line that stops short is not taken for one.
+- When several pages are done at once, a previous split is trusted this way only if you placed it by hand or accepted the page; otherwise it is a hint.
 
-Working through a book one page at a time, each proposal starts from the split on the page before, as you left it: it is put at the same place across the new crop and moved only slightly, onto a fold seen within about a hundredth of the width, since the book shifts a little between photographs. A split you placed by hand or accepted is trusted the same way when splits are proposed for many pages at once; one nobody has looked at is only a hint there. When an earlier page already has a split, the proposal goes by the nearest one: the fold is expected at the same fraction across the crop, whatever the crop's size, the line nearest that position that looks like a fold is taken, even if another is darker, and that position is used when no fold stands out. The fold is looked for in the band of blank paper between the two pages' print: thin lines running through that band (rules, frame borders, the fold's own shadow) do not divide it, only its middle part is searched, and a faint step in the paper's tone counts as a fold as well as a dark line. So between two framed advertisements the split goes midway between the frames, not on a frame's border. Pressing **T** again steps through up to three other candidates and back to the first. A fold runs the whole way across the page: a dark line that stops short of the top or bottom, such as the border of a printed frame, is not taken for one. When the page has a split, **Send to Claude** also shows Claude the line and asks whether it is on the fold; a corrected line is applied directly, as a crop fix is (Undo puts either back). Proposing splits on several selected pages works down the list, each page going by the one before. The proposal follows the two cues ScanTailor's page-split stage uses, rewritten for this app rather than copied: a near-vertical dark line or shadow in the middle of the spread, and a column free of print between two bodies of content. A dark line with print right beside it is taken for a rule or a stroke of text rather than the fold. When neither cue stands out, the line goes at the centre and the status bar says so. Every proposal needs a visual check; on the sample collection most land on the fold and a few are off by a strip of the neighbouring page.
+Check each one. The line is stored as a position across the crop, so it follows the crop when you adjust the corners. Turning the output a half turn mirrors the split; a quarter turn looks for the fold again.
+
+Each half is perspective-corrected separately, so a tilted fold still gives two straight pages. **Split Pages** in the export window chooses which half comes first (right first for books read right to left) or exports spreads whole.
 
 ## Deskew
 
-**T** (or **Crop ▸ Deskew**, Command-K, or **Auto** in the inspector) measures the tilt of the lines of text in the corrected page and turns the page level. With several pages selected it measures each. A split spread gets one angle per page.
+**q** measures the tilt of the lines of text and turns the page level. A split spread gets one angle for each page.
 
-- **Option-,** and **Option-.** turn the page counterclockwise and clockwise by 0.1°, up to 15°. **Shift-T** removes the deskew.
-- The angle is shown under the file name, and the corrected preview shows the result. For a split spread the preview shows the two pages side by side, each with its own angle.
-- The page keeps its size; the thin wedges a turn exposes at the edges repeat the edge of the paper.
-- A tilt under 0.15° is within the measurement's error and is not applied. Changing the crop, rotation or split while a measurement is running discards it.
+- **Option ,** and **Option .** turn the page by 0.1°, up to 15° either way. **Shift Q** removes the deskew.
+- The angle shows under the file name in the inspector.
+- A tilt under 0.15° is within the measurement's error and is not applied. A page needs at least five lines of text to be measured.
+- A page with little text, such as an advertisement, can give a false reading, so check the preview.
 
-The measurement follows ScanTailor's deskew stage in outline: it tries angles between −8° and 8° and keeps the one at which rows, or for vertical text columns, of print give the sharpest profile. Print is taken to be whatever is clearly darker than the paper around it, so uneven lighting and dark pictures do not count. A page needs at least five lines to be measured. The crop already squares the page to the paper's edges, so most pages need nothing: of the first 30 sample pages, 26 measured level, 2 were unclear and 2 were given an angle. The one of those two I looked at, an advertisement with few lines of text, appears to be a false reading, so check the preview after deskewing.
+The crop already squares the page to the paper's edges, so most pages need nothing.
+
+## Image settings
+
+These apply to the exported page, not to the photograph as shown for cropping, so changing one turns the [preview](#preview) on.
+
+- **Mode**, four buttons: *None* leaves the photograph as it is. *Black & White* evens out the lighting, whitens the paper and reduces the page to pure black and white. *Grayscale* evens the lighting and whitens the paper, keeping gray tones. *Color* does the same while keeping colour.
+- **Despeckle** (Off, 1, 2, 3) removes specks from Black & White pages; 1 takes only the smallest. Small marks beside print, such as dots and accents, are kept.
+- **Exposure** lightens or darkens the photograph as a longer or shorter exposure would, up to two stops either way.
+- **Brightness** and **Contrast** shift and stretch the tones. In Black & White, brightness moves the cut-off between black and white.
+- **Sharpness** strengthens edges.
+
+Exposure, Brightness and Contrast are neutral in the middle and show a value from −100 to +100; Sharpness runs from 0 to 100. The arrow beside the heading resets everything.
+
+To reuse settings:
+
+- **v** copies the previous page's image settings to this page.
+- **Edit ▸ Copy Settings** and **Paste Settings** (⇧⌘C, ⇧⌘V) carry image settings and page format between pages.
+- **Apply Settings to All Pages**, under the Page Format section, copies them to the whole project. Crops and splits are never copied.
+
+The cleanup modes estimate the paper's tone from the brightest part of each neighbourhood, so large dark pictures lighten around their edges. Use *None*, or a [picture zone](#picture-zones), where that matters.
 
 ## Picture zones
 
-On a page set to **Black & White**, photographs and drawings turn into harsh black shapes. **W** (or **Crop ▸ Add Picture Zone**, or **Add Zone** in the inspector) lets you drag a rectangle over a picture; inside it the page keeps its gray tones, as a photograph, while the rest stays pure black and white.
+On a Black & White page, photographs and drawings turn into harsh black shapes. **w** lets you drag a rectangle over a picture; inside it the page keeps its gray tones while the rest stays black and white.
 
-- One drag draws one zone. **Escape** cancels. Right-click a zone to remove it; **Shift-W** removes all of them from the selected pages.
-- Zones are drawn in blue on the photograph and stored as positions within the crop, so they follow the crop and the split.
-- A page with a zone is exported as an 8-bit gray image instead of a one-bit image; a split page without a picture on its side stays one-bit.
-- Zones have no effect in the other cleanup modes. They are drawn by hand; pictures are not found automatically.
+- One drag draws one zone. **Esc** cancels. Right-click a zone to remove it; **Shift W** removes all of them from the selected pages.
+- Zones are drawn in blue and follow the crop and the split.
+- They have no effect in the other modes.
+
+## Smudging text
+
+The smudge brush blurs print that should not be readable in the output.
+
+- Click the hand button in the inspector's Smudge row, or press **Shift B**. The **Brush** (width) and **Strength** sliders appear while the brush is in use.
+- Drag over the text. Each drag is one stroke, and ⌘Z undoes the last. A little gray grain is laid over the blur.
+- **Esc** puts the brush down. The crossed-out hand button, or **Option Shift B**, removes the smudges from the selected pages.
+
+Smudges lie on the photograph, so they stay on the same text when the crop or split changes, and they appear in the preview and in every export. It is a blur, not a black box: at low strength large print may still be guessable, so use a high strength for anything that must not be read. A page sent for a [second opinion](#a-second-opinion-from-claude-openai-or-gemini) is sent without its smudges.
+
+## Page format
+
+**Page Format** sets the physical size of the exported page. Enter a width or a height in centimetres and the other follows the crop's proportions; the line beneath shows the resulting resolution. A page with no size entered counts as 300 DPI.
+
+**Presets** centres the page on a standard sheet (A3, A4, A5, B5, US Letter, US Legal) in exported PDFs, turning the sheet to suit the page.
+
+## Preview
+
+**p** shows the page as it will be exported: cropped, straightened, split and with its image settings. It stays on as you move between pages, and while it is on the sidebar shows the corrected pages too. A split spread is shown as its two pages with a black band between them.
+
+Selecting a corner or edge, picking up the smudge brush or drawing a picture zone turns the preview off, since those work on the photograph.
 
 ## Finding unusual pages
 
-**View ▸ Show Deviations** (Command-J) lists every page with how far its crop is from what is usual in the project, in four measures: **Size** (how much of the photograph the crop covers), **Shape** (its proportions), **Taper** (how unequal opposite sides are) and **Skew** (the deskew angle, where one has been set). Click a column heading to sort by that measure, worst first; click **Page** to return to page order. Click a row to go to that page.
+**View ▸ Show Deviations** (⌘J) lists every page with how far its crop is from what is usual in the project, in four measures: **Size**, **Shape**, **Taper** (how unequal opposite sides are) and **Skew** (the deskew angle). Click a column heading to sort by it; click a row to go to that page.
 
-A page whose worst measure is 3.5 or more is marked unusual: it shows ⚠︎ and the reason in the sidebar, and **U** (or **Page ▸ Go To ▸ Next Unusual Page**) goes to the next one. The scale is the project's own median and spread, so a mis-detected crop among 300 similar spreads stands out, and a project of fewer than five pages marks nothing. Covers, fold-outs and other legitimately different pages will be marked too.
-
-## Image settings and page format
-
-The inspector's **Image Settings** apply to the corrected output, not the source view, so changing one switches to the corrected preview.
-
-- **Cleanup** has four modes. *None* leaves the photograph as it is. *Color* evens out lighting and whitens the paper. *Grayscale* does the same and removes colour. *Black & White* then reduces the page to pure black and white.
-- **Despeckle** (Off, 1, 2, 3) removes specks from Black & White output: 1 takes only the smallest, 3 larger ones too, scaled to the page's resolution. A small mark beside print, such as a dot or a voicing mark, is kept. It has no effect in the other modes or inside picture zones.
-- The **Smudge** brush blurs print you do not want readable. Click the smudge button in the inspector (**Shift-B**), set **Brush** (width) and **Strength**, and drag over the photograph; each drag is one stroke, undone with ⌘Z. A little gray grain is laid over the blur when a stroke is finished. Escape puts the brush down, and the crossed-out smudge button (**Option-Shift-B**) removes the page's smudges. Smudges lie on the photograph, so they stay on the same print when the crop or split changes, and they appear in the preview and in every export.
-- **Exposure** lightens or darkens the photograph as a longer or shorter exposure would, up to two stops either way, before the other adjustments; its slider is neutral in the middle.
-- **Mode** (formerly Cleanup) chooses none, grayscale, black and white or colour cleanup.
-- **Brightness** and **Contrast** apply in every mode; each slider is neutral in the middle and shows its value, from −100 to +100, beside it. **Sharpness** runs from 0 to 100 and strengthens edges. In Black & White, brightness moves the black/white cut-off.
-- The arrow beside the heading resets all three.
-
-Cleanup estimates the paper tone from each neighbourhood's brightest area, so large dark illustrations and photographs lighten around their edges. Use *None* for pages where that matters.
-
-**Page Format** sets the physical size of the corrected page. Enter a width or a height in centimetres; the other follows the crop's proportions. The resolution line shows the resulting DPI. A page with no size entered counts as 300 DPI. **Presets** centres the page on a standard sheet (A3, A4, A5, B5, US Letter, US Legal) in exported PDFs, turning the sheet to match the page.
-
-**Edit ▸ Copy Settings** and **Paste Settings** carry adjustments and page format between pages. **Apply Settings to All Pages** copies them to the whole project.
+A page that stands well apart is marked ⚠︎ with the reason in the sidebar, and **u** goes to the next one. The scale is the project's own, so one mis-detected crop among hundreds of similar spreads stands out; covers and fold-outs will be marked too. A project of fewer than five pages marks nothing.
 
 ## Export
 
-**E** or **File ▸ Export…** opens the export sheet.
+**e** opens the export window.
 
-- **Include**: all pages, or only the sidebar selection. Unreviewed pages are included.
-- **Format**: one PDF, one **PDF with Apple Vision OCR**, or a folder of JPEG, PNG or TIFF files. The OCR choice adds an invisible searchable text layer recognized on this Mac by Apple Vision; **Text Language** is automatic unless you choose one. Recognition adds a second or more per page, and vertical text is recognized less reliably.
-- **Split Pages**: which half of a split spread comes first, or export spreads whole.
-- **JPEG Quality**: used for JPEG files and for colour and grayscale pages inside a PDF. Black & White pages are stored as one-bit images in PDF, PNG and TIFF.
-- **Maximum DPI**: downsamples pages above the limit. Pages are never enlarged. A page without a physical size counts as 300 DPI.
+- **Include**: all pages, or only the selection. Pages you have not reviewed are included.
+- **Format**: one PDF; one **PDF with Apple Vision OCR**, which adds an invisible layer of recognised text so the PDF can be searched and copied from; or a folder of JPEG, PNG or TIFF files.
+- **Text Language**, for the OCR format: automatic unless you choose one.
+- **Split Pages**: left half first, right half first, or ignore splits.
+- **JPEG Quality**: for JPEG files and for colour and grayscale pages inside a PDF. Black & White pages are stored as compact one-bit images.
+- **Maximum DPI**: reduces pages above the limit, for a smaller file. Pages are never enlarged.
 
-The choices are remembered between exports. A PDF is written to a temporary file and moved into place when complete; stopping an export leaves no partial PDF. Image exports go into a new dated subfolder.
+The choices are remembered. The progress in the status bar counts output pages, so a split spread counts as two, and it stays until the file is complete. A PDF is written to a temporary file and moved into place only when finished, so stopping leaves no partial PDF. Image files go into a new dated folder and are named after the originals.
 
-## A second opinion: Send to Claude, OpenAI or Gemini
+Text recognition runs on your Mac. It adds a second or more per page and is less reliable for vertical text; the recognised text cannot be edited.
 
-**A**, **Crop ▸ Send to …** or the toolbar button asks a model to check the crop of the photograph on screen, or of every selected photograph in turn. The command names the provider chosen in Settings.
+Exports carry nothing from the photographs' metadata (no location, camera or owner), and a PDF has no producer, creator or dates.
 
-Set it up once in **KettleStitch ▸ Settings…**: choose a provider, paste an API key for it and choose a model. The request goes straight from the app to that provider over HTTPS; nothing else needs to be installed. Keys are stored in the login keychain, one for each provider; the README's section on API keys and security says exactly where they go and how to check it.
+## A second opinion from Claude, OpenAI or Gemini
+
+Optionally, a model can check a page's crop and split. This is the only feature that uses the network, and it needs your own API key.
+
+Set it up once in **KettleStitch ▸ Settings…**: choose a provider, paste a key for it and choose a model.
 
 | Provider | Models, cheapest first |
 | --- | --- |
@@ -166,82 +200,53 @@ Set it up once in **KettleStitch ▸ Settings…**: choose a provider, paste an 
 | OpenAI | GPT-6 Luna, GPT-6.1 Sol, GPT-6 Astra |
 | Gemini (Google) | Gemini 3.5 Flash-Lite, Gemini 3.8 Flash, Gemini 3.1 Pro (preview) |
 
-For each page KettleStitch makes two reduced JPEGs (longest side 1568 pixels): the photograph, and the photograph with the current crop, corner labels, a coordinate grid and any split line drawn on it. It sends them with the crop coordinates in the prompt, and asks for a verdict, the four corner coordinates, the split's ends if there is a split, and a comment of at most ten words naming what was moved. The answer must follow a fixed form, which each provider enforces.
+Then **a**, or the toolbar's Second Opinion button, sends the page on screen, or each selected page in turn. The menu command names the provider you chose.
 
-- While you wait, the status bar names the model and the page it is looking at and counts the seconds, with a progress bar beside it. In the sidebar that page dims under a spinner; the rest of a batch read "Queued for review".
-- The comment appears in the inspector under the file name. It is dropped if you then change the crop by hand, and an answer about a crop you edited while waiting is not kept.
-- If the model moved any corner, its version is selected at once and added to the proposals under the provider's name. Undo puts your crop back; the other proposals are still in the menu and under **[** and **]**. A corrected split line is applied the same way.
-- Pages with such a proposal show "Claude fix", "OpenAI fix" or "Gemini fix" in the sidebar.
-- When the answer arrives, the status bar shows the tokens the request used and, where the model's list price is known, an estimate of its cost, added up for a batch. **Crop ▸ Second Opinion Usage Log…** lists every request with its time, model, file, duration, tokens and cost; the log is kept in `~/Library/Application Support/KettleStitch/claude-usage.json`.
-- A request that fails because the service is busy is tried up to three times. Escape stops a batch. An error such as a rejected key stops the batch and is shown once.
-- A model may decline a page; the message says so. For Claude Sonnet 5.5 and Opus 5.5 the request asks Anthropic to retry a declined page on another of its models.
+- **What is sent:** two reduced copies of the page (longest side 1568 pixels), one plain and one with the crop and split drawn on it, plus the crop's coordinates. Nothing else, and only to that provider. See [API keys and security](../README.md#api-keys-and-security) in the README.
+- **While you wait:** the status bar names the model and page and counts the seconds; the page dims under a spinner in the sidebar. **Esc** stops.
+- **The answer:** if the model moves a corner, its crop is selected at once and added to the proposals under the provider's name. A corrected split line is applied the same way. ⌘Z puts either back. Its comment, of a few words, appears under the file name.
+- **If you edited the crop while waiting,** the answer is discarded.
+- **Cost:** the status bar shows the tokens used and, where the price is known, an estimate of the cost. **Crop ▸ Second Opinion Usage Log…** lists every request.
+- **Failures:** a busy service is retried up to three times. A rejected key, or a model declining a page, is reported once and stops a batch.
 
-This is the only feature that uses the network: the reduced photograph and its crop go to the provider and are billed to your API key. A model's corner estimates are approximate; treat them like any other proposal. Running detection again keeps the model's entry; sending the page again replaces it. The model names are those each provider listed on 2026-10-11 and will need updating as they change (`ReviewModel.all` in `Sources/CropCore/ReviewProviders.swift`).
+A model's corners are estimates; treat them like any other proposal.
 
-## Detection behavior
+## Projects and where things are kept
 
-Automatic proposals must cover at least **65%** of the source photograph. Their corner angles must be **70–110°**, opposite side lengths may differ by at most **40%**, and opposite sides may diverge by at most **20°**. Geometry is checked in image coordinates with its true aspect ratio. These are hard filters applied after refinement and when reopening old projects; manual and reviewed crops are preserved. If no candidate passes, the full photograph remains available for manual cropping.
+- **A project** is a small `.kettlestitch` file holding the list of photographs and what to do with each. It stores each photograph's full location, not the photograph.
+- **Saving:** **s** (⌘S) saves the project file; **Shift S** saves under a new name; **g** starts a new project at a place you choose. A dot in the window's close button marks unsaved changes.
+- **Auto-save:** with "Save changes automatically every 5 minutes" on in Settings (the default), a project file is saved every five minutes, and when you quit, close or open another project. With it off, you are asked.
+- **Untitled work** is kept as you go in `~/Library/Application Support/KettleStitch/`, as `Untitled <date and time>.kettlestitch`, and appears under Open Recent.
+- **Moved photographs:** if a project cannot find its photographs, it looks in its own folder and then asks where they are now. They are matched by file name, and you can choose a folder above several moved folders. **File ▸ Locate Missing Photographs…** asks again later.
+- **API keys** are in your login keychain, one for each provider.
+- **The usage log** for second opinions is `claude-usage.json` in the same Application Support folder.
+- Projects from the app's earlier names, `.pagecrop` and `.scanseamstress`, still open.
 
-The pipeline combines Apple Vision document segmentation, rectangle detection on original and enhanced analysis images, and an independent border-background estimate. It scores whole-image coverage, edge support and plausible geometry, then offers several alternatives. Local supporting-line refinement helps align candidates with visible page boundaries. Detection runs at a maximum of 1600 pixels on the longest side.
+## Troubleshooting
 
-The background estimate fits robust lines to foreground transitions relative to the dominant color in the photograph's corners. It helps with dark illustrations that mislead the document detector. It is still a heuristic: cluttered backgrounds, tight framing, strong shadows, fingers, bent pages and unusual photographs can require correction.
+**macOS will not open the app.** It is not notarized. Try to open it once, then use System Settings ▸ Privacy & Security ▸ Open Anyway. The README's install section has the steps.
 
-Every automatic crop remains unreviewed. No score is presented as a calibrated accuracy percentage. Proposals are listed with the highest-scoring one first and the rest from largest to smallest. Running D on a manually edited or already processed photograph refreshes its proposal list; it does not replace that crop, and it keeps Claude's proposal if there is one. Choose an alternative explicitly with the menu or brackets. B only processes pending photographs, as does D when several photographs are selected. Stop cancels queued jobs; the currently executing Vision request may finish, but its result is discarded.
+**A sidebar row shows a warning triangle.** The photograph is missing or cannot be read. Use File ▸ Locate Missing Photographs… if it was moved.
 
-## Foundations and limits
+**"KettleStitch was updated while it was running…"** in Settings or when sending a page. macOS will not let a copy of the app that was replaced on disk read the keychain. Quit and reopen; your key is still saved.
 
-- Swift/AppKit UI, ImageIO decoding, Vision detection and text recognition, Core Image perspective rendering and cleanup; no external package dependencies. Nothing leaves the Mac except through Send to Claude.
-- Bounded queues for current preview, thumbnails, detection and export. Sidebar pictures are kept in memory for the whole book (up to 3,000, nearest pages first), reloaded if one is ever found missing, and a photograph that cannot be read is marked with a warning sign rather than left blank. Detection, export, Claude review and split proposals each process one image at a time and share one progress bar; full originals are decoded only for export.
-- EXIF orientation normalized on load. Crop coordinates are normalized against the upright original, ordered top-left, top-right, bottom-right, bottom-left.
-- Versioned JSON projects written atomically. Revision checks prevent stale detection from replacing newer edits. Undo/redo covers crop geometry, review state, output rotation, flags, image settings, page format, page order and removal within the running session. A slider drag is one undo step.
-- Originals are referenced, not copied; moved photographs can be located again, by file name. File-change detection, portable project packages, and persistent undo history remain future work.
-- TIFF import uses the first image. RAW and PDF import are not implemented. Supported photographs: JPEG, PNG, HEIC/HEIF, TIFF and BMP.
-- Export includes any unreviewed photographs. New output folders prevent overwriting earlier image exports. Each file is finalized through a temporary path. Export cancellation takes effect between pages.
-- Edge repair, nonlinear curvature correction, automatic picture detection, content selection and uniform margins, page groups, JBIG2 or CCITT compression and editing of recognized text remain future work. Perspective correction cannot flatten curved paper.
-- This local build is ad-hoc signed for Apple Silicon. It is not a notarized distribution release.
+**macOS asks for permission to use a key.** This can happen once after installing a new version. Choose Always Allow.
 
-## Build and verify
+**A split lands on a printed border or the wrong line.** Press **t** again for another candidate, or drag the line. Once one page is right, the following pages start from it.
 
-Requires a macOS Swift toolchain; built here with Xcode 16.4 / Swift 6.1.2. Deployment target is macOS 13; runtime verification was on macOS 26.6.2 only.
+**A Black & White page loses a picture.** Draw a [picture zone](#picture-zones) over it.
 
-```sh
-./scripts/build-app.sh
-swift test --disable-sandbox
-.build/release/CropCheck --benchmark 300
-.build/release/CropCheck --collection /path/to/photos /path/to/diagnostics 300
-.build/release/CropCheck --claude-files project.kettlestitch 5 /path/to/folder
-.build/release/CropCheck --split project.kettlestitch /path/to/folder 12
-.build/release/CropCheck --deskew project.kettlestitch /path/to/folder 12
-```
+**Moving between pages feels slow.** Detection of a newly imported book runs in the background for a while and competes for the processor; **Esc** stops it, and **b** resumes it for the pages still pending.
 
-`--deskew` prints the measured tilt of each page (or "unclear") and writes small deskewed copies, again without changing the project.
+## What it cannot do
 
-`--split` proposes a split for a project's first pages without changing the project, prints each position and writes small copies of the two halves to inspect.
+- Flatten curved pages. Perspective correction straightens a flat page seen at an angle, not the bend near a spine.
+- Import PDFs or RAW files. A multi-page TIFF contributes its first image only.
+- Find pictures on a page by itself; picture zones are drawn by hand.
+- Edit recognised text, or correct it.
+- Keep undo history after you quit.
+- Notice that a photograph has been changed on disk.
 
-`--claude-files` writes what a second opinion would upload for one page (the two images, the prompt and the reply schema) without contacting anyone.
+## For developers
 
-The collection check cycles through the source files if the requested count exceeds their number. It saves a project containing each unique source and contact sheets showing the **complete source photograph plus the proposed boundary**. A generated proposal is not a verified correct crop.
-
-The build script replaces the app's executable by rename, so it is safe to run while KettleStitch is open; quit and reopen the app to get the new build. Each build is ad-hoc signed afresh, so macOS may ask once more for permission to read the saved API key.
-
-Tests requiring Vision/Core Image need access to the macOS graphics services; a restrictive command sandbox can prevent those services from working even though the app works normally.
-
-Performance and evaluation findings: [Validation](Validation.md).
-
-Press **C** to copy the previous photo’s crop. **;** shrinks the current crop and **'** expands it by 2% per dimension, independently of C or selection. H/J/K/L move the left/bottom/top/right side outward by 0.5% of the image dimension; Shift reverses the direction. Expansion stops at the image boundary. All changes support undo. Mouse dragging still pans the image; Option-drag moves the whole crop.
-
-The material detector learns recurring corner-patch colour and local texture from each photo, and only counts matching regions connected to the image border. It adds material-boundary proposals and penalizes background inside candidates. It does not recognize cork semantically or require fingers; visible occlusion edges can contribute to ordinary boundary evidence. Fingers themselves carry no penalty.
-
-Arrow-key crop editing activates only through **1–8**, never through mouse selection or dragging. Clicking the canvas or pressing Escape exits that keyboard editing mode. Left/right then navigate photographs.
-
-Whole-spread ranking also penalizes unequal left/right perspective lean, measured relative to the spread’s own horizontal axis. A 3° imbalance is tolerated; larger differences progressively lower the score. This is a soft prior, not a claim that all legitimate photographs have symmetric perspective.
-
-**Shift-drag a corner** preserves the original directions and angles of all four sides: neighbouring corners adjust along their opposite edges while the opposite corner stays fixed. Ordinary dragging moves one corner independently. Invalid or out-of-image angle-locked positions are ignored.
-
-**Option-H/J/K/L** translates the entire crop left/down/up/right by 0.5% of the image dimension; adding **Shift** uses 2% steps. All corners move together and stop at image boundaries.
-
-The corner magnifier switches between the top-right and bottom-left of the canvas when it would obscure the active corner, retaining its position during movement to avoid flicker.
-
-## License
-
-KettleStitch is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version. This is the same license as ScanTailor. KettleStitch is distributed in the hope that it will be useful, but without any warranty; see [LICENSE](../LICENSE) for the full text.
+Notes on the code, building and the measurements behind the detectors are in [`development/`](development/) and [`validation/`](validation/).

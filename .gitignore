@@ -3,5 +3,5 @@ dist/
 .DS_Store
 .qa/
 sample-images/
-docs/*-notes-and-research.md
+docs/**/*-notes-and-research.md
 examples/
