@@ -147,14 +147,12 @@ Cleanup estimates the paper tone from each neighbourhood's brightest area, so la
 **E** or **File ▸ Export…** opens the export sheet.
 
 - **Include**: all pages, or only the sidebar selection. Unreviewed pages are included.
-- **Format**: one PDF, or a folder of JPEG, PNG or TIFF files.
-- **Type** (PDF): image only, or image plus an invisible searchable text layer recognized on this Mac by Apple Vision. **Text Language** is automatic unless you choose one. Recognition adds a second or more per page, and vertical text is recognized less reliably than horizontal text.
-- **Page Cleanup**: override every page's cleanup mode for this export.
+- **Format**: one PDF, one **PDF with Apple Vision OCR**, or a folder of JPEG, PNG or TIFF files. The OCR choice adds an invisible searchable text layer recognized on this Mac by Apple Vision; **Text Language** is automatic unless you choose one. Recognition adds a second or more per page, and vertical text is recognized less reliably.
+- **Split Pages**: which half of a split spread comes first, or export spreads whole.
 - **JPEG Quality**: used for JPEG files and for colour and grayscale pages inside a PDF. Black & White pages are stored as one-bit images in PDF, PNG and TIFF.
-- **Maximum DPI**: downsamples pages above the limit. Pages are never enlarged.
-- **Protection**: a password required to open the PDF. It is not remembered. It must be at most 32 unaccented letters, digits and common symbols, which is all PDF protection can store here.
+- **Maximum DPI**: downsamples pages above the limit. Pages are never enlarged. A page without a physical size counts as 300 DPI.
 
-The other choices are remembered between exports. A PDF is written to a temporary file and moved into place when complete; stopping an export leaves no partial PDF. Image exports go into a new dated subfolder.
+The choices are remembered between exports. A PDF is written to a temporary file and moved into place when complete; stopping an export leaves no partial PDF. Image exports go into a new dated subfolder.
 
 ## A second opinion: Send to Claude, OpenAI or Gemini
 
