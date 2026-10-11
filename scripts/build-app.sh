@@ -3,11 +3,20 @@ set -euo pipefail
 cd "${0:A:h}/.."
 export CLANG_MODULE_CACHE_PATH="${TMPDIR:-/tmp}/kettlestitch-clang"
 export SWIFTPM_MODULECACHE_OVERRIDE="${TMPDIR:-/tmp}/kettlestitch-swift"
-swift build --disable-sandbox -c release
+# RELEASE=1 makes the build that is given to others: for Apple Silicon and Intel alike, and without the debugging
+# records that name the folders it was built in.
+if [[ -n "${RELEASE:-}" ]]; then
+  swift build --disable-sandbox -c release --arch arm64 --arch x86_64
+  BUILT=.build/apple/Products/Release/KettleStitch
+else
+  swift build --disable-sandbox -c release
+  BUILT=.build/release/KettleStitch
+fi
 APP="$PWD/dist/KettleStitch.app"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 # Rename into place: a running copy keeps its old file instead of having it overwritten.
-cp .build/release/KettleStitch "$APP/Contents/MacOS/KettleStitch.new"
+cp "$BUILT" "$APP/Contents/MacOS/KettleStitch.new"
+if [[ -n "${RELEASE:-}" ]]; then strip -S "$APP/Contents/MacOS/KettleStitch.new"; fi
 mv -f "$APP/Contents/MacOS/KettleStitch.new" "$APP/Contents/MacOS/KettleStitch"
 # The icon in every size macOS asks for, made from the one 1024-pixel picture.
 ICONSET="${TMPDIR:-/tmp}/kettlestitch-icon/AppIcon.iconset"

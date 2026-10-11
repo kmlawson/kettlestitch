@@ -29,18 +29,35 @@ The [manual](docs/Manual.md) describes each of these in detail.
 
 ## Install
 
-There is no packaged download yet; build it from source. You need a Mac running macOS 13 or later with Xcode or the Swift toolchain installed.
+1. Download `KettleStitch-0.4.0.dmg` (or the newest one) from the [Releases page](https://github.com/kmlawson/kettlestitch/releases).
+2. Open the disk image and drag **KettleStitch** onto the **Applications** folder beside it.
+3. Open KettleStitch from Applications, and expect macOS to refuse the first time; see below.
+
+It needs macOS 13 or later and runs on both Apple Silicon and Intel Macs.
+
+> [!WARNING]
+> **macOS will block KettleStitch the first time you open it.** The app is not signed with an Apple Developer ID or notarized by Apple, so Gatekeeper reports that it "cannot be opened because Apple cannot check it for malicious software", or that the developer cannot be verified. This is expected for an app distributed this way. To allow it:
+>
+> 1. Try to open KettleStitch once, and dismiss the warning with **Done** (not *Move to Trash*).
+> 2. Open **System Settings ▸ Privacy & Security** and scroll down to the Security section.
+> 3. Next to the message that KettleStitch was blocked, click **Open Anyway**, then confirm with your password or Touch ID.
+>
+> You only need to do this once for each version you install. On macOS 14 and earlier you can instead Control-click the app, choose **Open**, and confirm. From Terminal, `xattr -dr com.apple.quarantine /Applications/KettleStitch.app` has the same effect.
+>
+> Only do this for a copy you downloaded from this repository's Releases page.
+
+### Build from source
+
+You need Xcode or the Swift toolchain.
 
 ```sh
-./scripts/build-app.sh
+./scripts/build-app.sh          # builds dist/KettleStitch.app for this Mac
 open dist/KettleStitch.app
+swift test --disable-sandbox    # runs the tests
+./scripts/build-dmg.sh          # builds the universal release and dist/KettleStitch-<version>.dmg
 ```
 
-The app is built for the Mac it is built on and signed ad hoc; it is not notarized. To run the tests:
-
-```sh
-swift test --disable-sandbox
-```
+An app you build yourself is not blocked by Gatekeeper, because it was never downloaded.
 
 ## Using it
 
