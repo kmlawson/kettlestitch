@@ -79,7 +79,7 @@ extension AppDelegate: NSMenuItemValidation, NSMenuDelegate {
         edit.addItem(.separator())
         add(edit,"Copy Settings",#selector(copySettings),"c",[.command,.shift]);add(edit,"Paste Settings",#selector(pasteSettings),"v",[.command,.shift])
         add(edit,"Copy Rotation",#selector(copyRotation),"c",[.command,.option]);add(edit,"Paste Rotation",#selector(pasteRotation),"v",[.command,.option])
-        add(edit,"Copy Previous Page\u{2019}s Image Settings",#selector(copyPreviousAdjustments),"v",plain);add(edit,"Apply Settings to All Pages",#selector(applySettingsToAll));add(edit,"Reset Image Settings",#selector(resetAdjustments))
+        add(edit,"Copy Previous Page\u{2019}s Image Settings",#selector(copyPreviousAdjustments),"v",plain);add(edit,"Apply Settings to All Pages",#selector(applySettingsToAll));presetMenu.delegate=self;add(edit,"Image Settings Preset",nil,own:false).submenu=presetMenu;add(edit,"Reset Image Settings",#selector(resetAdjustments))
 
         let page=menu("Page")
         add(page,"Next Page",#selector(next),arrow(NSRightArrowFunctionKey),plain);add(page,"Previous Page",#selector(previous),arrow(NSLeftArrowFunctionKey),plain)
@@ -140,6 +140,7 @@ extension AppDelegate: NSMenuItemValidation, NSMenuDelegate {
         if let item=badExampleItem,menu===item.menu {
             let show=NSEvent.modifierFlags.contains(.option);item.isHidden = !show;badExampleSeparator?.isHidden = !show;return
         }
+        if menu===presetMenu {rebuildPresetMenu(menu,title:false);return}
         menu.removeAllItems()
         let urls=NSDocumentController.shared.recentDocumentURLs.filter{FileManager.default.fileExists(atPath:$0.path)}
         for url in urls {let item=menu.addItem(withTitle:url.deletingPathExtension().lastPathComponent,action:#selector(openRecent(_:)),keyEquivalent:"");item.target=self;item.representedObject=url;item.toolTip=url.path}

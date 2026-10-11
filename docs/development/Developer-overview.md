@@ -46,6 +46,7 @@ The user steers by small, frequent interaction changes. Follow the newest reques
 | `Sources/CropCore/ClaudeReview.swift` | The second opinion's prompt, reply schema and parsing, overlay drawing, usage log, and `run`, the one network call |
 | `Sources/CropCore/ReviewProviders.swift` | Providers, offered models and list prices, the request for each API, reading each reply, the no-redirect session |
 | `Sources/CropCore/Commands.swift` | Menu enabling and titles (`MenuPolicy`), shortcut reference data, shared progress tracker |
+| `Sources/CropCore/Presets.swift` | Named presets of image settings and the list kept in preferences |
 | `Sources/CropCore/Recovery.swift` | Recovery copies of unsaved changes and the list of what can be recovered |
 | `Sources/CropCore/Launch.swift` | What opens at launch, untitled names, auto-save rule, sorting dropped files, relinking moved photographs, legacy names |
 | `Sources/KettleStitch/main.swift` | AppDelegate: state, project lifecycle, queues, every action, single-key routing, undo |

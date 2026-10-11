@@ -36,6 +36,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
     let candidates=NSPopUpButton()
     let cleanupControl=NSSegmentedControl()
     let cleanupName=NSTextField(labelWithString:"")
+    /// Named sets of image settings kept on this Mac, and the menu they are chosen from.
+    var presets:[SettingsPreset]=PresetStore.decode(UserDefaults.standard.data(forKey:PresetStore.key))
+    let presetPopup=NSPopUpButton(frame:.zero,pullsDown:true)
     let brightnessSlider=NSSlider(value:0,minValue:-1,maxValue:1,target:nil,action:nil)
     let contrastSlider=NSSlider(value:0,minValue:-1,maxValue:1,target:nil,action:nil)
     let sharpnessSlider=NSSlider(value:0,minValue:0,maxValue:1,target:nil,action:nil)
@@ -133,6 +136,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
     var exportSheet: ExportSheetController?
     var settings: SettingsController?
     var recovery: RecoveryController?
+    /// Edit ▸ Image Settings Preset, filled each time it opens.
+    let presetMenu=NSMenu(title:"Image Settings Preset")
     /// The app's folder in Application Support, or the test folder.
     var supportURL: URL!
     /// Names this session's recovery copy. A new one is taken whenever another project is opened.
@@ -958,6 +963,62 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
         guard project.pages[i].adjustments != adjustments else{status.stringValue="This page already has the previous page's image settings";return}
         edit([i],geometry:false){$0.adjustments=adjustments}
         status.stringValue=adjustments == nil ? "The previous page has no image settings; this page's were removed":"Copied the previous page's image settings (\((adjustments ?? Adjustments()).cleanup.title) cleanup, exposure, brightness, contrast, sharpness)"
+    }
+    // MARK: Presets
+    func keepPresets(_ list:[SettingsPreset]){
+        presets=list;if let data=try? PresetStore.encode(list) {UserDefaults.standard.set(data,forKey:PresetStore.key)}
+        rebuildPresetMenu(presetPopup.menu!,title:true)
+    }
+    /// Fills a menu with the presets, then the commands to keep the current settings as one and to delete one.
+    func rebuildPresetMenu(_ menu:NSMenu,title:Bool){
+        menu.removeAllItems()
+        if title {menu.addItem(withTitle:presets.isEmpty ? "No presets yet":"Apply a preset",action:nil,keyEquivalent:"")}
+        for preset in presets {
+            let item=menu.addItem(withTitle:preset.name,action:#selector(applyPresetItem(_:)),keyEquivalent:"");item.target=self;item.representedObject=preset.name;item.toolTip=preset.summary
+        }
+        if !presets.isEmpty {menu.addItem(.separator())}
+        menu.addItem(withTitle:"Save These Settings as a Preset…",action:#selector(savePresetAsked),keyEquivalent:"").target=self
+        if !presets.isEmpty {
+            let delete=NSMenu()
+            for preset in presets {let item=delete.addItem(withTitle:preset.name,action:#selector(deletePresetItem(_:)),keyEquivalent:"");item.target=self;item.representedObject=preset.name}
+            menu.addItem(withTitle:"Delete Preset",action:nil,keyEquivalent:"").submenu=delete
+        }
+    }
+    @objc func applyPresetItem(_ sender:NSMenuItem){if let name=sender.representedObject as? String {applyPreset(named:name)}}
+    @objc func deletePresetItem(_ sender:NSMenuItem){
+        guard let name=sender.representedObject as? String else{return}
+        keepPresets(PresetStore.removing(name,from:presets));status.stringValue="Deleted the preset “\(name)” · pages it was applied to keep their settings"
+    }
+    /// Gives the selected pages a preset's image settings, and its page format if it has one, as one change.
+    func applyPreset(named name:String){
+        guard let preset=presets.first(where:{$0.name==name}) else{return}
+        let targets=targetIndexes;guard !targets.isEmpty else{NSSound.beep();return}
+        if !canvas.preview {setPreview(true)}
+        edit(targets,geometry:false){preset.apply(to:&$0)}
+        status.stringValue="Applied “\(preset.name)” to \(targets.count==1 ? "this page":"\(targets.count) pages") · \(preset.summary)"
+    }
+    /// Keeps the page on screen's image settings under a name, with its page format if asked.
+    @discardableResult func savePreset(named name:String,includeFormat:Bool)->Bool {
+        guard let i=current,!name.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty else{return false}
+        let preset=SettingsPreset(name:name,adjustments:project.pages[i].adjustments ?? Adjustments(),format:includeFormat ? (project.pages[i].format ?? PageFormat()):nil)
+        keepPresets(PresetStore.adding(preset,to:presets));status.stringValue="Saved the preset “\(name.trimmingCharacters(in:.whitespacesAndNewlines))” · \(preset.summary)"
+        return true
+    }
+    @objc func savePresetAsked(){
+        guard current != nil else{NSSound.beep();return}
+        let alert=NSAlert();alert.messageText="Save these image settings as a preset";alert.informativeText="The preset keeps this page's mode, exposure, brightness, contrast, sharpness and despeckle. Choose it later from the Preset menu to give them to the selected pages."
+        let name=NSTextField(frame:NSRect(x:0,y:28,width:280,height:24));name.placeholderString="Name, such as Text pages"
+        let format=NSButton(checkboxWithTitle:"Also keep this page's format (width or paper size)",target:nil,action:nil);format.frame=NSRect(x:0,y:0,width:280,height:20)
+        let box=NSView(frame:NSRect(x:0,y:0,width:280,height:54));box.addSubview(name);box.addSubview(format);alert.accessoryView=box
+        alert.addButton(withTitle:"Save");alert.addButton(withTitle:"Cancel");alert.window.initialFirstResponder=name
+        guard alert.runModal() == .alertFirstButtonReturn else{return}
+        let chosen=name.stringValue.trimmingCharacters(in:.whitespacesAndNewlines)
+        guard !chosen.isEmpty else{NSSound.beep();status.stringValue="A preset needs a name";return}
+        if PresetStore.isTaken(chosen,in:presets) {
+            let replace=NSAlert();replace.messageText="Replace the preset “\(chosen)”?";replace.informativeText="A preset with this name already exists.";replace.addButton(withTitle:"Replace");replace.addButton(withTitle:"Cancel")
+            guard replace.runModal() == .alertFirstButtonReturn else{return}
+        }
+        savePreset(named:chosen,includeFormat:format.state == .on)
     }
     @objc func resetAdjustments(){guard current != nil else{return};cleanupControl.selectedSegment=0;brightnessSlider.doubleValue=0;contrastSlider.doubleValue=0;sharpnessSlider.doubleValue=0;exposureSlider.doubleValue=0;showAdjustmentValues();despeckleControl.selectedSegment=0;despeckleControl.isEnabled=false;setAdjustments(Adjustments())}
     /// The number beside each slider: signed from the neutral middle for brightness and contrast, 0–100 for sharpness.

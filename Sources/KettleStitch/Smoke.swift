@@ -292,6 +292,24 @@ extension AppDelegate {
             key("v",9);precondition(self.project.pages[1].adjustments==borrowed && canvas.preview,"V copies the adjustments and shows the preview")
             self.undo();precondition(self.project.pages[1].adjustments==nil);self.project.pages[0].adjustments=nil;self.setPreview(false)
             print("COPY_ADJUSTMENTS passed")
+            // A preset keeps a page's image settings under a name and gives them to the selected pages in one change.
+            do {
+                let kept=self.presets,first=self.project.pages[0],second=self.project.pages[1]
+                self.project.selected=0;self.selectCurrent();self.table.selectRowIndexes(IndexSet(integer:0),byExtendingSelection:false)
+                var wanted=Adjustments();wanted.cleanup = .grayscale;wanted.brightness=0.2;wanted.sharpness=0.4
+                self.edit{$0.adjustments=wanted;$0.format=PageFormat(fitInto:.a5)}
+                precondition(self.savePreset(named:" Smoke text ",includeFormat:false) && self.presets.last?.name=="Smoke text" && self.presets.last?.format==nil)
+                precondition(self.presetPopup.menu!.items.contains{$0.title=="Smoke text" && $0.toolTip?.contains("Grayscale")==true} && self.presetPopup.menu!.items.contains{$0.title=="Delete Preset"})
+                self.table.selectRowIndexes(IndexSet([0,1]),byExtendingSelection:false);self.edit([0,1],geometry:false){$0.adjustments=nil;$0.format=nil}
+                self.applyPreset(named:"Smoke text")
+                precondition(self.project.pages[0].adjustments==wanted && self.project.pages[1].adjustments==wanted && self.project.pages[1].format==nil && self.canvas.preview,"Both selected pages take the preset; their format is left alone")
+                self.undo();precondition(self.project.pages[1].adjustments==nil,"One Undo takes the preset off both")
+                snapshot(self.window.contentView!,"preset.png")
+                self.keepPresets(kept);precondition(!self.presets.contains{$0.name=="Smoke text"})
+                self.undo();self.undo();self.table.selectRowIndexes(IndexSet(integer:0),byExtendingSelection:false)
+                precondition(self.project.pages[0].adjustments==first.adjustments && self.project.pages[1].adjustments==second.adjustments)
+                print("PRESETS passed")
+            }
             // The sidebar's two layouts: compact rows, and large pictures with only the number, name and type beneath.
             self.project.selected=1;self.selectCurrent()
             let compactCell=self.table.view(atColumn:0,row:1,makeIfNecessary:true) as! PageCell

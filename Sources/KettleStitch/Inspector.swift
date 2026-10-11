@@ -134,7 +134,9 @@ extension AppDelegate {
         exposureSlider.toolTip="Lighten or darken the photograph as a longer or shorter exposure would, up to two stops either way"
         for value in [exposureValue,brightnessValue,contrastValue,sharpnessValue] {value.font = .monospacedDigitSystemFont(ofSize:11,weight:.regular);value.textColor = .secondaryLabelColor;value.alignment = .right}
         let blank=NSGridCell.emptyContentView
-        let adjustments=NSGridView(views:[[caption("Mode:"),cleanupControl,blank],[blank,cleanupName,blank],[caption("Despeckle:"),despeckleControl,blank],[caption("Exposure:"),exposureSlider,exposureValue],[caption("Brightness:"),brightnessSlider,brightnessValue],[caption("Contrast:"),contrastSlider,contrastValue],[caption("Sharpness:"),sharpnessSlider,sharpnessValue]])
+        presetPopup.controlSize = .small;presetPopup.font = .systemFont(ofSize:11);presetPopup.toolTip="Give the selected pages a set of image settings you saved under a name, or save this page's"
+        rebuildPresetMenu(presetPopup.menu!,title:true)
+        let adjustments=NSGridView(views:[[caption("Preset:"),presetPopup,blank],[caption("Mode:"),cleanupControl,blank],[blank,cleanupName,blank],[caption("Despeckle:"),despeckleControl,blank],[caption("Exposure:"),exposureSlider,exposureValue],[caption("Brightness:"),brightnessSlider,brightnessValue],[caption("Contrast:"),contrastSlider,contrastValue],[caption("Sharpness:"),sharpnessSlider,sharpnessValue]])
         for row in 0..<3 {adjustments.mergeCells(inHorizontalRange:NSRange(location:1,length:2),verticalRange:NSRange(location:row,length:1));adjustments.cell(atColumnIndex:1,rowIndex:row).xPlacement = .fill}
         adjustments.column(at:2).width=30
         adjustments.rowSpacing=6;adjustments.columnSpacing=8;adjustments.column(at:0).xPlacement = .trailing;adjustments.column(at:0).width=78;adjustments.row(at:1).topPadding = -4

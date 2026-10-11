@@ -135,6 +135,7 @@ To reuse settings:
 - **v** copies the previous page's image settings to this page.
 - **Edit ▸ Copy Settings** and **Paste Settings** (⇧⌘C, ⇧⌘V) carry image settings and page format between pages.
 - **Apply Settings to All Pages**, under the Page Format section, copies them to the whole project. Crops and splits are never copied.
+- **Presets** keep a set of image settings under a name. Set a page up the way you like, then choose **Save These Settings as a Preset…** from the **Preset** menu at the top of the section (or **Edit ▸ Image Settings Preset**) and name it, for example "Text pages" or "Colour plates". Choosing the preset later gives its mode, exposure, brightness, contrast, sharpness and despeckle to every selected page in one step that ⌘Z undoes. Tick the box when saving to keep the page format in the preset too. Presets are kept on this Mac for all projects; deleting one does not change pages it was applied to.
 
 The cleanup modes estimate the paper's tone from the brightest part of each neighbourhood, so large dark pictures lighten around their edges. Use *None*, or a [picture zone](#picture-zones), where that matters.
 
