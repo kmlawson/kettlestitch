@@ -304,6 +304,13 @@ extension AppDelegate {
                 self.applyPreset(named:"Smoke text")
                 precondition(self.project.pages[0].adjustments==wanted && self.project.pages[1].adjustments==wanted && self.project.pages[1].format==nil && self.canvas.preview,"Both selected pages take the preset; their format is left alone")
                 self.undo();precondition(self.project.pages[1].adjustments==nil,"One Undo takes the preset off both")
+                // Tools lists the presets, and the one applied most often is first in line for ⌘1.
+                self.savePreset(named:"Smoke other",includeFormat:false)
+                func shortcut(_ name:String)->String? {self.toolsPresetMenu.items.first{$0.title==name}?.keyEquivalent}
+                precondition(self.toolsPresetMenu.items.map{$0.title}.suffix(2)==["Smoke text","Smoke other"] && self.toolsPresetMenu.supermenu?.title=="Tools")
+                self.applyPreset(named:"Smoke other");self.applyPreset(named:"Smoke other");self.undo();self.undo()
+                precondition(self.presetUses["Smoke other"]==2 && self.presetUses["Smoke text"]==1 && PresetStore.mostUsed(self.presets.filter{$0.name.hasPrefix("Smoke")},uses:self.presetUses)==["Smoke other","Smoke text"])
+                if self.presets.count==2 {precondition(shortcut("Smoke other")=="1" && shortcut("Smoke text")=="2","\(String(describing:shortcut("Smoke other")))")}
                 snapshot(self.window.contentView!,"preset.png")
                 self.keepPresets(kept);precondition(!self.presets.contains{$0.name=="Smoke text"})
                 self.undo();self.undo();self.table.selectRowIndexes(IndexSet(integer:0),byExtendingSelection:false)

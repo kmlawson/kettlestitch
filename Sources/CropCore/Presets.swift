@@ -41,6 +41,14 @@ public enum PresetStore {
         return list
     }
     public static func removing(_ name: String, from list: [SettingsPreset]) -> [SettingsPreset] {list.filter{!same($0.name,name)}}
+    /// Where the app keeps how often each preset has been applied.
+    public static let usesKey = "settingsPresetUses"
+    /// The names of the presets applied most often, most used first; presets used equally keep the order they were made in.
+    public static func mostUsed(_ list: [SettingsPreset], uses: [String:Int], limit: Int = 3) -> [String] {
+        let ranked=list.enumerated().sorted{(uses[$0.element.name] ?? 0,-$0.offset)>(uses[$1.element.name] ?? 0,-$1.offset)}
+        return ranked.prefix(limit).map{$0.element.name}
+    }
+    public static func counting(_ name: String, in uses: [String:Int]) -> [String:Int] {var uses=uses;uses[name,default:0]+=1;return uses}
     public static func encode(_ list: [SettingsPreset]) throws -> Data {try JSONEncoder().encode(list)}
     public static func decode(_ data: Data?) -> [SettingsPreset] {data.flatMap{try? JSONDecoder().decode([SettingsPreset].self,from:$0)} ?? []}
 }

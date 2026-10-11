@@ -109,6 +109,7 @@ extension AppDelegate: NSMenuItemValidation, NSMenuDelegate {
         add(crop,"Deskew Both, Left or Right Page",#selector(nextDeskewHalf),"/",[.option])
         crop.addItem(.separator())
         add(crop,"Add Picture Zone",#selector(addZone),"w",plain);add(crop,"Remove Picture Zones",#selector(removeZones),"w",[.shift])
+        crop.addItem(.separator());add(crop,"Apply Preset to Selected Pages",nil,own:false).submenu=toolsPresetMenu;rebuildToolsPresetMenu()
         crop.addItem(.separator());add(crop,"Smudge Brush",#selector(toggleSmudge),"b",[.shift]);add(crop,"Remove Smudges",#selector(removeSmudges),"b",[.option,.shift])
         add(crop,"Clone Brush",#selector(toggleClone),"c",[.shift]);add(crop,"Remove Cloning",#selector(removeClones),"c",[.option,.shift])
         crop.addItem(.separator())

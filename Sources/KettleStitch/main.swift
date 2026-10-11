@@ -39,6 +39,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
     /// Named sets of image settings kept on this Mac, and the menu they are chosen from.
     var presets:[SettingsPreset]=PresetStore.decode(UserDefaults.standard.data(forKey:PresetStore.key))
     let presetPopup=NSPopUpButton(frame:.zero,pullsDown:true)
+    /// How often each preset has been applied, which decides the three that get ⌘1, ⌘2 and ⌘3.
+    var presetUses=UserDefaults.standard.dictionary(forKey:PresetStore.usesKey) as? [String:Int] ?? [:]
+    /// Tools ▸ Apply Preset to Selected Pages, kept filled so that its shortcuts work without the menu being opened.
+    let toolsPresetMenu=NSMenu(title:"Apply Preset to Selected Pages")
     let brightnessSlider=NSSlider(value:0,minValue:-1,maxValue:1,target:nil,action:nil)
     let contrastSlider=NSSlider(value:0,minValue:-1,maxValue:1,target:nil,action:nil)
     let sharpnessSlider=NSSlider(value:0,minValue:0,maxValue:1,target:nil,action:nil)
@@ -1003,7 +1007,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
     // MARK: Presets
     func keepPresets(_ list:[SettingsPreset]){
         presets=list;if testDirectory == nil,let data=try? PresetStore.encode(list) {UserDefaults.standard.set(data,forKey:PresetStore.key)}
-        rebuildPresetMenu(presetPopup.menu!,title:true)
+        presetUses=presetUses.filter{name,_ in list.contains{$0.name==name}}
+        if testDirectory == nil {UserDefaults.standard.set(presetUses,forKey:PresetStore.usesKey)}
+        rebuildPresetMenu(presetPopup.menu!,title:true);rebuildToolsPresetMenu()
+    }
+    /// The presets by name, the three applied most often carrying ⌘1, ⌘2 and ⌘3.
+    func rebuildToolsPresetMenu(){
+        toolsPresetMenu.removeAllItems()
+        let numbered=PresetStore.mostUsed(presets,uses:presetUses)
+        for preset in presets {
+            let number=numbered.firstIndex(of:preset.name).map{String($0+1)} ?? ""
+            let item=toolsPresetMenu.addItem(withTitle:preset.name,action:#selector(applyPresetItem(_:)),keyEquivalent:number);item.keyEquivalentModifierMask=[.command]
+            item.target=self;item.representedObject=preset.name;item.toolTip=preset.summary
+        }
+        if presets.isEmpty {toolsPresetMenu.addItem(withTitle:"No presets yet — save one from Image Settings",action:nil,keyEquivalent:"")}
     }
     /// Fills a menu with the presets, then the commands to keep the current settings as one and to delete one.
     func rebuildPresetMenu(_ menu:NSMenu,title:Bool){
@@ -1031,6 +1048,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
         let targets=targetIndexes;guard !targets.isEmpty else{NSSound.beep();return}
         if !canvas.preview {setPreview(true)}
         edit(targets,geometry:false){preset.apply(to:&$0)}
+        presetUses=PresetStore.counting(preset.name,in:presetUses)
+        if testDirectory == nil {UserDefaults.standard.set(presetUses,forKey:PresetStore.usesKey)}
+        rebuildToolsPresetMenu()
         status.stringValue="Applied “\(preset.name)” to \(targets.count==1 ? "this page":"\(targets.count) pages") · \(preset.summary)"
     }
     /// Keeps the page on screen's image settings under a name, with its page format if asked.

@@ -180,6 +180,7 @@ Single keys act on the main window and are off while you type in a field. Letter
 | ⇧⌘A | Select all pages |
 | ⇧⌘U | Next flagged page |
 | ⌘⌫ | Remove the selected pages from the project |
+| ⌘1 / ⌘2 / ⌘3 | Apply the three most used image-settings presets to the selected pages |
 | ⌥⌘↑ / ⌥⌘↓ | Move the selected pages up or down (or drag them in the sidebar) |
 | ⌘J | Show deviations: pages whose crop is unlike the rest |
 | ⌘. | Stop background work |

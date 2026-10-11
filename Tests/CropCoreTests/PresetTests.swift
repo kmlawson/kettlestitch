@@ -30,6 +30,14 @@ final class PresetTests: XCTestCase {
         XCTAssertEqual(PresetStore.decode(try PresetStore.encode(list)),list)
         XCTAssertEqual(PresetStore.decode(Data("nonsense".utf8)),[]);XCTAssertEqual(PresetStore.decode(nil),[])
     }
+    func testTheMostUsedPresetsComeFirstAndTiesKeepTheirOrder() {
+        let list=["Text","Plates","Maps","Covers"].map{SettingsPreset(name:$0,adjustments:Adjustments(),format:nil)}
+        XCTAssertEqual(PresetStore.mostUsed(list,uses:[:]),["Text","Plates","Maps"],"Before any is used, the first three made")
+        XCTAssertEqual(PresetStore.mostUsed(list,uses:["Covers":5,"Maps":2,"Gone":9]),["Covers","Maps","Text"],"A count for a preset that is gone is ignored")
+        XCTAssertEqual(PresetStore.mostUsed(list,uses:["Plates":1,"Covers":1]),["Plates","Covers","Text"])
+        XCTAssertEqual(PresetStore.mostUsed(Array(list.prefix(2)),uses:[:]),["Text","Plates"]);XCTAssertEqual(PresetStore.mostUsed(list,uses:["Maps":1],limit:1),["Maps"])
+        XCTAssertEqual(PresetStore.counting("Maps",in:["Maps":2]),["Maps":3]);XCTAssertEqual(PresetStore.counting("Text",in:[:]),["Text":1])
+    }
     func testAPresetSaysWhatItHolds() {
         var a=settings(.grayscale,brightness:0.2);a.sharpness=0.5
         let summary=SettingsPreset(name:"Text",adjustments:a,format:PageFormat(fitInto:.a5)).summary
