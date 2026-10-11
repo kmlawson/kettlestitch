@@ -122,7 +122,7 @@ public enum ShortcutReference {
         section("Smudge",[("Shift B","Pick up or put down the smudge brush, which blurs print so it cannot be read; Escape also puts it down"),("Option Shift B","Remove the smudges")]),
         section("Output and view",[("P","Corrected preview"),("R","Rotate the output clockwise"),("Shift R","Rotate the output counterclockwise"),("+ / −","Zoom in / out"),("F or 0","Zoom to fit"),("A","Send to Claude"),("Z / Y","Undo / redo"),("?","Show this reference")]),
     ]
-    public static let notes = "Single keys are off while you type in a field. Only 1–8 hand the arrow keys to a corner or edge; Escape gives them back. Drag a corner, any green edge, or the pink split line. Shift-drag a corner keeps the crop's angles; Option-drag moves the whole crop. Every command is also in the menus with a Command-key shortcut. Originals are never modified."
+    public static let notes = "Single keys are off while you type in a field. Only 1–8 hand the arrow keys to a corner or edge; Escape gives them back. Drag a corner, any green edge, or the pink split line. Shift-drag a corner keeps the crop's angles; Option-drag moves the whole crop. Every command is also in the menus. Originals are never modified."
 }
 
 public enum SelectionPolicy {
