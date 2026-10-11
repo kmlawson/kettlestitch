@@ -737,7 +737,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
     @objc func previousCandidate(){cycleCandidate(-1)}
     @objc func nextCandidate(){cycleCandidate(1)}
 
-    // MARK: Image adjustments and page format
+    // MARK: Image settings and page format
     @objc func adjustmentChanged(_ sender:Any?){
         var a=Adjustments();a.cleanup=Cleanup.allCases[max(0,cleanupControl.selectedSegment)];a.brightness=brightnessSlider.doubleValue;a.contrast=contrastSlider.doubleValue
         // Whole steps of the number shown, so the middle of a slider is exactly neutral.
@@ -755,9 +755,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
         guard let i=current,i>0 else{NSSound.beep();status.stringValue="There is no page before this one to copy adjustments from";return}
         let adjustments=project.pages[i-1].adjustments
         if !canvas.preview {setPreview(true)}
-        guard project.pages[i].adjustments != adjustments else{status.stringValue="This page already has the previous page's image adjustments";return}
+        guard project.pages[i].adjustments != adjustments else{status.stringValue="This page already has the previous page's image settings";return}
         edit([i],geometry:false){$0.adjustments=adjustments}
-        status.stringValue=adjustments == nil ? "The previous page has no image adjustments; this page's were removed":"Copied the previous page's image adjustments (\((adjustments ?? Adjustments()).cleanup.title) cleanup, exposure, brightness, contrast, sharpness)"
+        status.stringValue=adjustments == nil ? "The previous page has no image settings; this page's were removed":"Copied the previous page's image settings (\((adjustments ?? Adjustments()).cleanup.title) cleanup, exposure, brightness, contrast, sharpness)"
     }
     @objc func resetAdjustments(){guard current != nil else{return};cleanupControl.selectedSegment=0;brightnessSlider.doubleValue=0;contrastSlider.doubleValue=0;sharpnessSlider.doubleValue=0;exposureSlider.doubleValue=0;showAdjustmentValues();despeckleControl.selectedSegment=0;despeckleControl.isEnabled=false;setAdjustments(Adjustments())}
     /// The number beside each slider: signed from the neutral middle for brightness and contrast, 0–100 for sharpness.
@@ -798,7 +798,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
     }
     /// Return hands the keyboard back to the canvas so single-key commands work again.
     func finishField(){if let e=NSApp.currentEvent,e.type == .keyDown,[36,76].contains(e.keyCode){window.makeFirstResponder(canvas)}}
-    @objc func copySettings(){guard let i=current else{return};copiedSettings=(project.pages[i].adjustments,project.pages[i].format);status.stringValue="Copied image adjustments and page format"}
+    @objc func copySettings(){guard let i=current else{return};copiedSettings=(project.pages[i].adjustments,project.pages[i].format);status.stringValue="Copied image settings and page format"}
     @objc func pasteSettings(){guard let s=copiedSettings else{return};let targets=targetIndexes;edit(targets,geometry:false){$0.adjustments=s.0;$0.format=s.1};status.stringValue="Pasted settings to \(targets.count) page\(targets.count==1 ? "":"s")"}
     @objc func applySettingsToAll(){
         guard let i=current else{return};let a=project.pages[i].adjustments,f=project.pages[i].format

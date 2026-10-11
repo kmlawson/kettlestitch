@@ -268,7 +268,7 @@ extension AppDelegate {
             precondition(self.project.pages[1].split==PageSplit(top:0.31,bottom:0.31),"A page that already has a split keeps it")
             self.stop();self.project.pages[1].split=nil;for i in self.project.pages.indices {self.project.pages[i].split=nil};self.refreshDetail()
             print("SPLIT_CANDIDATES passed")
-            // V brings over the previous page's image adjustments and turns the preview on to show them.
+            // V brings over the previous page's image settings and turns the preview on to show them.
             var borrowed=Adjustments();borrowed.cleanup = .grayscale;borrowed.brightness=0.25;borrowed.sharpness=0.4
             self.project.pages[0].adjustments=borrowed;self.project.pages[1].adjustments=nil
             self.project.selected=1;self.selectCurrent();canvas.image=smokeImage;self.original=smokeImage;self.setPreview(false)

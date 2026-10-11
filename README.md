@@ -153,7 +153,7 @@ Single keys act on the main window and are off while you type in a field. Letter
 | Key | Action |
 | --- | --- |
 | p | Corrected preview |
-| v | Copy the previous photograph's image adjustments (cleanup, exposure, brightness, contrast, sharpness), with the preview on |
+| v | Copy the previous photograph's image settings (cleanup, exposure, brightness, contrast, sharpness), with the preview on |
 | r | Rotate the output clockwise |
 | Shift R | Rotate the output counterclockwise |
 | + / − | Zoom in / out |
@@ -169,7 +169,7 @@ Single keys act on the main window and are off while you type in a field. Letter
 | ⌘N / ⌘O | New / open project |
 | ⌘S / ⇧⌘S | Save / save as |
 | ⌘Z / ⇧⌘Z | Undo / redo |
-| ⇧⌘C / ⇧⌘V | Copy / paste a page's image adjustments and page format |
+| ⇧⌘C / ⇧⌘V | Copy / paste a page's image settings and page format |
 | ⇧⌘A | Select all pages |
 | ⇧⌘U | Next flagged page |
 | ⌘⌫ | Remove the selected pages from the project |

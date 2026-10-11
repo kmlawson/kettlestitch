@@ -53,7 +53,7 @@ Single-key commands are suspended in text-entry fields and file dialogs.
 | Add or remove a flag | M |
 | Send to Claude | A |
 | Propose page split / remove it | T / Shift + T |
-| Copy the previous photograph's image adjustments | V |
+| Copy the previous photograph's image settings | V |
 | Move split left / right | , / . |
 | Larger split movement | Add Shift |
 | Deskew / remove deskew | Q / Shift + Q |
@@ -76,7 +76,7 @@ The button beside the sidebar's own in the toolbar, or **View ▸ Large Sidebar 
 
 ## Selecting several pages
 
-Shift-click or Command-click in the sidebar, or choose **Page ▸ Select All Pages**, to select several photographs. The one on screen stays on screen. Flags, image adjustments, page format, Paste Settings, Remove from Project, the export sheet's **Selected Pages** choice and Send to Claude then apply to the whole selection. Cropping always applies to the photograph on screen only.
+Shift-click or Command-click in the sidebar, or choose **Page ▸ Select All Pages**, to select several photographs. The one on screen stays on screen. Flags, image settings, page format, Paste Settings, Remove from Project, the export sheet's **Selected Pages** choice and Send to Claude then apply to the whole selection. Cropping always applies to the photograph on screen only.
 
 Right-clicking a row in the sidebar acts on that row, or on the whole selection if the row is part of it.
 
@@ -124,9 +124,9 @@ On a page set to **Black & White**, photographs and drawings turn into harsh bla
 
 A page whose worst measure is 3.5 or more is marked unusual: it shows ⚠︎ and the reason in the sidebar, and **U** (or **Page ▸ Go To ▸ Next Unusual Page**) goes to the next one. The scale is the project's own median and spread, so a mis-detected crop among 300 similar spreads stands out, and a project of fewer than five pages marks nothing. Covers, fold-outs and other legitimately different pages will be marked too.
 
-## Image adjustments and page format
+## Image settings and page format
 
-The inspector's **Image Adjustments** apply to the corrected output, not the source view, so changing one switches to the corrected preview.
+The inspector's **Image Settings** apply to the corrected output, not the source view, so changing one switches to the corrected preview.
 
 - **Cleanup** has four modes. *None* leaves the photograph as it is. *Color* evens out lighting and whitens the paper. *Grayscale* does the same and removes colour. *Black & White* then reduces the page to pure black and white.
 - **Despeckle** (Off, 1, 2, 3) removes specks from Black & White output: 1 takes only the smallest, 3 larger ones too, scaled to the page's resolution. A small mark beside print, such as a dot or a voicing mark, is kept. It has no effect in the other modes or inside picture zones.
@@ -193,7 +193,7 @@ Every automatic crop remains unreviewed. No score is presented as a calibrated a
 - Swift/AppKit UI, ImageIO decoding, Vision detection and text recognition, Core Image perspective rendering and cleanup; no external package dependencies. Nothing leaves the Mac except through Send to Claude.
 - Bounded queues for current preview, thumbnails, detection and export. Sidebar pictures are kept in memory for the whole book (up to 3,000, nearest pages first), reloaded if one is ever found missing, and a photograph that cannot be read is marked with a warning sign rather than left blank. Detection, export, Claude review and split proposals each process one image at a time and share one progress bar; full originals are decoded only for export.
 - EXIF orientation normalized on load. Crop coordinates are normalized against the upright original, ordered top-left, top-right, bottom-right, bottom-left.
-- Versioned JSON projects written atomically. Revision checks prevent stale detection from replacing newer edits. Undo/redo covers crop geometry, review state, output rotation, flags, image adjustments, page format, page order and removal within the running session. A slider drag is one undo step.
+- Versioned JSON projects written atomically. Revision checks prevent stale detection from replacing newer edits. Undo/redo covers crop geometry, review state, output rotation, flags, image settings, page format, page order and removal within the running session. A slider drag is one undo step.
 - Originals are referenced, not copied; moved photographs can be located again, by file name. File-change detection, portable project packages, and persistent undo history remain future work.
 - TIFF import uses the first image. RAW and PDF import are not implemented. Supported photographs: JPEG, PNG, HEIC/HEIF, TIFF and BMP.
 - Export includes any unreviewed photographs. New output folders prevent overwriting earlier image exports. Each file is finalized through a temporary path. Export cancellation takes effect between pages.

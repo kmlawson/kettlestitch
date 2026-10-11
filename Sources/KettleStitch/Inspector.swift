@@ -97,8 +97,8 @@ extension AppDelegate {
         smudgeRows=[frame.row(at:frame.numberOfRows-2),frame.row(at:frame.numberOfRows-1)];showSmudgeState()
         frame.rowSpacing=7;frame.columnSpacing=8;frame.column(at:0).xPlacement = .trailing;frame.column(at:0).width=78;frame.column(at:1).xPlacement = .fill
         section("Cropping Frame",key:"crop",[detail,note,frame])
-        // Image adjustments
-        let reset=NSButton(image:symbol("arrow.counterclockwise") ?? NSImage(),target:self,action:#selector(resetAdjustments));reset.isBordered=false;reset.toolTip="Reset image adjustments"
+        // Image settings
+        let reset=NSButton(image:symbol("arrow.counterclockwise") ?? NSImage(),target:self,action:#selector(resetAdjustments));reset.isBordered=false;reset.toolTip="Reset image settings"
         cleanupControl.segmentCount=4;cleanupControl.trackingMode = .selectOne;cleanupControl.segmentDistribution = .fillEqually;cleanupControl.target=self;cleanupControl.action=#selector(adjustmentChanged(_:))
         let icons=[symbol("xmark"),symbol("circle.lefthalf.filled"),symbol("circle.hexagongrid","circle.dotted"),symbol("paintpalette")]
         for (i,mode) in Cleanup.allCases.enumerated() {
@@ -120,7 +120,7 @@ extension AppDelegate {
         for row in 0..<3 {adjustments.mergeCells(inHorizontalRange:NSRange(location:1,length:2),verticalRange:NSRange(location:row,length:1));adjustments.cell(atColumnIndex:1,rowIndex:row).xPlacement = .fill}
         adjustments.column(at:2).width=30
         adjustments.rowSpacing=6;adjustments.columnSpacing=8;adjustments.column(at:0).xPlacement = .trailing;adjustments.column(at:0).width=78;adjustments.row(at:1).topPadding = -4
-        section("Image Adjustments",key:"adjustments",accessory:reset,[adjustments])
+        section("Image Settings",key:"adjustments",accessory:reset,[adjustments])
         // Page format
         func field(_ f:NSTextField)->NSView {
             f.alignment = .left;f.target=self;f.action=#selector(formatChanged(_:));f.cell?.sendsActionOnEndEditing=true;f.widthAnchor.constraint(equalToConstant:64).isActive=true
@@ -132,12 +132,12 @@ extension AppDelegate {
         let format=NSGridView(views:[[caption("Width:"),field(widthField)],[caption("Height:"),field(heightField)],[caption("Presets:"),fitPopup]])
         format.rowSpacing=6;format.columnSpacing=8;format.column(at:0).xPlacement = .trailing;format.column(at:0).width=78;format.column(at:1).xPlacement = .leading
         resolutionLabel.font = .systemFont(ofSize:11);resolutionLabel.textColor = .secondaryLabelColor;resolutionLabel.alignment = .center
-        let all=applyAllButton;all.target=self;all.action=#selector(applySettingsToAll);all.bezelStyle = .rounded;all.controlSize = .small;all.toolTip="Copy this page's image adjustments (cleanup, exposure, brightness, contrast, sharpness) and page format to every page. Crops and splits are left as they are."
+        let all=applyAllButton;all.target=self;all.action=#selector(applySettingsToAll);all.bezelStyle = .rounded;all.controlSize = .small;all.toolTip="Copy this page's image settings (cleanup, exposure, brightness, contrast, sharpness) and page format to every page. Crops and splits are left as they are."
         section("Page Format",key:"format",open:false,[format,resolutionLabel])
-        // Outside the sections, because it carries the image adjustments as well as the page format.
+        // Outside the sections, because it carries the image settings as well as the page format.
         add(all,after:22)
         // The keys used most, kept in view; the full list is one key away.
-        let keys:[(String,String)]=[("← / →","Previous / next image"),("C","Set crop to same as previous image"),("V","Copy image adjustments from previous image"),("T","Propose split"),("R","Rotate (Shift-R for reverse)"),("; / '","Decrease / increase current crop"),("H J K L","Increase crop edges (Shift to decrease, Option to move crop)"),("/","See more shortcuts")]
+        let keys:[(String,String)]=[("← / →","Previous / next image"),("C","Set crop to same as previous image"),("V","Copy image settings from previous image"),("T","Propose split"),("R","Rotate (Shift-R for reverse)"),("; / '","Decrease / increase current crop"),("H J K L","Increase crop edges (Shift to decrease, Option to move crop)"),("/","See more shortcuts")]
         let shortcuts=NSGridView(views:keys.map{entry->[NSView] in
             let key=NSTextField(labelWithString:ShortcutReference.shown(entry.0));key.font = .monospacedSystemFont(ofSize:11,weight:.medium);key.textColor = .secondaryLabelColor;key.alignment = .right
             let action=NSTextField(wrappingLabelWithString:entry.1);action.font = .systemFont(ofSize:11);action.textColor = .secondaryLabelColor
