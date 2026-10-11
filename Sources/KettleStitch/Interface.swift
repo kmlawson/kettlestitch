@@ -70,8 +70,12 @@ final class PageCell: NSTableCellView {
         let file=URL(fileURLWithPath:page.path)
         title.stringValue="\(number). \(file.deletingPathExtension().lastPathComponent)"
         kind.stringValue=file.pathExtension.uppercased();kind.invalidateIntrinsicContentSize();kind.isHidden=kind.stringValue.isEmpty
-        let proposed=page.candidates.contains{$0.source==Candidate.claudeSource}
-        subtitle.stringValue=review?.label ?? (page.reviewed ? "✓ Reviewed":page.status)+(proposed ? " · Claude fix":"")+(page.split != nil ? " · split":"")+(unusual.map{" · ⚠︎ "+$0} ?? "")
+        let proposed=page.candidates.first{$0.isReview}?.source
+        var line=page.reviewed ? "✓ Reviewed":page.status
+        if let proposed {line+=" · \(proposed) fix"}
+        if page.split != nil {line+=" · split"}
+        if let unusual {line+=" · ⚠︎ "+unusual}
+        subtitle.stringValue=review?.label ?? line
         subtitle.textColor=review != nil ? .controlAccentColor:page.reviewed ? .systemGreen:.secondaryLabelColor
     }
 }
@@ -170,7 +174,7 @@ extension AppDelegate: NSToolbarDelegate {
         case .rotateRight:return toolbarItem(id,"Rotate Right",symbol("rotate.right"),#selector(rotate),"Rotate the output clockwise (R)")
         case .split:return toolbarItem(id,"Split",symbol("rectangle.split.2x1","square.split.2x1"),#selector(proposeSplit),"Propose a split between facing pages (T)")
         case .flag:return toolbarItem(id,"Flag",symbol("flag"),#selector(toggleFlag),"Add or remove a flag (M)")
-        case .claude:return toolbarItem(id,"Send to Claude",symbol("sparkles","bubble.left"),#selector(sendToClaude),"Ask Claude to check the crop of the selected pages (A)")
+        case .claude:return toolbarItem(id,"Second Opinion",symbol("sparkles","bubble.left"),#selector(sendToClaude),"Ask Claude, OpenAI or Gemini, as chosen in Settings, to check the crop of the selected pages (A)")
         case .accept:return toolbarItem(id,"Accept",symbol("checkmark.circle"),#selector(accept),"Mark reviewed and go to the next photograph (Return)")
         case .export:return toolbarItem(id,"Export",symbol("square.and.arrow.up"),#selector(exportImages),"Export a PDF or image files (E)")
         case .inspector:return toolbarItem(id,"Inspector",symbol("sidebar.right"),#selector(toggleInspector),"Show or hide the inspector")

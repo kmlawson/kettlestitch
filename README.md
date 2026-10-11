@@ -23,7 +23,7 @@ It is named after the kettle stitch, a knot that links one sewn section of a boo
 - **Preview** of exactly what will be exported, kept on as you move from page to page.
 - **Export** to PDF or to JPEG, PNG or TIFF. Exports carry no metadata from the photographs (no location, camera or owner), and PDFs carry no producer, creator or dates. OCR via Apple Vision is offered.
 - **Review tools**: accept pages as you go, flag ones to return to, and jump to pages whose crop is unlike the rest of the book.
-- **Send to Claude** (optional) asks Anthropic's Claude for a second opinion on a crop and split. It is the only feature that uses the network, and needs your own API key and the `claude` command-line tool installed. Your key is saved in your keychain. 
+- **A second opinion** (optional): send a page to Claude, OpenAI or Gemini to have its crop and split checked. It is the only feature that uses the network. It talks to the provider directly with your own API key, which is kept in your keychain; nothing else needs to be installed. See [API keys and security](#api-keys-and-security).
 
 The [manual](docs/Manual.md) describes each of these in detail.
 
@@ -156,7 +156,7 @@ Single keys act on the main window and are off while you type in a field. Press 
 | Shift R | Rotate the output counterclockwise |
 | + / − | Zoom in / out |
 | F or 0 | Zoom to fit |
-| A | Send to Claude |
+| A | Send the page to Claude, OpenAI or Gemini for a second opinion |
 | Z / Y | Undo / redo |
 | / or ? | Show the shortcut reference |
 
@@ -193,7 +193,62 @@ Single keys act on the main window and are off while you type in a field. Press 
 
 ## Privacy
 
-Everything happens on your Mac. Nothing is sent anywhere unless you use Send to Claude, which uploads a reduced copy of the page on screen and its crop to Anthropic under your own API key. The key is kept in your login keychain.
+Everything happens on your Mac. Nothing is sent anywhere unless you ask for a second opinion on a page, which uploads a reduced copy of that page and its crop to the provider you chose, under your own API key. Exports carry no metadata from your photographs.
+
+## API keys and security
+
+The second-opinion feature is optional and off until you add a key. You choose a provider in **KettleStitch ▸ Settings…** and paste an API key for it:
+
+| Provider | Models offered | Requests go to |
+| --- | --- | --- |
+| Claude (Anthropic) | Haiku 5.5, Sonnet 5.5, Opus 5.5 | `api.anthropic.com` |
+| OpenAI | GPT-6 Luna, GPT-6.1 Sol, GPT-6 Astra | `api.openai.com` |
+| Gemini (Google) | Gemini 3.5 Flash-Lite, 3.8 Flash, 3.1 Pro (preview) | `generativelanguage.googleapis.com` |
+
+**How a key is stored**
+
+- Keys are kept in your macOS login keychain, one item for each provider, under the service names `local.kettlestitch.app.anthropic`, `.openai` and `.gemini`. You can see or delete them in the Keychain Access app.
+- A key is never written to a project file, to the app's preferences, to the usage log or to any other file, and it is never shown again after you paste it: the field is emptied and only says that a key is saved.
+- **Remove Key** in Settings deletes it from the keychain.
+
+**Where a key goes**
+
+- A key is read from the keychain at one moment only: when you choose Send. It is put in a single header of an HTTPS request to that provider's own address, and nowhere else. It is never part of the address or the body of the request.
+- The app contacts no other server, for this or anything else. It has no analytics, no update check and no telemetry.
+- The connection keeps nothing on disk (no cache, no cookies) and refuses redirects, so a request cannot be passed on to another address with the key attached.
+
+**What is sent with it**
+
+- Two reduced JPEGs of the page on screen (longest side 1568 pixels): the photograph, and the same photograph with the crop drawn on it.
+- A fixed prompt containing the crop's coordinates, and the form the answer must take.
+- Not sent: the file's name or location, your other pages, the project, or anything identifying you or your Mac. The request identifies the app only as `KettleStitch (book page cropper)`.
+
+**What is kept afterwards**
+
+- The usage log (`~/Library/Application Support/KettleStitch/claude-usage.json`) records the time, model, file name, duration and token counts of each request, with an estimated cost at list price where the price is known. It holds no key and never leaves your Mac.
+
+**Checking this yourself**
+
+All of it is in three short places in the source:
+
+| What | Where |
+| --- | --- |
+| Reading, writing and deleting keys in the keychain | `Keychain` in [`Sources/KettleStitch/Settings.swift`](Sources/KettleStitch/Settings.swift) |
+| The only place a key is read for use | `sendToClaude` in [`Sources/KettleStitch/main.swift`](Sources/KettleStitch/main.swift) |
+| The three addresses, the header the key goes in, and the no-redirect connection | `ReviewAPI` in [`Sources/CropCore/ReviewProviders.swift`](Sources/CropCore/ReviewProviders.swift) |
+| The one network call in the app | `ClaudeReview.run` in [`Sources/CropCore/ClaudeReview.swift`](Sources/CropCore/ClaudeReview.swift) |
+
+These commands, run in the repository, list every network call, every address and every use of the keychain in the app:
+
+```sh
+grep -rn 'URLSession\|URLRequest' Sources          # every network call
+grep -rno 'https\?://[A-Za-z0-9./_-]*' Sources     # every address the app can contact
+grep -rn 'Keychain\.\|SecItem' Sources             # every use of the keychain
+```
+
+A test, `testEachProviderGetsItsOwnRequestAndTheKeyGoesOnlyInAHeader` in `Tests/CropCoreTests/OutputTests.swift`, checks for every model that the request goes to its provider's host over HTTPS and that the key appears in exactly one header and not in the address or body. Run it with `swift test --disable-sandbox`.
+
+Your API key is still a secret that can spend money: anyone who can unlock your Mac's keychain can read it, and each request is billed to you by the provider. Use a key with a spending limit if your provider offers one.
 
 ## Acknowledgements
 

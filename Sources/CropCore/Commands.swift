@@ -41,6 +41,8 @@ public struct MenuState {
     public var inspectorVisible = false
     /// False while a sheet or another window has the keyboard.
     public var windowActive = true
+    /// Who Send to… goes to: Claude, OpenAI or Gemini, as chosen in Settings.
+    public var reviewer = "Claude"
     public init() {}
 }
 public enum MenuPolicy {
@@ -96,7 +98,7 @@ public enum MenuPolicy {
         let several=s.targetCount>1
         switch command {
         case .flag:return (s.currentFlagged ? "Remove Flag":"Add Flag")+(several ? (s.currentFlagged ? " from":" to")+" \(s.targetCount) Pages":"")
-        case .sendToClaude:return several ? "Send \(s.targetCount) Pages to Claude":"Send to Claude"
+        case .sendToClaude:return several ? "Send \(s.targetCount) Pages to \(s.reviewer)":"Send to \(s.reviewer)"
         case .deskew:return several ? "Deskew \(s.targetCount) Pages":"Deskew"
         case .proposeSplit:return several ? "Propose Page Split on \(s.targetCount) Pages":"Propose Page Split"
         case .removePages:return several ? "Remove \(s.targetCount) Pages from Project":"Remove from Project"
@@ -120,7 +122,7 @@ public enum ShortcutReference {
         section("Page split",[("T","Propose a split between facing pages; again for the next candidate"),("Shift T","Remove the split"),(", / .","Move the split left / right; add Shift to move farther")]),
         section("Deskew and picture zones",[("Q","Deskew: level the lines of text"),("Shift Q","Remove the deskew"),("Option , / .","Turn the page counterclockwise / clockwise by 0.1°"),("W","Draw a picture zone, kept in gray on a black-and-white page"),("Shift W","Remove the picture zones")]),
         section("Smudge",[("Shift B","Pick up or put down the smudge brush, which blurs print so it cannot be read; Escape also puts it down"),("Option Shift B","Remove the smudges")]),
-        section("Output and view",[("P","Corrected preview"),("R","Rotate the output clockwise"),("Shift R","Rotate the output counterclockwise"),("+ / −","Zoom in / out"),("F or 0","Zoom to fit"),("A","Send to Claude"),("Z / Y","Undo / redo"),("?","Show this reference")]),
+        section("Output and view",[("P","Corrected preview"),("R","Rotate the output clockwise"),("Shift R","Rotate the output counterclockwise"),("+ / −","Zoom in / out"),("F or 0","Zoom to fit"),("A","Send to Claude, OpenAI or Gemini for a second opinion"),("Z / Y","Undo / redo"),("?","Show this reference")]),
     ]
     public static let notes = "Single keys are off while you type in a field. Only 1–8 hand the arrow keys to a corner or edge; Escape gives them back. Drag a corner, any green edge, or the pink split line. Shift-drag a corner keeps the crop's angles; Option-drag moves the whole crop. Every command is also in the menus. Originals are never modified."
 }

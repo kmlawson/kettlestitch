@@ -189,17 +189,56 @@ final class ExportTests:XCTestCase {
     }
 }
 
+/// Answers requests from a script instead of the network, and keeps what was asked.
+final class ScriptedProtocol: URLProtocol {
+    static var replies:[(status:Int,headers:[String:String],body:Data)]=[]
+    static var requests:[URLRequest]=[]
+    override class func canInit(with request:URLRequest)->Bool {true}
+    override class func canonicalRequest(for request:URLRequest)->URLRequest {request}
+    override func startLoading(){
+        ScriptedProtocol.requests.append(request)
+        let reply=ScriptedProtocol.replies.isEmpty ? (status:500,headers:[:],body:Data()):ScriptedProtocol.replies.removeFirst()
+        client?.urlProtocol(self,didReceive:HTTPURLResponse(url:request.url!,statusCode:reply.status,httpVersion:"HTTP/1.1",headerFields:reply.headers)!,cacheStoragePolicy:.notAllowed)
+        client?.urlProtocol(self,didLoad:reply.body);client?.urlProtocolDidFinishLoading(self)
+    }
+    override func stopLoading(){}
+}
 final class ClaudeReviewTests:XCTestCase {
+    func testARequestIsRetriedWhenTheServiceIsBusyAndItsAnswerBecomesAReview() throws {
+        let photo=try temporaryPhoto(shadedPage(width:1200,height:800));defer{try? FileManager.default.removeItem(at:photo)}
+        var page=Page(path:photo.path);page.quad=current
+        let configuration=URLSessionConfiguration.ephemeral;configuration.protocolClasses=[ScriptedProtocol.self]
+        let session=URLSession(configuration:configuration)
+        let body=#"{"verdict":"adjust","comment":"TL moved out","corners":{"top_left":{"x":0.05,"y":0.06},"top_right":{"x":0.9,"y":0.1},"bottom_right":{"x":0.9,"y":0.9},"bottom_left":{"x":0.1,"y":0.9}}}"#
+        let good=try JSONSerialization.data(withJSONObject:["type":"message","stop_reason":"end_turn","content":[["type":"text","text":body]],"usage":["input_tokens":2000,"output_tokens":100]] as [String:Any])
+        ScriptedProtocol.requests=[];ScriptedProtocol.replies=[(429,["retry-after":"0"],Data(#"{"type":"error","error":{"message":"busy"}}"#.utf8)),(200,[:],good)]
+        var started=0
+        let review=try ClaudeReview.run(page,model:ReviewModel.chosen("claude-sonnet-5-5",for:.anthropic),apiKey:"sk-test",session:session){_ in started+=1}
+        XCTAssertEqual(started,2,"Busy the first time, so it was asked again");XCTAssertEqual(ScriptedProtocol.requests.count,2)
+        XCTAssertEqual(ScriptedProtocol.requests.last?.url?.absoluteString,"https://api.anthropic.com/v1/messages")
+        XCTAssertEqual(review.quad?.points[0],Point(0.05,0.06));XCTAssertEqual(review.comment,"TL moved out")
+        // 2,000 tokens in and 100 out on Sonnet 5.5, at $2 and $10 a million.
+        XCTAssertEqual(review.usage?.inputTokens,2000);XCTAssertEqual(try XCTUnwrap(review.usage?.cost),0.005,accuracy:1e-12)
+        // A rejected key is not retried.
+        ScriptedProtocol.requests=[];ScriptedProtocol.replies=[(401,[:],Data(#"{"type":"error","error":{"message":"invalid x-api-key"}}"#.utf8))]
+        XCTAssertThrowsError(try ClaudeReview.run(page,model:ReviewModel.chosen(nil,for:.anthropic),apiKey:"sk-bad",session:session)){XCTAssertTrue($0.localizedDescription.hasPrefix("Claude rejected the API key."))}
+        XCTAssertEqual(ScriptedProtocol.requests.count,1)
+    }
     func testTokenUseIsReadAddedUpAndLogged() throws {
-        let same=#""corners":{"top_left":{"x":0.1,"y":0.1},"top_right":{"x":0.9,"y":0.1},"bottom_right":{"x":0.9,"y":0.9},"bottom_left":{"x":0.1,"y":0.9}}"#
-        let output=Data("{\"type\":\"result\",\"is_error\":false,\"result\":\"\",\"total_cost_usd\":0.0123,\"usage\":{\"input_tokens\":1200,\"cache_creation_input_tokens\":300,\"cache_read_input_tokens\":40,\"output_tokens\":85},\"structured_output\":{\"verdict\":\"good\",\"comment\":\"ok\",\(same)}}".utf8)
-        let usage=try XCTUnwrap(ClaudeReview.parse(output,current:current).usage)
-        XCTAssertEqual(usage,ReviewUsage(inputTokens:1540,outputTokens:85,cost:0.0123));XCTAssertEqual(usage.summary,"1,540 tokens in, 85 out, $0.0123")
-        XCTAssertNil(try ClaudeReview.parse(reply("{\"verdict\":\"good\",\"comment\":\"\",\(same)}"),current:current).usage,"An answer without counts has none")
+        let body=#"{"verdict":"good","comment":"ok","corners":{"top_left":{"x":0.1,"y":0.1},"top_right":{"x":0.9,"y":0.1},"bottom_right":{"x":0.9,"y":0.9},"bottom_left":{"x":0.1,"y":0.9}}}"#
+        let reply=try JSONSerialization.data(withJSONObject:["type":"message","stop_reason":"end_turn","content":[["type":"thinking","thinking":""],["type":"text","text":body]],"usage":["input_tokens":1200,"cache_creation_input_tokens":300,"cache_read_input_tokens":40,"output_tokens":85]] as [String:Any])
+        let answer=try ReviewAPI.answer(reply,status:200,provider:.anthropic)
+        XCTAssertEqual(answer.text,body);XCTAssertTrue(try ClaudeReview.parse(answer.text,current:current).good)
+        var usage=try XCTUnwrap(answer.usage);XCTAssertEqual(usage,ReviewUsage(inputTokens:1540,outputTokens:85),"Cached tokens count as read")
+        // Cost is worked out from list prices: 1,540 in and 85 out on Opus 5.5 at $4 and $20 a million.
+        let opus=ReviewModel.chosen("claude-opus-5-5",for:.anthropic)
+        XCTAssertEqual(try XCTUnwrap(opus.cost(usage)),(1540*4+85*20)/1_000_000,accuracy:1e-12)
+        XCTAssertNil(ReviewModel.chosen(nil,for:.gemini).cost(usage),"No price is assumed where none is known")
+        usage.cost=0.0123;XCTAssertEqual(usage.summary,"1,540 tokens in, 85 out, $0.0123")
         XCTAssertEqual((usage+ReviewUsage(inputTokens:10,outputTokens:5)).summary,"1,550 tokens in, 90 out, $0.0123")
         XCTAssertEqual(ReviewUsage(inputTokens:10,outputTokens:5).summary,"10 tokens in, 5 out")
         let url=FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString+".json");defer{try? FileManager.default.removeItem(at:url)}
-        XCTAssertEqual(UsageLog.text(UsageLog.read(url)),"No requests have been sent to Claude yet.")
+        XCTAssertEqual(UsageLog.text(UsageLog.read(url)),"No requests have been sent yet.")
         try UsageLog.append(UsageEntry(date:Date(timeIntervalSince1970:1_800_000_000),file:"IMG_1.HEIC",model:"Haiku 5.5",seconds:8.4,usage:usage),to:url)
         try UsageLog.append(UsageEntry(date:Date(timeIntervalSince1970:1_800_000_060),file:"IMG_2.HEIC",model:"Haiku 5.5",seconds:11,usage:ReviewUsage(inputTokens:10,outputTokens:5)),to:url)
         let lines=UsageLog.text(UsageLog.read(url),timeZone:TimeZone(identifier:"UTC")!).components(separatedBy:"\n")
@@ -218,8 +257,6 @@ final class ClaudeReviewTests:XCTestCase {
         XCTAssertFalse(ClaudeReview.schema().contains("split"))
         let schema=try XCTUnwrap(JSONSerialization.jsonObject(with:Data(ClaudeReview.schema(split:true).utf8)) as? [String:Any])
         XCTAssertEqual(schema["required"] as? [String],["verdict","comment","corners","split"])
-        let arguments=ClaudeReview.arguments(model:"m",prompt:prompt,split:true)
-        XCTAssertTrue(arguments[arguments.firstIndex(of:"--json-schema")!+1].contains("\"s2\""))
         let same=#""corners":{"top_left":{"x":0.1,"y":0.1},"top_right":{"x":0.9,"y":0.1},"bottom_right":{"x":0.9,"y":0.9},"bottom_left":{"x":0.1,"y":0.9}}"#
         // Claude puts the line on the fold at x 0.5, with ends a little inside the crop's edges.
         let moved=try ClaudeReview.parse(reply("{\"verdict\":\"good\",\"comment\":\"Crop fine; the line was on a frame border.\",\(same),\"split\":{\"s1\":{\"x\":0.5,\"y\":0.12},\"s2\":{\"x\":0.5,\"y\":0.88}}}"),current:current,split:page.split,rotation:0)
@@ -236,7 +273,7 @@ final class ClaudeReviewTests:XCTestCase {
         XCTAssertEqual(page.reviewNote,"Claude: crop looks right; split line moved — Crop fine; the line was on a frame border.")
     }
     let current=Quad([Point(0.1,0.1),Point(0.9,0.1),Point(0.9,0.9),Point(0.1,0.9)])
-    func reply(_ body:String,error:Bool=false)->Data {Data("{\"type\":\"result\",\"is_error\":\(error),\"result\":\"\",\"structured_output\":\(body)}".utf8)}
+    func reply(_ body:String)->String {body}
     func testAdjustedCornerBecomesProposal() throws {
         let body=#"{"verdict":"adjust","comment":"Top-left was inside the page.","corners":{"top_left":{"x":0.05,"y":0.06},"top_right":{"x":0.9,"y":0.1},"bottom_right":{"x":0.9,"y":0.9},"bottom_left":{"x":0.1,"y":0.9}}}"#
         let review=try ClaudeReview.parse(reply(body),current:current)
@@ -252,32 +289,84 @@ final class ClaudeReviewTests:XCTestCase {
         XCTAssertNil(try ClaudeReview.parse(reply("{\"verdict\":\"adjust\",\"comment\":\"\",\"corners\":\(crossed)}"),current:current).quad)
     }
     func testOutOfRangeCoordinatesAreClampedAndTextFallbackWorks() throws {
-        let text=#"{\"verdict\":\"adjust\",\"comment\":\"Wider.\",\"corners\":{\"top_left\":{\"x\":-0.2,\"y\":0},\"top_right\":{\"x\":1.3,\"y\":0},\"bottom_right\":{\"x\":1,\"y\":1},\"bottom_left\":{\"x\":0,\"y\":1}}}"#
-        let data=Data("{\"is_error\":false,\"result\":\"Here you go: \(text)\"}".utf8)
-        XCTAssertEqual(try ClaudeReview.parse(data,current:current).quad,Quad.full)
+        let text=#"Here you go: {"verdict":"adjust","comment":"Wider.","corners":{"top_left":{"x":-0.2,"y":0},"top_right":{"x":1.3,"y":0},"bottom_right":{"x":1,"y":1},"bottom_left":{"x":0,"y":1}}}"#
+        XCTAssertEqual(try ClaudeReview.parse(text,current:current).quad,Quad.full)
+        XCTAssertThrowsError(try ClaudeReview.parse("not json",current:current))
     }
-    func testErrorsAreReported() {
-        XCTAssertThrowsError(try ClaudeReview.parse(Data("{\"is_error\":true,\"result\":\"Invalid API key\"}".utf8),current:current)){XCTAssertEqual($0.localizedDescription,"Invalid API key")}
-        XCTAssertThrowsError(try ClaudeReview.parse(Data("not json".utf8),current:current))
-    }
-    func testCommandLineAndPrompt() throws {
+    func testEachProviderGetsItsOwnRequestAndTheKeyGoesOnlyInAHeader() throws {
         let prompt=ClaudeReview.prompt(quad:current)
-        XCTAssertTrue(prompt.contains("top_left (x 0.1000, y 0.1000)"));XCTAssertTrue(prompt.contains(ClaudeReview.photoName));XCTAssertTrue(prompt.contains(ClaudeReview.overlayName))
-        let arguments=ClaudeReview.arguments(model:"claude-haiku-5-5",prompt:prompt)
-        XCTAssertEqual(Array(arguments.prefix(2)),["-p",prompt])
-        XCTAssertEqual(arguments[arguments.firstIndex(of:"--model")!+1],"claude-haiku-5-5")
-        XCTAssertFalse(arguments.joined().contains("sk-"),"The key travels in the environment, never the arguments")
-        XCTAssertNotNil(try JSONSerialization.jsonObject(with:Data(ClaudeReview.schema().utf8)))
-        XCTAssertEqual(ClaudeReview.models.map{$0.id},["claude-haiku-5-5","claude-sonnet-5-5"])
+        XCTAssertTrue(prompt.contains("top_left (x 0.1000, y 0.1000)"));XCTAssertTrue(prompt.contains("Two images are attached"))
+        XCTAssertEqual(ReviewModel.models(for:.anthropic).map{$0.id},["claude-haiku-5-5","claude-sonnet-5-5","claude-opus-5-5"])
+        XCTAssertEqual(ReviewModel.models(for:.openai).map{$0.id},["gpt-6-luna","gpt-6.1-sol","gpt-6-astra"])
+        XCTAssertEqual(ReviewModel.models(for:.gemini).map{$0.id},["gemini-3.5-flash-lite","gemini-3.8-flash","gemini-3.1-pro-preview"])
+        XCTAssertEqual(ReviewModel.chosen("gone",for:.openai).id,"gpt-6-luna","A choice no longer offered falls back to the provider's first")
+        let photo=Data([1,2,3]),overlay=Data([4,5,6]),secret="sk-secret-key"
+        let hosts:[ReviewProvider:String]=[.anthropic:"api.anthropic.com",.openai:"api.openai.com",.gemini:"generativelanguage.googleapis.com"]
+        let keyHeader:[ReviewProvider:String]=[.anthropic:"x-api-key",.openai:"Authorization",.gemini:"x-goog-api-key"]
+        for model in ReviewModel.all {
+            let request=try ReviewAPI.request(model:model,apiKey:secret,prompt:prompt,photo:photo,overlay:overlay,split:true)
+            let url=try XCTUnwrap(request.url),body=try XCTUnwrap(request.httpBody),text=String(decoding:body,as:UTF8.self)
+            XCTAssertEqual(url.scheme,"https");XCTAssertEqual(url.host,hosts[model.provider],"\(model.id) is sent to its own provider and nowhere else")
+            XCTAssertFalse(url.absoluteString.contains(secret),"The key is never part of the address");XCTAssertFalse(text.contains(secret),"nor of the body")
+            let carrying=(request.allHTTPHeaderFields ?? [:]).filter{$0.value.contains(secret)}.map{$0.key}
+            XCTAssertEqual(carrying,[keyHeader[model.provider]!],"Exactly one header carries the key")
+            XCTAssertEqual(request.value(forHTTPHeaderField:"User-Agent"),ReviewAPI.userAgent);XCTAssertFalse(ReviewAPI.userAgent.contains("@"))
+            XCTAssertTrue(text.contains(photo.base64EncodedString()) && text.contains(overlay.base64EncodedString()),"Both pictures are attached")
+            let json=try XCTUnwrap(JSONSerialization.jsonObject(with:body) as? [String:Any])
+            switch model.provider {
+            case .anthropic:
+                XCTAssertEqual(json["model"] as? String,model.id);XCTAssertNil(json["thinking"],"These models think by default; nothing is forced")
+                let config=try XCTUnwrap(json["output_config"] as? [String:Any])
+                XCTAssertEqual(config["effort"] as? String,"medium");XCTAssertEqual((config["format"] as? [String:Any])?["type"] as? String,"json_schema")
+                XCTAssertEqual(json["fallbacks"] as? String,model.id == "claude-haiku-5-5" ? nil:"default")
+                XCTAssertEqual(request.value(forHTTPHeaderField:"anthropic-beta"),model.id == "claude-haiku-5-5" ? nil:"server-side-fallback-2026-07-01")
+                XCTAssertEqual(request.value(forHTTPHeaderField:"anthropic-version"),"2023-06-01")
+            case .openai:
+                XCTAssertEqual(url.path,"/v1/responses")
+                let format=try XCTUnwrap((json["text"] as? [String:Any])?["format"] as? [String:Any])
+                XCTAssertEqual(format["type"] as? String,"json_schema");XCTAssertEqual(format["strict"] as? Bool,true)
+                XCTAssertEqual((format["schema"] as? [String:Any])?["additionalProperties"] as? Bool,false)
+            case .gemini:
+                XCTAssertEqual(url.path,"/v1beta/models/\(model.id):generateContent")
+                let schema=try XCTUnwrap((json["generationConfig"] as? [String:Any])?["responseSchema"] as? [String:Any])
+                XCTAssertEqual(schema["type"] as? String,"OBJECT");XCTAssertNil(schema["additionalProperties"])
+                XCTAssertEqual(((schema["properties"] as? [String:Any])?["split"] as? [String:Any])?["type"] as? String,"OBJECT")
+            }
+        }
+        // The answer's form is closed at every level, as strict structured output requires.
+        let schema=try XCTUnwrap(JSONSerialization.jsonObject(with:Data(ClaudeReview.schema(split:true).utf8)) as? [String:Any])
+        XCTAssertEqual(schema["additionalProperties"] as? Bool,false)
+        let corners=try XCTUnwrap((schema["properties"] as? [String:Any])?["corners"] as? [String:Any])
+        XCTAssertEqual(corners["additionalProperties"] as? Bool,false);XCTAssertEqual((corners["required"] as? [String])?.count,4)
+    }
+    func testRepliesFromEachProviderAreReadAndTheirRefusalsAndErrorsReported() throws {
+        func data(_ object:[String:Any])->Data {try! JSONSerialization.data(withJSONObject:object)}
+        let body=#"{"verdict":"good"}"#
+        let openai=try ReviewAPI.answer(data(["status":"completed","output":[["type":"reasoning"],["type":"message","content":[["type":"output_text","text":body]]]],"usage":["input_tokens":900,"output_tokens":40]]),status:200,provider:.openai)
+        XCTAssertEqual(openai,ReviewAnswer(text:body,usage:ReviewUsage(inputTokens:900,outputTokens:40)))
+        let gemini=try ReviewAPI.answer(data(["candidates":[["content":["parts":[["text":"thinking…","thought":true],["text":body]]],"finishReason":"STOP"]],"usageMetadata":["promptTokenCount":700,"candidatesTokenCount":30,"thoughtsTokenCount":50]]),status:200,provider:.gemini)
+        XCTAssertEqual(gemini,ReviewAnswer(text:body,usage:ReviewUsage(inputTokens:700,outputTokens:80)),"Thinking is billed as output and left out of the answer")
+        func message(_ reply:Data,_ status:Int,_ provider:ReviewProvider)->String {
+            do {_=try ReviewAPI.answer(reply,status:status,provider:provider);return "no error"} catch {return error.localizedDescription}
+        }
+        XCTAssertEqual(message(data(["type":"message","stop_reason":"refusal","content":[]]),200,.anthropic),"Claude declined to look at this page.")
+        XCTAssertTrue(message(data(["status":"completed","output":[["type":"message","content":[["type":"refusal","refusal":"I can't help with that."]]]]]),200,.openai).contains("I can't help with that."))
+        XCTAssertEqual(message(data(["promptFeedback":["blockReason":"SAFETY"]]),200,.gemini),"Gemini declined to look at this page (SAFETY).")
+        XCTAssertTrue(message(data(["status":"incomplete","incomplete_details":["reason":"max_output_tokens"]]),200,.openai).contains("max_output_tokens"))
+        let rejected=message(data(["type":"error","error":["type":"authentication_error","message":"invalid x-api-key"]]),401,.anthropic)
+        XCTAssertTrue(rejected.hasPrefix("Claude rejected the API key.") && rejected.contains("invalid x-api-key"))
+        XCTAssertTrue(message(data(["error":["message":"API key not valid.","status":"INVALID_ARGUMENT"]]),400,.gemini).contains("API key not valid."))
+        XCTAssertTrue(message(Data("<html>bad gateway</html>".utf8),502,.openai).contains("bad gateway"))
+        XCTAssertTrue(ReviewAPI.isTemporary(status:429) && ReviewAPI.isTemporary(status:529) && !ReviewAPI.isTemporary(status:400) && !ReviewAPI.isTemporary(status:401))
     }
     func testWaitingStatesAndStatusLine() {
         let a=UUID(),b=UUID(),c=UUID()
         XCTAssertEqual(ReviewProgress.state(a,active:a,pending:[a,b]),.active)
         XCTAssertEqual(ReviewProgress.state(b,active:a,pending:[a,b]),.queued)
         XCTAssertNil(ReviewProgress.state(c,active:a,pending:[a,b]))
-        XCTAssertEqual(ReviewProgress.status(model:"Haiku 5.5",number:1,total:1,name:"IMG_1.HEIC",seconds:7),"Waiting for Claude Haiku 5.5 · IMG_1.HEIC · 7 s — Esc stops")
-        XCTAssertEqual(ReviewProgress.status(model:"Sonnet 5.5",number:2,total:5,name:"IMG_2.HEIC",seconds:75),"Waiting for Claude Sonnet 5.5 · page 2 of 5 · IMG_2.HEIC · 1 min 15 s — Esc stops")
-        XCTAssertEqual(ReviewProgress.status(model:"Haiku 5.5",number:0,total:3,name:nil,seconds:0),"Waiting for Claude Haiku 5.5 · 0 s — Esc stops")
+        XCTAssertEqual(ReviewProgress.status(model:"Claude Haiku 5.5",number:1,total:1,name:"IMG_1.HEIC",seconds:7),"Waiting for Claude Haiku 5.5 · IMG_1.HEIC · 7 s — Esc stops")
+        XCTAssertEqual(ReviewProgress.status(model:"GPT-6.1 Sol",number:2,total:5,name:"IMG_2.HEIC",seconds:75),"Waiting for GPT-6.1 Sol · page 2 of 5 · IMG_2.HEIC · 1 min 15 s — Esc stops")
+        XCTAssertEqual(ReviewProgress.status(model:"Gemini 3.8 Flash",number:0,total:3,name:nil,seconds:0),"Waiting for Gemini 3.8 Flash · 0 s — Esc stops")
     }
     func testPreparedImagesAreReducedCopies() throws {
         let photo=try temporaryPhoto(shadedPage(width:3000,height:2000))

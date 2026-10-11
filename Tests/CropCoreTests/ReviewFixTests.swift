@@ -92,21 +92,6 @@ final class OtherWindowMenuTests:XCTestCase {
 }
 
 final class ClaudeLaunchTests:XCTestCase {
-    func testEnvironmentCarriesTheKeyAndASearchPathThatFindsNode() {
-        let env=ClaudeReview.environment(base:["PATH":"/usr/bin:/bin","HOME":"/Users/me","OTHER":"1"],apiKey:"sk-test",executable:URL(fileURLWithPath:"/opt/custom/bin/claude"),home:"/Users/me")
-        XCTAssertEqual(env["ANTHROPIC_API_KEY"],"sk-test");XCTAssertEqual(env["OTHER"],"1")
-        let path=env["PATH"]!.split(separator:":").map(String.init)
-        XCTAssertEqual(path.first,"/opt/custom/bin","The tool's own folder comes first; its interpreter usually sits beside it")
-        for expected in ["/opt/homebrew/bin","/usr/local/bin","/Users/me/.local/bin","/usr/bin","/bin"] {XCTAssertTrue(path.contains(expected),expected)}
-        XCTAssertEqual(Set(path).count,path.count,"No duplicates")
-        XCTAssertNotNil(ClaudeReview.environment(base:[:],apiKey:"k",executable:URL(fileURLWithPath:"/usr/local/bin/claude"),home:"/Users/me")["PATH"])
-    }
-    func testFailureMessagesDistinguishTimeoutFromStop() {
-        XCTAssertEqual(ClaudeReview.failureMessage(timedOut:true,timeout:240,stopped:true,status:15,detail:""),"Claude did not answer within 4 minutes")
-        XCTAssertEqual(ClaudeReview.failureMessage(timedOut:false,timeout:240,stopped:true,status:15,detail:""),"Claude was stopped before it answered")
-        XCTAssertEqual(ClaudeReview.failureMessage(timedOut:false,timeout:240,stopped:false,status:127,detail:"env: node: No such file or directory\n"),"env: node: No such file or directory")
-        XCTAssertEqual(ClaudeReview.failureMessage(timedOut:false,timeout:240,stopped:false,status:2,detail:""),"Claude exited with status 2 and no reply")
-    }
     func testPromptNamesCornersWithTheSchemaKeys() {
         let prompt=ClaudeReview.prompt(quad:.full)
         for key in ClaudeReview.cornerKeys {XCTAssertTrue(prompt.contains(key+" (x"),key)}

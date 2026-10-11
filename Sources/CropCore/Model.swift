@@ -72,11 +72,13 @@ public struct Candidate: Codable {
     public var score: Double
     public var source: String
     public init(quad: Quad, score: Double, source: String) {self.quad=quad;self.score=score;self.source=source}
-    /// A fresh detection replaces the detector's earlier proposals but keeps Claude's.
+    /// A fresh detection replaces the detector's earlier proposals but keeps a reviewer's.
     public static func merging(detected: [Candidate], into existing: [Candidate]) -> [Candidate] {
-        ordered(detected+existing.filter{$0.source == claudeSource})
+        ordered(detected+existing.filter{$0.isReview})
     }
     public static let claudeSource = "Claude"
+    /// True for a crop that Claude or another provider's model proposed, which is named after it.
+    public var isReview: Bool {ReviewProvider.allCases.contains{$0.name == source}}
     /// The highest-scoring proposal first, then the rest from largest to smallest.
     public static func ordered(_ candidates: [Candidate]) -> [Candidate] {
         guard let best=candidates.indices.max(by:{candidates[$0].score<candidates[$1].score}) else {return []}
@@ -159,14 +161,15 @@ public struct Page: Codable, Identifiable {
     public mutating func selectProposal(_ q: Quad) {quad=q;status="Proposal selected";reviewed=false}
     /// Stores Claude's verdict on the crop that was sent and selects its fix, if it made one. Returns false, changing nothing, if the crop has been edited since.
     /// A moved split line is applied, provided the line is still the one that was sent.
-    @discardableResult public mutating func record(_ review: CropReview, sentQuad: Quad, sentSplit: PageSplit? = nil) -> Bool {
+    /// `reviewer` is what the model that answered is called: Claude, OpenAI or Gemini.
+    @discardableResult public mutating func record(_ review: CropReview, sentQuad: Quad, sentSplit: PageSplit? = nil, reviewer: String = Candidate.claudeSource) -> Bool {
         guard quad == sentQuad else {return false}
         let moved=review.split != nil && split != nil && split == sentSplit
         if moved {split=review.split}
-        candidates.removeAll{$0.source == Candidate.claudeSource}
-        // Claude's crop is selected at once and stays in the list; the crop it replaces is one Undo away.
-        if let fix=review.quad {candidates=Candidate.ordered(candidates+[Candidate(quad:fix,score:0,source:Candidate.claudeSource)]);selectProposal(fix);revision+=1}
-        let verdict=(review.quad != nil ? "Claude's fix selected":review.good ? "Claude: crop looks right":"Claude: no usable fix")+(moved ? "; split line moved":"")
+        candidates.removeAll{$0.isReview}
+        // The reviewer's crop is selected at once and stays in the list; the crop it replaces is one Undo away.
+        if let fix=review.quad {candidates=Candidate.ordered(candidates+[Candidate(quad:fix,score:0,source:reviewer)]);selectProposal(fix);revision+=1}
+        let verdict=(review.quad != nil ? "\(reviewer)'s fix selected":review.good ? "\(reviewer): crop looks right":"\(reviewer): no usable fix")+(moved ? "; split line moved":"")
         reviewNote=review.comment.isEmpty ? verdict:verdict+" — "+review.comment
         return true
     }
@@ -179,9 +182,9 @@ public struct Page: Codable, Identifiable {
             return ProposalPolicy.accepts(q,imageAspectRatio:aspect)
         }
         // The limits describe what the detector may propose. Claude's proposal was asked for and is kept as given.
-        candidates.removeAll { $0.source != Candidate.claudeSource && !accepts($0.quad) }
+        candidates.removeAll { !$0.isReview && !accepts($0.quad) }
         candidates=Candidate.ordered(candidates)
-        let fromClaude=candidates.contains{$0.source == Candidate.claudeSource && $0.quad == quad}
+        let fromClaude=candidates.contains{$0.isReview && $0.quad == quad}
         if !reviewed, !fromClaude, ["Check proposal","Proposal selected"].contains(status), !accepts(quad) {
             quad=candidates.first?.quad ?? .full
             status=candidates.isEmpty ? "No suitable proposal — crop manually":"Check proposal"

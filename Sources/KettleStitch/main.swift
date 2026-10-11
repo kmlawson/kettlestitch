@@ -81,7 +81,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
     var exporting=false
     var reviewing=false
     var reviewCancelled=false
-    var reviewProcess: Process?
+    /// The request a second opinion is waiting on, kept so that Stop can cancel it.
+    var reviewTask: URLSessionTask?
     var tracker=ProgressTracker()
     var notedRecent: URL?
     /// Files handed over before the window exists, as when the app is started by dropping them on its icon.
@@ -196,7 +197,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
     }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication)->Bool {true}
     func applicationShouldTerminate(_ sender: NSApplication)->NSApplication.TerminateReply {confirmUnsaved() ? .terminateNow:.terminateCancel}
-    func applicationWillTerminate(_ notification: Notification){queue.cancelAllOperations();reviewProcess?.terminate();writeUntitled()}
+    func applicationWillTerminate(_ notification: Notification){queue.cancelAllOperations();reviewTask?.cancel();writeUntitled()}
 
     // MARK: Page list
     func numberOfRows(in tableView:NSTableView)->Int {project.pages.count}
@@ -418,7 +419,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
     func nextMatching(_ test:(Page)->Bool){guard let i=current else{return};for d in 1...project.pages.count {let j=(i+d)%project.pages.count;if test(project.pages[j]){show(j);return}};NSSound.beep()}
     @objc func nextReview(){nextMatching{!$0.reviewed}}
     @objc func nextFlagged(){nextMatching{$0.flagged==true}}
-    @objc func selectAllPages(){table.selectAll(nil);status.stringValue="\(table.selectedRowIndexes.count) pages selected — settings, flags, export and Send to Claude apply to all of them"}
+    @objc func selectAllPages(){table.selectAll(nil);status.stringValue="\(table.selectedRowIndexes.count) pages selected — settings, flags, export and Send to \(ReviewChoice.provider.name) apply to all of them"}
     @objc func toggleFlag(){guard let i=current else{return};let on=project.pages[i].flagged != true;edit(targetIndexes,geometry:false){$0.flagged=on ? true:nil}}
     @objc func fit(){canvas.fit()}
     @objc func zoomIn(){canvas.zoom=min(8,canvas.zoom*1.25)}
@@ -831,7 +832,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
             }
         }
     }
-    @objc func stop(){invalidateWork();exportCancelled=true;reviewCancelled=true;reviewProcess?.terminate();status.stringValue="Stopped; completed edits are saved"}
+    @objc func stop(){invalidateWork();exportCancelled=true;reviewCancelled=true;reviewTask?.cancel();status.stringValue="Stopped; completed edits are saved"}
     @objc func exportImages(){
         guard !exporting,!project.pages.isEmpty else{return}
         let selected=targetIndexes
@@ -901,10 +902,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
     }
 
     // MARK: Claude
-    var claudeModel: String {
-        let saved=UserDefaults.standard.string(forKey:"claudeModel")
-        return ClaudeReview.models.contains{$0.id==saved} ? saved!:ClaudeReview.models[0].id
-    }
     /// Keeps the photograph on screen with its crop and split as they stand, for working out later why the
     /// detector got them wrong. Everything goes into one new folder under "Bad Examples" in the support folder.
     @objc func saveBadExample(){
@@ -940,10 +937,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
     /// Asks Claude to judge the crop of every targeted page. A fix is selected at once and stays among the proposals; Undo puts the old crop back.
     @objc func sendToClaude(){
         let targets=targetIndexes;guard !reviewing,!targets.isEmpty else{return}
-        guard let key=Keychain.read(),!key.isEmpty else{showSettings();settings?.explain("Add an Anthropic API key to send crops to Claude.");return}
-        guard let executable=ClaudeReview.locateExecutable() else{showError(CropError.message("The claude command-line tool was not found. Install Claude Code, then try again."));return}
-        let pages=targets.map{project.pages[$0]},model=claudeModel,token=generation
-        beginReview(pages,model:ClaudeReview.models.first{$0.id==model}?.title ?? model)
+        // The key goes from the keychain to the request for this provider and nowhere else: it is not logged, saved or shown.
+        let model=ReviewChoice.model,reviewer=model.provider.name
+        guard let key=Keychain.read(model.provider),!key.isEmpty else{showSettings();settings?.explain("Add \(model.provider.company == "Anthropic" ? "an":"a") \(model.provider.company) API key to send crops to \(reviewer).");return}
+        let pages=targets.map{project.pages[$0]},token=generation
+        beginReview(pages,model:ReviewChoice.displayName(model))
         reviewQueue.addOperation{[weak self] in
             var good=0,fixes=0,failure:Error?,spent:ReviewUsage?
             for (number,page) in pages.enumerated() {
@@ -953,7 +951,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
                 }
                 if !proceed{break}
                 let asked=Date()
-                let result=Result{try ClaudeReview.run(page,model:model,apiKey:key,executable:executable){process in DispatchQueue.main.async{self?.reviewProcess=process}}}
+                let result=Result{try ClaudeReview.run(page,model:model,apiKey:key){task in DispatchQueue.main.async{self?.reviewTask=task}}}
                 var stop=false
                 DispatchQueue.main.sync{
                     guard let self,self.generation==token,!self.reviewCancelled else{stop=true;return}
@@ -963,7 +961,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
                     case .success(let review):
                         if review.quad != nil{fixes+=1}else if review.good{good+=1}
                         self.reviewPending.remove(page.id);self.reviewActive=nil
-                        self.record(review,for:page,done:number+1,of:pages.count)
+                        self.record(review,for:page,done:number+1,of:pages.count,reviewer:reviewer)
                         if let usage=review.usage {
                             spent=(spent ?? ReviewUsage())+usage
                             try? UsageLog.append(UsageEntry(date:asked,file:URL(fileURLWithPath:page.path).lastPathComponent,model:self.reviewModel,seconds:Date().timeIntervalSince(asked),usage:usage),to:self.usageURL)
@@ -976,9 +974,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
             }
             DispatchQueue.main.async{guard let self else{return}
                 let stopped=self.reviewCancelled;self.endReview()
-                if let failure,!stopped {self.status.stringValue="Claude review failed";self.showError(failure)}
-                else if stopped {self.status.stringValue="Stopped; Claude's finished reviews are kept"}
-                else if pages.count>1 {self.status.stringValue="Claude reviewed \(good+fixes) of \(pages.count): \(good) good, \(fixes) fixed — Undo on a page puts its old crop back"+(spent.map{" · "+$0.summary} ?? "")}
+                if let failure,!stopped {self.status.stringValue="\(reviewer) review failed";self.showError(failure)}
+                else if stopped {self.status.stringValue="Stopped; \(reviewer)'s finished reviews are kept"}
+                else if pages.count>1 {self.status.stringValue="\(reviewer) reviewed \(good+fixes) of \(pages.count): \(good) good, \(fixes) fixed — Undo on a page puts its old crop back"+(spent.map{" · "+$0.summary} ?? "")}
             }
         }
     }
@@ -1007,16 +1005,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
     }
     func endReview(){
         let waiting=reviewPending
-        reviewTimer?.invalidate();reviewTimer=nil;reviewing=false;reviewProcess=nil;reviewPending=[];reviewActive=nil
+        reviewTimer?.invalidate();reviewTimer=nil;reviewing=false;reviewTask=nil;reviewPending=[];reviewActive=nil
         endProgress(.review)
         reloadReviewRows(waiting)
     }
-    func record(_ review:CropReview,for page:Page,done:Int,of total:Int){
+    func record(_ review:CropReview,for page:Page,done:Int,of total:Int,reviewer:String=Candidate.claudeSource){
         guard let i=project.pages.firstIndex(where:{$0.id==page.id}) else{return}
         // Claude saw the crop as it was when sent; a verdict on a crop edited since would mislead.
         let before=project.pages[i]
-        guard project.pages[i].record(review,sentQuad:page.quad,sentSplit:page.split) else{
-            if total==1 {status.stringValue="The crop changed while Claude was looking, so its answer was not kept"}
+        guard project.pages[i].record(review,sentQuad:page.quad,sentSplit:page.split,reviewer:reviewer) else{
+            if total==1 {status.stringValue="The crop changed while \(reviewer) was looking, so its answer was not kept"}
             return
         }
         save();table.reloadData(forRowIndexes:IndexSet(integer:i),columnIndexes:IndexSet(integer:0))
@@ -1024,7 +1022,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
         let moved=project.pages[i].split != before.split
         if moved || project.pages[i].quad != before.quad {undoStack.append(.pages([before]));redoStack.removeAll()}
         if current==i {canvas.quad=project.pages[i].quad;refreshDetail();if canvas.preview{renderPreview()}}
-        if total==1 {status.stringValue=(review.quad != nil ? "Claude’s fix is selected · Undo puts the old crop back":review.good ? "Claude: crop looks right":"Claude: no usable fix")+(moved ? " · Claude moved the split line (Undo puts it back)":"")}
+        if total==1 {status.stringValue=(review.quad != nil ? "\(reviewer)’s fix is selected · Undo puts the old crop back":review.good ? "\(reviewer): crop looks right":"\(reviewer): no usable fix")+(moved ? " · \(reviewer) moved the split line (Undo puts it back)":"")}
     }
 
     func showError(_ error:Error){let alert=NSAlert(error:error);alert.runModal()}

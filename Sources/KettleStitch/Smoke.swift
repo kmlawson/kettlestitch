@@ -189,14 +189,14 @@ extension AppDelegate {
             print("DESKEW_ZONES_DESPECKLE_DEVIATIONS passed")
             // Waiting indicators: status line, progress bar, sidebar rows and inspector note; nothing is sent.
             let batch=[self.project.pages[1],self.project.pages[2]]
-            self.beginReview(batch,model:"Haiku 5.5");self.reviewWaiting(for:batch[0],number:1)
+            self.beginReview(batch,model:"Claude Haiku 5.5");self.reviewWaiting(for:batch[0],number:1)
             precondition(!self.progress.isHidden && !self.progress.isIndeterminate && self.status.stringValue.hasPrefix("Waiting for Claude Haiku 5.5 · page 1 of 2"))
             let activeCell=self.table.view(atColumn:0,row:1,makeIfNecessary:true) as! PageCell,queuedCell=self.table.view(atColumn:0,row:2,makeIfNecessary:true) as! PageCell
-            precondition(activeCell.subtitle.stringValue=="Waiting for Claude…" && queuedCell.subtitle.stringValue=="Queued for Claude" && self.note.stringValue=="Waiting for Claude…" && !self.note.isHidden)
+            precondition(activeCell.subtitle.stringValue=="Waiting for an answer…" && queuedCell.subtitle.stringValue=="Queued for review" && self.note.stringValue=="Waiting for an answer…" && !self.note.isHidden)
             snapshot(view,"waiting.png")
             self.endReview()
-            precondition(self.progress.isHidden && self.reviewPending.isEmpty && (self.table.view(atColumn:0,row:1,makeIfNecessary:true) as! PageCell).subtitle.stringValue != "Waiting for Claude…")
-            self.beginReview([batch[0]],model:"Haiku 5.5");precondition(self.progress.isIndeterminate);self.endReview();precondition(!self.progress.isIndeterminate)
+            precondition(self.progress.isHidden && self.reviewPending.isEmpty && (self.table.view(atColumn:0,row:1,makeIfNecessary:true) as! PageCell).subtitle.stringValue != "Waiting for an answer…")
+            self.beginReview([batch[0]],model:"Claude Haiku 5.5");precondition(self.progress.isIndeterminate);self.endReview();precondition(!self.progress.isIndeterminate)
             print("CLAUDE_WAITING_INDICATORS passed")
             self.navigate(-1)
             canvas.image=smokeImage

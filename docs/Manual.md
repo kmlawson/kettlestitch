@@ -149,22 +149,29 @@ Cleanup estimates the paper tone from each neighbourhood's brightest area, so la
 
 The other choices are remembered between exports. A PDF is written to a temporary file and moved into place when complete; stopping an export leaves no partial PDF. Image exports go into a new dated subfolder.
 
-## Send to Claude
+## A second opinion: Send to Claude, OpenAI or Gemini
 
-**A**, **Page ▸ Send to Claude** (Option-Command-C) or the toolbar button asks Claude to check the crop of the photograph on screen, or of every selected photograph in turn.
+**A**, **Crop ▸ Send to …** or the toolbar button asks a model to check the crop of the photograph on screen, or of every selected photograph in turn. The command names the provider chosen in Settings.
 
-Set it up once in **KettleStitch ▸ Settings…**: paste an Anthropic API key and choose **Haiku 5.5** or **Sonnet 5.5**. The key is stored in the login keychain. The feature runs the `claude` command-line tool (Claude Code), which must be installed.
+Set it up once in **KettleStitch ▸ Settings…**: choose a provider, paste an API key for it and choose a model. The request goes straight from the app to that provider over HTTPS; nothing else needs to be installed. Keys are stored in the login keychain, one for each provider; the README's section on API keys and security says exactly where they go and how to check it.
 
-For each page KettleStitch writes two reduced JPEGs (longest side 1568 pixels) to a temporary folder: the photograph, and the photograph with the current crop, corner labels and a coordinate grid drawn on it. It runs `claude -p` in that folder with the key in the environment and the crop coordinates in the prompt, and asks for a verdict, the four corner coordinates and a comment of at most ten words naming what it moved. The temporary files are deleted afterwards.
+| Provider | Models, cheapest first |
+| --- | --- |
+| Claude (Anthropic) | Haiku 5.5, Sonnet 5.5, Opus 5.5 |
+| OpenAI | GPT-6 Luna, GPT-6.1 Sol, GPT-6 Astra |
+| Gemini (Google) | Gemini 3.5 Flash-Lite, Gemini 3.8 Flash, Gemini 3.1 Pro (preview) |
 
-- While you wait, the status bar names the page Claude is looking at and counts the seconds, with a progress bar beside it. In the sidebar that page dims under a spinner and reads "Waiting for Claude…"; the rest of a batch read "Queued for Claude".
-- Claude's comment appears in the inspector under the file name. It is dropped if you then change the crop by hand, and an answer about a crop you edited while Claude was looking is not kept.
-- If Claude moved any corner, its version is selected at once and added to the proposals as **Claude**. Undo puts your crop back; the other proposals are still in the menu and under **[** and **]**.
-- Pages with a Claude proposal show "Claude fix" in the sidebar.
-- When Claude has answered, the status bar shows the tokens the request used and its cost, added up for a batch. **Crop ▸ Claude Usage Log…** lists every request with its time, model, file, duration, tokens and cost; the log is kept in `~/Library/Application Support/KettleStitch/claude-usage.json`.
-- Escape stops a batch. An error such as a rejected key stops the batch and is shown once.
+For each page KettleStitch makes two reduced JPEGs (longest side 1568 pixels): the photograph, and the photograph with the current crop, corner labels, a coordinate grid and any split line drawn on it. It sends them with the crop coordinates in the prompt, and asks for a verdict, the four corner coordinates, the split's ends if there is a split, and a comment of at most ten words naming what was moved. The answer must follow a fixed form, which each provider enforces.
 
-This is the only feature that uses the network: the reduced photograph and its crop go to Anthropic and are billed to your API key. A model's corner estimates are approximate; treat them like any other proposal. Running detection again keeps Claude's entry; sending the page to Claude again replaces it.
+- While you wait, the status bar names the model and the page it is looking at and counts the seconds, with a progress bar beside it. In the sidebar that page dims under a spinner; the rest of a batch read "Queued for review".
+- The comment appears in the inspector under the file name. It is dropped if you then change the crop by hand, and an answer about a crop you edited while waiting is not kept.
+- If the model moved any corner, its version is selected at once and added to the proposals under the provider's name. Undo puts your crop back; the other proposals are still in the menu and under **[** and **]**. A corrected split line is applied the same way.
+- Pages with such a proposal show "Claude fix", "OpenAI fix" or "Gemini fix" in the sidebar.
+- When the answer arrives, the status bar shows the tokens the request used and, where the model's list price is known, an estimate of its cost, added up for a batch. **Crop ▸ Second Opinion Usage Log…** lists every request with its time, model, file, duration, tokens and cost; the log is kept in `~/Library/Application Support/KettleStitch/claude-usage.json`.
+- A request that fails because the service is busy is tried up to three times. Escape stops a batch. An error such as a rejected key stops the batch and is shown once.
+- A model may decline a page; the message says so. For Claude Sonnet 5.5 and Opus 5.5 the request asks Anthropic to retry a declined page on another of its models.
+
+This is the only feature that uses the network: the reduced photograph and its crop go to the provider and are billed to your API key. A model's corner estimates are approximate; treat them like any other proposal. Running detection again keeps the model's entry; sending the page again replaces it. The model names are those each provider listed on 2026-10-11 and will need updating as they change (`ReviewModel.all` in `Sources/CropCore/ReviewProviders.swift`).
 
 ## Detection behavior
 
@@ -206,7 +213,7 @@ swift test --disable-sandbox
 
 `--split` proposes a split for a project's first pages without changing the project, prints each position and writes small copies of the two halves to inspect.
 
-`--claude-files` writes exactly what Send to Claude would upload for one page (the two images, the prompt and the reply schema) without contacting anyone.
+`--claude-files` writes what a second opinion would upload for one page (the two images, the prompt and the reply schema) without contacting anyone.
 
 The collection check cycles through the source files if the requested count exceeds their number. It saves a project containing each unique source and contact sheets showing the **complete source photograph plus the proposed boundary**. A generated proposal is not a verified correct crop.
 

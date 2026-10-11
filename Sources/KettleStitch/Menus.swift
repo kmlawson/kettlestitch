@@ -25,6 +25,7 @@ extension AppDelegate: NSMenuItemValidation, NSMenuDelegate {
         s.currentFlagged=page?.flagged==true;s.currentHasSplit=page?.split != nil;s.targetsHaveSplit=targets.contains{project.pages[$0].split != nil}
         s.targetsHaveDeskew=targets.contains{project.pages[$0].deskew != nil};s.targetsHaveZones=targets.contains{project.pages[$0].pictureZones != nil};s.outlierCount=deviationRows.filter{$0.isOutlier}.count
         s.detecting=detecting;s.exporting=exporting;s.reviewing=reviewing;s.previewing=canvas.preview
+        s.reviewer=ReviewChoice.provider.name
         s.windowActive=window.attachedSheet==nil && (NSApp.keyWindow==nil || NSApp.keyWindow===window)
         s.sidebarVisible = !sidebarItem.isCollapsed;s.inspectorVisible = !inspectorItem.isCollapsed
         return s
@@ -105,7 +106,7 @@ extension AppDelegate: NSMenuItemValidation, NSMenuDelegate {
         add(crop,"Add Picture Zone",#selector(addZone),"w",plain);add(crop,"Remove Picture Zones",#selector(removeZones),"w",[.shift])
         crop.addItem(.separator());add(crop,"Smudge Brush",#selector(toggleSmudge),"b",[.shift]);add(crop,"Remove Smudges",#selector(removeSmudges),"b",[.option,.shift])
         crop.addItem(.separator())
-        add(crop,"Send to Claude",#selector(sendToClaude),"a",plain);add(crop,"Claude Usage Log…",#selector(showUsageLog))
+        add(crop,"Send to Claude",#selector(sendToClaude),"a",plain);add(crop,"Second Opinion Usage Log…",#selector(showUsageLog))
         crop.addItem(.separator())
         add(crop,"Stop Background Work",#selector(stop),".")
         // For collecting detector mistakes. Shown only while Option is held as the menu opens; its shortcut always works.
@@ -146,7 +147,7 @@ final class UsageLogController: NSObject {
     let url:URL
     init(url:URL){
         self.url=url;super.init()
-        window.title="Claude Usage Log";window.isReleasedWhenClosed=false;window.isFloatingPanel=false;window.hidesOnDeactivate=false;window.minSize=NSSize(width:480,height:200)
+        window.title="Second Opinion Usage Log";window.isReleasedWhenClosed=false;window.isFloatingPanel=false;window.hidesOnDeactivate=false;window.minSize=NSSize(width:480,height:200)
         text.isEditable=false;text.font = .monospacedSystemFont(ofSize:12,weight:.regular);text.textContainerInset=NSSize(width:12,height:12);text.autoresizingMask=[.width]
         let scroll=NSScrollView();scroll.hasVerticalScroller=true;scroll.documentView=text
         window.contentView=scroll;window.center()
