@@ -118,7 +118,9 @@ extension AppDelegate: NSMenuItemValidation, NSMenuDelegate {
         add(view,"Corrected Preview",#selector(togglePreview),"p",plain)
         view.addItem(.separator());add(view,"Zoom In",#selector(zoomIn),"=",plain);add(view,"Zoom Out",#selector(zoomOut),"-",plain);add(view,"Zoom to Fit",#selector(fit),"f",plain)
         view.addItem(.separator());add(view,"Show Deviations",#selector(showDeviations),"j")
-        view.addItem(.separator());add(view,"Show Sidebar",#selector(toggleSidebarPane),"s",[.command,.control]);add(view,"Show Inspector",#selector(toggleInspector),"i",[.command,.option])
+        view.addItem(.separator());add(view,"Show Sidebar",#selector(toggleSidebarPane),"s",[.command,.control])
+        sidebarLayoutMenuItem=add(view,"Large Sidebar Pictures",#selector(toggleSidebarLayout),"l",[.command,.control]);sidebarLayoutMenuItem?.state=ThumbnailPolicy.large ? .on:.off
+        add(view,"Show Inspector",#selector(toggleInspector),"i",[.command,.option])
         view.addItem(.separator());add(view,"Enter Full Screen",#selector(NSWindow.toggleFullScreen(_:)),"f",[.command,.control],own:false)
 
         let windows=menu("Window")

@@ -176,6 +176,7 @@ Single keys act on the main window and are off while you type in a field. Letter
 | ⌘J | Show deviations: pages whose crop is unlike the rest |
 | ⌘. | Stop background work |
 | ⌃⌘S / ⌥⌘I | Show or hide the sidebar / inspector |
+| ⌃⌘L | Switch the sidebar between compact rows and large pictures |
 | ⌃⌘F | Full screen |
 | ⌘, | Settings |
 | ⌥⌘B | Save the page on screen as a bad crop/split example, for improving the detectors |

@@ -20,15 +20,22 @@ final class PageTable: NSTableView {
 
 /// How sidebar pictures are sized, retried and watched over.
 enum ThumbnailPolicy {
-    /// Longest side of the plain picture, of the copy a preview picture is worked from, and of the finished preview picture.
-    static let plainPixels=120,previewSourcePixels=640,previewPixels=160
+    /// Longest side of the plain picture, of the copy a preview picture is worked from, and of the finished preview
+    /// picture. The large sidebar layout shows pictures about four times the size, so it loads them larger.
+    static var large=false
+    static var plainPixels:Int {large ? 420:120}
+    static let previewSourcePixels=640
+    static var previewPixels:Int {large ? 420:160}
+    /// Height of a sidebar row in each layout.
+    static var rowHeight:CGFloat {large ? 176:58}
     /// How many times a photograph is tried before its row is marked unreadable, and the pause before each new try.
     static let attempts=3
     static func retryDelay(after failures:Int)->TimeInterval {failures>=attempts ? 0:Double(failures)*1.5}
     /// How often the rows on screen are checked, and how long a request may be out with nothing running before it is given up.
     static let checkInterval:TimeInterval=2,patience:TimeInterval=20
-    /// How many pictures are held before the farthest pages' are dropped.
-    static let kept=3000
+    /// How many pictures are held before the farthest pages' are dropped: fewer of the large ones, which take about
+    /// half a megabyte each.
+    static var kept:Int {large ? 300:3000}
     static func reduced(_ image:CGImage,to longest:Int)->CGImage {
         let scale=Double(longest)/Double(max(image.width,image.height));guard scale<1 else{return image}
         let w=max(1,Int((Double(image.width)*scale).rounded())),h=max(1,Int((Double(image.height)*scale).rounded()))
@@ -72,12 +79,33 @@ final class PageCell: NSTableCellView {
         spinner.style = .spinning;spinner.controlSize = .small;spinner.isDisplayedWhenStopped=false
         for v in [thumb,title,subtitle,kind,flag,spinner] as [NSView] {v.translatesAutoresizingMaskIntoConstraints=false;addSubview(v)}
         for label in [title,subtitle] {label.setContentCompressionResistancePriority(.defaultLow,for:.horizontal)}
-        NSLayoutConstraint.activate([
+        // The picture takes whatever room the text leaves, in both directions, instead of insisting on its own size.
+        for axis in [NSLayoutConstraint.Orientation.horizontal,.vertical] {thumb.setContentCompressionResistancePriority(.init(1),for:axis);thumb.setContentHuggingPriority(.init(1),for:axis)}
+        title.setContentCompressionResistancePriority(.required,for:.vertical);title.setContentHuggingPriority(.required,for:.vertical)
+        // Two arrangements share the views: a compact row with the picture beside two lines of text, and a large
+        // picture with the number, name and file type under it.
+        compact=[
             thumb.leadingAnchor.constraint(equalTo:leadingAnchor,constant:2),thumb.centerYAnchor.constraint(equalTo:centerYAnchor),thumb.widthAnchor.constraint(equalToConstant:44),thumb.heightAnchor.constraint(equalToConstant:46),
-            title.leadingAnchor.constraint(equalTo:thumb.trailingAnchor,constant:8),title.bottomAnchor.constraint(equalTo:centerYAnchor,constant:-1),kind.leadingAnchor.constraint(equalTo:title.trailingAnchor,constant:5),kind.centerYAnchor.constraint(equalTo:title.centerYAnchor),kind.trailingAnchor.constraint(lessThanOrEqualTo:flag.leadingAnchor,constant:-4),
+            title.leadingAnchor.constraint(equalTo:thumb.trailingAnchor,constant:8),title.bottomAnchor.constraint(equalTo:centerYAnchor,constant:-1),kind.trailingAnchor.constraint(lessThanOrEqualTo:flag.leadingAnchor,constant:-4),
             subtitle.leadingAnchor.constraint(equalTo:title.leadingAnchor),subtitle.topAnchor.constraint(equalTo:centerYAnchor,constant:1),subtitle.trailingAnchor.constraint(lessThanOrEqualTo:flag.leadingAnchor,constant:-4),
+            flag.trailingAnchor.constraint(equalTo:trailingAnchor,constant:-2),flag.centerYAnchor.constraint(equalTo:centerYAnchor)]
+        spacious=[
+            thumb.topAnchor.constraint(equalTo:topAnchor,constant:6),thumb.leadingAnchor.constraint(equalTo:leadingAnchor,constant:6),thumb.trailingAnchor.constraint(equalTo:trailingAnchor,constant:-6),thumb.bottomAnchor.constraint(equalTo:title.topAnchor,constant:-5),
+            title.leadingAnchor.constraint(equalTo:leadingAnchor,constant:8),title.bottomAnchor.constraint(equalTo:bottomAnchor,constant:-6),kind.trailingAnchor.constraint(lessThanOrEqualTo:trailingAnchor,constant:-8),
+            flag.trailingAnchor.constraint(equalTo:thumb.trailingAnchor,constant:-5),flag.topAnchor.constraint(equalTo:thumb.topAnchor,constant:5)]
+        NSLayoutConstraint.activate([
+            kind.leadingAnchor.constraint(equalTo:title.trailingAnchor,constant:5),kind.centerYAnchor.constraint(equalTo:title.centerYAnchor),
             spinner.centerXAnchor.constraint(equalTo:thumb.centerXAnchor),spinner.centerYAnchor.constraint(equalTo:thumb.centerYAnchor),
-            flag.trailingAnchor.constraint(equalTo:trailingAnchor,constant:-2),flag.centerYAnchor.constraint(equalTo:centerYAnchor),flag.widthAnchor.constraint(equalToConstant:13),flag.heightAnchor.constraint(equalToConstant:13)])
+            flag.widthAnchor.constraint(equalToConstant:13),flag.heightAnchor.constraint(equalToConstant:13)]+compact)
+    }
+    private var compact:[NSLayoutConstraint]=[],spacious:[NSLayoutConstraint]=[]
+    /// True for the large picture with its name beneath; false for the compact row.
+    var large=false {
+        didSet {
+            guard large != oldValue else{return}
+            NSLayoutConstraint.deactivate(large ? compact:spacious);NSLayoutConstraint.activate(large ? spacious:compact)
+            subtitle.isHidden=large
+        }
     }
     required init?(coder:NSCoder){nil}
     /// True while the row shows the mark for a photograph that is missing or cannot be read.
@@ -106,6 +134,7 @@ final class PageCell: NSTableCellView {
 }
 
 extension NSToolbarItem.Identifier {
+    static let sidebarLayout=NSToolbarItem.Identifier("sidebarLayout")
     static let importPhotos=NSToolbarItem.Identifier("import"),detect=NSToolbarItem.Identifier("detect"),detectPending=NSToolbarItem.Identifier("detectPending")
     static let rotateLeft=NSToolbarItem.Identifier("rotateLeft"),rotateRight=NSToolbarItem.Identifier("rotateRight"),preview=NSToolbarItem.Identifier("preview"),zoom=NSToolbarItem.Identifier("zoom")
     static let split=NSToolbarItem.Identifier("split"),flag=NSToolbarItem.Identifier("flag"),accept=NSToolbarItem.Identifier("accept"),claude=NSToolbarItem.Identifier("claude"),export=NSToolbarItem.Identifier("export"),inspector=NSToolbarItem.Identifier("inspector")
@@ -146,7 +175,7 @@ extension AppDelegate: NSToolbarDelegate {
     }
     func buildSidebar()->NSView {
         let scroll=NSScrollView();scroll.hasVerticalScroller=true;scroll.drawsBackground=false;scroll.documentView=table
-        table.addTableColumn(NSTableColumn(identifier:NSUserInterfaceItemIdentifier("page")));table.headerView=nil;table.rowHeight=58;table.style = .sourceList
+        table.addTableColumn(NSTableColumn(identifier:NSUserInterfaceItemIdentifier("page")));table.headerView=nil;table.rowHeight=ThumbnailPolicy.rowHeight;table.style = .sourceList
         table.delegate=self;table.dataSource=self;table.allowsEmptySelection=false;table.allowsMultipleSelection=true
         let menu=NSMenu()
         for (title,action) in [("Add or Remove Flag",#selector(toggleFlag)),("Detect Cropping Frame",#selector(detectCurrent)),("Send to Claude",#selector(sendToClaude)),("Copy Settings",#selector(copySettings)),("Paste Settings",#selector(pasteSettings)),("Remove from Project",#selector(removePages))] {menu.addItem(withTitle:title,action:action,keyEquivalent:"").target=self}
@@ -187,7 +216,7 @@ extension AppDelegate: NSToolbarDelegate {
         return item
     }
     func toolbarDefaultItemIdentifiers(_ toolbar:NSToolbar)->[NSToolbarItem.Identifier] {
-        [.toggleSidebar,.sidebarTrackingSeparator,.importPhotos,.detect,.detectPending,.flexibleSpace,.rotateLeft,.rotateRight,.split,.preview,.zoom,.flexibleSpace,.flag,.claude,.accept,.space,.export,.inspector]
+        [.toggleSidebar,.sidebarLayout,.sidebarTrackingSeparator,.importPhotos,.detect,.detectPending,.flexibleSpace,.rotateLeft,.rotateRight,.split,.preview,.zoom,.flexibleSpace,.flag,.claude,.accept,.space,.export,.inspector]
     }
     func toolbarAllowedItemIdentifiers(_ toolbar:NSToolbar)->[NSToolbarItem.Identifier] {toolbarDefaultItemIdentifiers(toolbar)+[.space]}
     func toolbar(_ toolbar:NSToolbar,itemForItemIdentifier id:NSToolbarItem.Identifier,willBeInsertedIntoToolbar flag:Bool)->NSToolbarItem? {
@@ -202,6 +231,9 @@ extension AppDelegate: NSToolbarDelegate {
         case .claude:return toolbarItem(id,"Second Opinion",symbol("sparkles","bubble.left"),#selector(sendToClaude),"Ask Claude, OpenAI or Gemini, as chosen in Settings, to check the crop of the selected pages (a)")
         case .accept:return toolbarItem(id,"Accept",symbol("checkmark.circle"),#selector(accept),"Mark reviewed and go to the next photograph (Return)")
         case .export:return toolbarItem(id,"Export",symbol("square.and.arrow.up"),#selector(exportImages),"Export a PDF or image files (e)")
+        case .sidebarLayout:
+            let item=toolbarItem(id,"Sidebar Layout",sidebarLayoutSymbol,#selector(toggleSidebarLayout),"Switch the sidebar between compact rows and large pictures")
+            sidebarLayoutItem=item;return item
         case .inspector:return toolbarItem(id,"Inspector",symbol("sidebar.right"),#selector(toggleInspector),"Show or hide the inspector")
         case .preview:
             let group=NSToolbarItemGroup(itemIdentifier:id,images:[symbol("eye") ?? NSImage()],selectionMode:.selectAny,labels:["Preview"],target:self,action:#selector(togglePreview))

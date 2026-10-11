@@ -70,6 +70,10 @@ Single-key commands are suspended in text-entry fields and file dialogs.
 
 Nudges use preview-pixel increments. The current preview is capped at 3200 pixels along its longest side. Rotation applies to the corrected output; the source-corner editor retains its canonical source orientation.
 
+## The sidebar's two layouts
+
+The button beside the sidebar's own in the toolbar, or **View ▸ Large Sidebar Pictures** (⌃⌘L), switches the sidebar between compact rows (a small picture beside the name and status) and large pictures with only the number, name and file type beneath. The choice is remembered.
+
 ## Selecting several pages
 
 Shift-click or Command-click in the sidebar, or choose **Page ▸ Select All Pages**, to select several photographs. The one on screen stays on screen. Flags, image adjustments, page format, Paste Settings, Remove from Project, the export sheet's **Selected Pages** choice and Send to Claude then apply to the whole selection. Cropping always applies to the photograph on screen only.
@@ -128,12 +132,13 @@ The inspector's **Image Adjustments** apply to the corrected output, not the sou
 - **Despeckle** (Off, 1, 2, 3) removes specks from Black & White output: 1 takes only the smallest, 3 larger ones too, scaled to the page's resolution. A small mark beside print, such as a dot or a voicing mark, is kept. It has no effect in the other modes or inside picture zones.
 - The **Smudge** brush blurs print you do not want readable. Choose **Paint** in the inspector (**Shift-B**), set **Brush** (width) and **Strength**, and drag over the photograph; each drag is one stroke, undone with ⌘Z. A little gray grain is laid over the blur when a stroke is finished. Escape puts the brush down, and **Clear** (**Option-Shift-B**) removes the page's smudges. Smudges lie on the photograph, so they stay on the same print when the crop or split changes, and they appear in the preview and in every export.
 - **Exposure** lightens or darkens the photograph as a longer or shorter exposure would, up to two stops either way, before the other adjustments; its slider is neutral in the middle.
+- **Mode** (formerly Cleanup) chooses none, grayscale, black and white or colour cleanup.
 - **Brightness** and **Contrast** apply in every mode; each slider is neutral in the middle and shows its value, from −100 to +100, beside it. **Sharpness** runs from 0 to 100 and strengthens edges. In Black & White, brightness moves the black/white cut-off.
 - The arrow beside the heading resets all three.
 
 Cleanup estimates the paper tone from each neighbourhood's brightest area, so large dark illustrations and photographs lighten around their edges. Use *None* for pages where that matters.
 
-**Page Format** sets the physical size of the corrected page. Enter a width or a height in centimetres; the other follows the crop's proportions. The resolution line shows the resulting DPI. A page with no size entered counts as 300 DPI. **Fit into** centres the page on a standard sheet (A3, A4, A5, B5, US Letter, US Legal) in exported PDFs, turning the sheet to match the page.
+**Page Format** sets the physical size of the corrected page. Enter a width or a height in centimetres; the other follows the crop's proportions. The resolution line shows the resulting DPI. A page with no size entered counts as 300 DPI. **Presets** centres the page on a standard sheet (A3, A4, A5, B5, US Letter, US Legal) in exported PDFs, turning the sheet to match the page.
 
 **Edit ▸ Copy Settings** and **Paste Settings** carry adjustments and page format between pages. **Apply Settings to All Pages** copies them to the whole project.
 

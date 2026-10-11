@@ -90,7 +90,7 @@ extension AppDelegate {
         exposureSlider.toolTip="Lighten or darken the photograph as a longer or shorter exposure would, up to two stops either way"
         for value in [exposureValue,brightnessValue,contrastValue,sharpnessValue] {value.font = .monospacedDigitSystemFont(ofSize:11,weight:.regular);value.textColor = .secondaryLabelColor;value.alignment = .right}
         let blank=NSGridCell.emptyContentView
-        let adjustments=NSGridView(views:[[caption("Cleanup:"),cleanupControl,blank],[blank,cleanupName,blank],[caption("Despeckle:"),despeckleControl,blank],[caption("Exposure:"),exposureSlider,exposureValue],[caption("Brightness:"),brightnessSlider,brightnessValue],[caption("Contrast:"),contrastSlider,contrastValue],[caption("Sharpness:"),sharpnessSlider,sharpnessValue]])
+        let adjustments=NSGridView(views:[[caption("Mode:"),cleanupControl,blank],[blank,cleanupName,blank],[caption("Despeckle:"),despeckleControl,blank],[caption("Exposure:"),exposureSlider,exposureValue],[caption("Brightness:"),brightnessSlider,brightnessValue],[caption("Contrast:"),contrastSlider,contrastValue],[caption("Sharpness:"),sharpnessSlider,sharpnessValue]])
         for row in 0..<3 {adjustments.mergeCells(inHorizontalRange:NSRange(location:1,length:2),verticalRange:NSRange(location:row,length:1));adjustments.cell(atColumnIndex:1,rowIndex:row).xPlacement = .fill}
         adjustments.column(at:2).width=30
         adjustments.rowSpacing=6;adjustments.columnSpacing=8;adjustments.column(at:0).xPlacement = .trailing;adjustments.column(at:0).width=78;adjustments.row(at:1).topPadding = -4
@@ -103,7 +103,7 @@ extension AppDelegate {
         fitPopup.addItems(withTitles:["None"]+PaperSize.allCases.map{$0.title});fitPopup.target=self;fitPopup.action=#selector(formatChanged(_:))
         widthField.toolTip="Physical width of the corrected page. The height follows the crop's proportions.";heightField.toolTip=widthField.toolTip
         fitPopup.toolTip="Centre the page on a standard sheet in exported PDFs"
-        let format=NSGridView(views:[[caption("Width:"),field(widthField)],[caption("Height:"),field(heightField)],[caption("Fit into:"),fitPopup]])
+        let format=NSGridView(views:[[caption("Width:"),field(widthField)],[caption("Height:"),field(heightField)],[caption("Presets:"),fitPopup]])
         format.rowSpacing=6;format.columnSpacing=8;format.column(at:0).xPlacement = .trailing;format.column(at:0).width=78;format.column(at:1).xPlacement = .leading
         resolutionLabel.font = .systemFont(ofSize:11);resolutionLabel.textColor = .secondaryLabelColor;resolutionLabel.alignment = .center
         let all=applyAllButton;all.target=self;all.action=#selector(applySettingsToAll);all.bezelStyle = .rounded;all.controlSize = .small;all.toolTip="Copy this page's image adjustments (cleanup, exposure, brightness, contrast, sharpness) and page format to every page. Crops and splits are left as they are."

@@ -128,6 +128,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
     var previewPending=Set<UUID>()
     var thumbnailRecoveries=0
     var thumbnailTimer: Timer?
+    var sidebarLayoutItem: NSToolbarItem?,sidebarLayoutMenuItem: NSMenuItem?
+    /// The toolbar button shows the layout it switches to.
+    var sidebarLayoutSymbol: NSImage? {ThumbnailPolicy.large ? symbol("list.bullet","sidebar.left"):symbol("square.grid.2x2","photo")}
     var current: Int? {project.pages.indices.contains(project.selected) ? project.selected:nil}
     /// Pages a settings change applies to: the sidebar selection when it includes the photograph on screen.
     var targetIndexes: [Int] {
@@ -153,6 +156,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
             do {project=try Project.read(asked);project.selected=min(max(0,project.selected),max(0,project.pages.count-1));projectURL=asked} catch {showError(error)}
         }
         if let data=UserDefaults.standard.data(forKey:"exportOptions"),let saved=try? JSONDecoder().decode(ExportOptions.self,from:data) {exportOptions=saved}
+        ThumbnailPolicy.large=UserDefaults.standard.bool(forKey:"sidebarLargePictures")
         buildUI();buildMenus();window.makeKeyAndOrderFront(nil);NSApp.activate(ignoringOtherApps:true)
         canvas.onCommit={[weak self] q in self?.edit{$0.setManualCrop(q)}}
         canvas.onSplitCommit={[weak self] s in self?.edit(geometry:false){$0.split=s;$0.splitByHand=true}}
@@ -211,6 +215,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
     func tableView(_ tableView:NSTableView,viewFor tableColumn:NSTableColumn?,row:Int)->NSView? {
         let p=project.pages[row]
         let cell=(tableView.makeView(withIdentifier:PageCell.identifier,owner:nil) as? PageCell) ?? PageCell()
+        cell.large=ThumbnailPolicy.large
         let picture=thumbnail(p)
         cell.show(p,number:row+1,thumbnail:picture,unusual:deviationRows.indices.contains(row) ? deviationRows[row].reason:nil,review:ReviewProgress.state(p.id,active:reviewActive,pending:reviewPending))
         // No picture yet: ask for it, or say plainly that the photograph cannot be read, so a row is never just blank.
@@ -218,6 +223,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
             if thumbnailUnreadable(p.path) {cell.showUnreadable()} else {requestThumbnail(p.path)}
         }
         return cell
+    }
+    @objc func toggleSidebarLayout(){setSidebarLarge(!ThumbnailPolicy.large)}
+    /// Switches the sidebar between compact rows and large pictures with the name beneath. The pictures are of a
+    /// different size in each, so they are loaded again.
+    func setSidebarLarge(_ on:Bool){
+        ThumbnailPolicy.large=on;UserDefaults.standard.set(on,forKey:"sidebarLargePictures")
+        thumbs=[:];previewThumbs=[:];thumbnailFailures=[:]
+        table.rowHeight=ThumbnailPolicy.rowHeight
+        let selected=table.selectedRowIndexes
+        reloadPages()
+        reloading=true;table.selectRowIndexes(selected,byExtendingSelection:false);reloading=false
+        if let i=current {table.scrollRowToVisible(i)}
+        sidebarLayoutItem?.image=sidebarLayoutSymbol;sidebarLayoutMenuItem?.state=on ? .on:.off
+        status.stringValue=on ? "Sidebar shows large pictures":"Sidebar shows compact rows"
     }
     /// True when the photograph is missing, or has failed to load as often as is worth trying.
     func thumbnailUnreadable(_ path:String)->Bool {

@@ -270,6 +270,18 @@ extension AppDelegate {
             key("v",9);precondition(self.project.pages[1].adjustments==borrowed && canvas.preview,"V copies the adjustments and shows the preview")
             self.undo();precondition(self.project.pages[1].adjustments==nil);self.project.pages[0].adjustments=nil;self.setPreview(false)
             print("COPY_ADJUSTMENTS passed")
+            // The sidebar's two layouts: compact rows, and large pictures with only the number, name and type beneath.
+            self.project.selected=1;self.selectCurrent()
+            let compactCell=self.table.view(atColumn:0,row:1,makeIfNecessary:true) as! PageCell
+            precondition(!compactCell.large && !compactCell.subtitle.isHidden && self.table.rowHeight==58)
+            self.toggleSidebarLayout()
+            let largeCell=self.table.view(atColumn:0,row:1,makeIfNecessary:true) as! PageCell;largeCell.layoutSubtreeIfNeeded()
+            precondition(largeCell.large && largeCell.subtitle.isHidden && self.table.rowHeight>150 && largeCell.thumb.frame.width>largeCell.bounds.width*0.8,"The large layout gives the picture the row's width")
+            precondition(largeCell.title.frame.maxY<largeCell.thumb.frame.minY+1 || largeCell.title.frame.minY>largeCell.thumb.frame.maxY-1,"with the name outside the picture")
+            precondition(self.table.selectedRow==1 && self.project.selected==1 && self.sidebarLayoutMenuItem?.state == .on,"The page on screen stays selected")
+            snapshot(view.superview ?? view,"sidebar-large.png")
+            self.toggleSidebarLayout();precondition(!ThumbnailPolicy.large && self.table.rowHeight==58)
+            print("SIDEBAR_LAYOUT passed")
             // A project file is written by Save, not by each edit.
             if self.hasProjectFile {
                 func onDisk()->Project? {try? Project.read(self.projectURL)}
@@ -365,6 +377,18 @@ extension AppDelegate {
         func run(){
             guard !plan.isEmpty else{lines.forEach{print($0)};self.unsaved=false;exit(0)}
             let (label,row)=plan.removeFirst();measure(label,row,run)
+        }
+        if CommandLine.arguments.contains("--large-sidebar"),let dir=testDirectory {
+            // A picture of the large sidebar layout once its pictures have loaded, to look at.
+            DispatchQueue.main.asyncAfter(deadline:.now()+2){
+                self.setSidebarLarge(true)
+                DispatchQueue.main.asyncAfter(deadline:.now()+5){
+                    let whole=self.window.contentView!,rep=whole.bitmapImageRepForCachingDisplay(in:whole.bounds)!;whole.cacheDisplay(in:whole.bounds,to:rep)
+                    try? rep.representation(using:.png,properties:[:])?.write(to:URL(fileURLWithPath:dir).appendingPathComponent("sidebar-large.png"))
+                    self.setSidebarLarge(false);self.unsaved=false;exit(0)
+                }
+            }
+            return
         }
         if CommandLine.arguments.contains("--thumbs") {
             // Sidebar pictures through the things that used to lose them: removing pages, the preview with
