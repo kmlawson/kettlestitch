@@ -9,6 +9,14 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 # Rename into place: a running copy keeps its old file instead of having it overwritten.
 cp .build/release/KettleStitch "$APP/Contents/MacOS/KettleStitch.new"
 mv -f "$APP/Contents/MacOS/KettleStitch.new" "$APP/Contents/MacOS/KettleStitch"
+# The icon in every size macOS asks for, made from the one 1024-pixel picture.
+ICONSET="${TMPDIR:-/tmp}/kettlestitch-icon/AppIcon.iconset"
+rm -rf "$ICONSET"; mkdir -p "$ICONSET"
+for size in 16 32 128 256 512; do
+  sips -z $size $size Resources/AppIcon.png --out "$ICONSET/icon_${size}x${size}.png" >/dev/null
+  sips -z $((size*2)) $((size*2)) Resources/AppIcon.png --out "$ICONSET/icon_${size}x${size}@2x.png" >/dev/null
+done
+iconutil -c icns "$ICONSET" -o "$APP/Contents/Resources/AppIcon.icns"
 cat > "$APP/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -22,6 +30,7 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 <key>CFBundleVersion</key><string>5</string>
 <key>LSMinimumSystemVersion</key><string>13.0</string>
 <key>NSHighResolutionCapable</key><true/>
+<key>CFBundleIconFile</key><string>AppIcon</string>
 <key>NSPrincipalClass</key><string>NSApplication</string>
 <key>CFBundleDocumentTypes</key><array>
 <dict><key>CFBundleTypeName</key><string>KettleStitch Project</string><key>CFBundleTypeRole</key><string>Editor</string><key>LSHandlerRank</key><string>Owner</string><key>LSItemContentTypes</key><array><string>local.kettlestitch.project</string></array></dict>
