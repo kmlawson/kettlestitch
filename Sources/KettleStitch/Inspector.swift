@@ -110,7 +110,7 @@ extension AppDelegate {
         // Outside the sections, because it carries the image adjustments as well as the page format.
         add(all,after:22)
         // The keys used most, kept in view; the full list is one key away.
-        let keys:[(String,String)]=[("← / →","Previous / next image"),("C","Set crop to same as previous image"),("T","Propose split"),("R","Rotate (Shift-R for reverse)"),("; / '","Decrease / increase current crop"),("H J K L","Increase crop edges (Shift to decrease, Option to move crop)"),("/","See more shortcuts")]
+        let keys:[(String,String)]=[("← / →","Previous / next image"),("C","Set crop to same as previous image"),("V","Copy image adjustments from previous image"),("T","Propose split"),("R","Rotate (Shift-R for reverse)"),("; / '","Decrease / increase current crop"),("H J K L","Increase crop edges (Shift to decrease, Option to move crop)"),("/","See more shortcuts")]
         let shortcuts=NSGridView(views:keys.map{entry->[NSView] in
             let key=NSTextField(labelWithString:entry.0);key.font = .monospacedSystemFont(ofSize:11,weight:.medium);key.textColor = .secondaryLabelColor;key.alignment = .right
             let action=NSTextField(wrappingLabelWithString:entry.1);action.font = .systemFont(ofSize:11);action.textColor = .secondaryLabelColor
