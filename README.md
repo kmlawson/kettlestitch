@@ -9,7 +9,7 @@
   A native macOS app for working through hundreds of photographed pages and spreads, quickly and from the keyboard.
 </p>
 
-KettleStitch is a Claude Code (Opus 5.5) vibe coded application which help you find the edge of each photographed page or two-page spread, lets you correct it in a keystroke or a drag, and exports perspective-corrected pages as a PDF or as images. It can propose a page split for a spread, and offers other ways to clean up the images. Your photographs are never changed: a project is a small file that records what to do with them via a reference to the original files.
+KettleStitch is a Claude Code (Opus 5.5) vibe coded application which helps you find the edge of each photographed page or two-page spread, lets you correct it in a keystroke or a drag, and exports perspective-corrected pages as a PDF or as images. It can propose a page split for a spread, and offers other ways to clean up the images. Your photographs are never changed: a project is a small file that records what to do with them via a reference to the original files.
 
 It is named after the kettle stitch, a knot that links one sewn section of a book to the next.
 
