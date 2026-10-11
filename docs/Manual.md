@@ -14,7 +14,7 @@ Keys are written as they are typed: **t** on its own, **Shift T** with Shift hel
 - [Deskew](#deskew)
 - [Image settings](#image-settings)
 - [Picture zones](#picture-zones)
-- [Smudging text](#smudging-text)
+- [Smudging and cloning](#smudging-and-cloning)
 - [Page format](#page-format)
 - [Preview](#preview)
 - [Finding unusual pages](#finding-unusual-pages)
@@ -142,16 +142,25 @@ On a Black & White page, photographs and drawings turn into harsh black shapes. 
 - One drag draws one zone. **Esc** cancels. Right-click a zone to remove it; **Shift W** removes all of them from the selected pages.
 - Zones are drawn in blue and follow the crop and the split.
 - They have no effect in the other modes.
+- **Picture Zones** in Settings chooses how a zone is kept: *Grayscale* (the default) keeps its gray tones and *Color* its colours, both with the page's exposure, brightness and contrast; *None* leaves it exactly as photographed. A zone is never whitened like the paper around it, which would wash a picture out.
 
-## Smudging text
+## Smudging and cloning
 
 The smudge brush blurs print that should not be readable in the output.
 
-- Click the hand button in the inspector's Smudge row, or press **Shift B**. The **Brush** (width) and **Strength** sliders appear while the brush is in use.
-- Drag over the text. Each drag is one stroke, and ⌘Z undoes the last. A little gray grain is laid over the blur.
+- Click the hand button in the inspector's Smudge row, or press **Shift B**. The **Brush** (width), **Strength** and **Grain** sliders appear while the brush is in use.
+- Drag over the text. Each drag is one stroke, and ⌘Z undoes the last.
+- **Grain** sets how much gray speckle is laid over the blur. A smooth blur stands out against the texture of the paper around it; grain makes the patch less conspicuous. Set it to 0 for none.
 - **Esc** puts the brush down. The crossed-out hand button, or **Option Shift B**, removes the smudges from the selected pages.
 
-Smudges lie on the photograph, so they stay on the same text when the crop or split changes, and they appear in the preview and in every export. It is a blur, not a black box: at low strength large print may still be guessable, so use a high strength for anything that must not be read. A page sent for a [second opinion](#a-second-opinion-from-claude-openai-or-gemini) is sent without its smudges.
+The **clone brush** paints a copy of one part of the page over another, for covering a mark with clean paper.
+
+- Click the button in the Clone row, or press **Shift C**. Only the Brush width applies to it.
+- **Option-click** the place to copy from. A ring marks it.
+- Drag where the copy should go. The copy keeps the same distance and direction from the source for every stroke, so you can build up an area in several strokes; Option-click again to copy from somewhere else.
+- **Esc** puts the brush down. The crossed-out button, or **Option Shift C**, removes everything cloned on the selected pages.
+
+Smudges and cloned areas lie on the photograph, so they stay on the same text when the crop or split changes, and they appear in the preview and in every export. It is a blur, not a black box: at low strength large print may still be guessable, so use a high strength for anything that must not be read. A page sent for a [second opinion](#a-second-opinion-from-claude-openai-or-gemini) is sent without its smudges.
 
 ## Page format
 
@@ -238,6 +247,8 @@ A model's corners are estimates; treat them like any other proposal.
 **A Black & White page loses a picture.** Draw a [picture zone](#picture-zones) over it.
 
 **Moving between pages feels slow.** Detection of a newly imported book runs in the background for a while and competes for the processor; **Esc** stops it, and **b** resumes it for the pages still pending.
+
+**Is there a newer version?** Choose **KettleStitch ▸ Check for Updates…**. It asks GitHub for the latest release and offers to open the download page. Nothing is checked unless you ask.
 
 ## What it cannot do
 

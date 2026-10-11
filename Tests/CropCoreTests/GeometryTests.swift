@@ -34,6 +34,43 @@ final class GeometryTests:XCTestCase {
         let cropped=try Imaging.corrected(striped,quad:.full,smudges:[Smudge(points:stroke,radius:0.05,strength:1)])
         XCTAssertLessThan(contrast(cropped,x:140,y:100),90);XCTAssertGreaterThan(contrast(cropped,x:450,y:300),200)
     }
+    /// A plain gray picture, left half dark and right half light.
+    private func halves(_ w:Int=600,_ h:Int=400)->CGImage {
+        let c=CGContext(data:nil,width:w,height:h,bitsPerComponent:8,bytesPerRow:0,space:CGColorSpaceCreateDeviceRGB(),bitmapInfo:CGImageAlphaInfo.premultipliedLast.rawValue)!
+        c.setFillColor(CGColor(gray:0.2,alpha:1));c.fill(CGRect(x:0,y:0,width:w/2,height:h))
+        c.setFillColor(CGColor(gray:0.8,alpha:1));c.fill(CGRect(x:w/2,y:0,width:w/2,height:h))
+        return c.makeImage()!
+    }
+    /// Lightest and darkest red value along 32 pixels of a row, top-left origin.
+    private func span(_ image:CGImage,x:Int,y:Int)->(low:Int,high:Int) {
+        var row=[UInt8](repeating:0,count:32*4)
+        let c=CGContext(data:&row,width:32,height:1,bitsPerComponent:8,bytesPerRow:128,space:CGColorSpaceCreateDeviceRGB(),bitmapInfo:CGImageAlphaInfo.premultipliedLast.rawValue)!
+        c.draw(image,in:CGRect(x:-x,y:-(image.height-1-y),width:image.width,height:image.height))
+        let reds=stride(from:0,to:128,by:4).map{Int(row[$0])};return (reds.min()!,reds.max()!)
+    }
+    func testTheGrainOverASmudgeCanBeSetFromNoneUpwards() throws {
+        let flat=halves(),stroke=[Point(0.1,0.25),Point(0.4,0.25)]
+        func spread(_ grain:Double?)throws->Int {let s=span(try Imaging.retouched(flat,smudges:[Smudge(points:stroke,radius:0.05,strength:1,grain:grain)],clones:[]),x:100,y:100);return s.high-s.low}
+        XCTAssertLessThan(try spread(0),3,"No grain leaves an even blur")
+        XCTAssertGreaterThan(try spread(1),try spread(0.2),"More grain, more variation")
+        XCTAssertEqual(try spread(nil),try spread(Imaging.smudgeGrain),"A stroke made before the setting existed uses the standard amount")
+        // Strokes saved before there was a setting still decode, and the amount is kept within range.
+        let old=#"{"points":[{"x":0.1,"y":0.2}],"radius":0.02,"strength":0.5}"#
+        XCTAssertNil(try JSONDecoder().decode(Smudge.self,from:Data(old.utf8)).grain)
+        XCTAssertEqual(Smudge(points:stroke,radius:0.05,strength:1,grain:7).grain,1)
+    }
+    func testACloneStrokeCopiesFromItsSourceAndNowhereElse() throws {
+        // Painting in the dark half, copying from half the width to the right, where it is light.
+        let picture=halves(),stroke=CloneStroke(points:[Point(0.15,0.25),Point(0.25,0.25)],radius:0.05,offset:Point(0.5,0))
+        let cloned=try Imaging.retouched(picture,smudges:[],clones:[stroke])
+        XCTAssertGreaterThan(span(cloned,x:100,y:100).low,180,"Under the brush the dark is replaced by the light it was told to copy")
+        XCTAssertLessThan(span(cloned,x:100,y:300).high,70,"Away from the brush nothing changes")
+        XCTAssertGreaterThan(span(cloned,x:400,y:100).low,180,"and the source itself is untouched")
+        XCTAssertEqual(try JSONDecoder().decode(CloneStroke.self,from:JSONEncoder().encode(stroke)),stroke)
+        // The corrected page shows it too, and a page saved before cloning existed has none.
+        let page=try Imaging.corrected(picture,quad:.full,clones:[stroke]);XCTAssertGreaterThan(span(page,x:100,y:100).low,180)
+        XCTAssertNil(try JSONDecoder().decode(Page.self,from:JSONEncoder().encode(Page(path:"/photos/a.jpg"))).clones)
+    }
     func testSharpnessIsOffByDefaultAndStrengthensEdges() throws {
         let saved=try JSONEncoder().encode(Adjustments())
         XCTAssertFalse(String(decoding:saved,as:UTF8.self).contains("sharpness"),"Older projects have no such key and still decode")

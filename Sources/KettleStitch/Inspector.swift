@@ -20,8 +20,11 @@ private final class InspectorDocument: NSView {override var isFlipped:Bool{true}
 /// The smudge brush's picture, and the same crossed out for removing smudges.
 enum SmudgeIcon {
     static let brush:NSImage={let image=symbol("hand.draw","hand.point.up.left","scribble") ?? NSImage();image.isTemplate=true;return image}()
-    static let erase:NSImage={
-        let base=brush,size=NSSize(width:max(18,base.size.width+4),height:max(16,base.size.height+2))
+    static let clone:NSImage={let image=symbol("square.on.square.dashed","square.on.square","doc.on.doc") ?? NSImage();image.isTemplate=true;return image}()
+    static let erase=crossed(brush),eraseClone=crossed(clone)
+    /// A picture with a cross through it, for the button that removes what that picture's tool has done.
+    static func crossed(_ base:NSImage)->NSImage {
+        let size=NSSize(width:max(18,base.size.width+4),height:max(16,base.size.height+2))
         let image=NSImage(size:size,flipped:false){rect in
             base.draw(in:NSRect(x:0,y:0,width:base.size.width,height:base.size.height).offsetBy(dx:(rect.width-base.size.width)/2,dy:(rect.height-base.size.height)/2))
             // A cross from corner to corner, heavy enough to read at this size.
@@ -33,7 +36,7 @@ enum SmudgeIcon {
             return true
         }
         image.isTemplate=true;return image
-    }()
+    }
 }
 extension AppDelegate {
     /// A section heading. With `fold` it carries a disclosure triangle, and a click anywhere on the title folds the section too.
@@ -83,18 +86,29 @@ extension AppDelegate {
         smudgeButton.target=self;smudgeButton.action=#selector(toggleSmudge);smudgeButton.toolTip="Pick up or put down the smudge brush, which blurs print so it cannot be read (Shift-B)"
         clearSmudgeButton.image=SmudgeIcon.erase;clearSmudgeButton.bezelStyle = .rounded;clearSmudgeButton.controlSize = .small;clearSmudgeButton.imagePosition = .imageOnly
         clearSmudgeButton.target=self;clearSmudgeButton.action=#selector(removeSmudges);clearSmudgeButton.toolTip="Remove the smudges (Option-Shift-B)"
-        for button in [smudgeButton,clearSmudgeButton] {button.widthAnchor.constraint(equalToConstant:44).isActive=true}
+        // The clone brush has the same pair: copy from one place to another, and remove what was copied.
+        cloneButton.image=SmudgeIcon.clone;cloneButton.setButtonType(.pushOnPushOff);cloneButton.bezelStyle = .rounded;cloneButton.controlSize = .small;cloneButton.imagePosition = .imageOnly
+        cloneButton.target=self;cloneButton.action=#selector(toggleClone);cloneButton.toolTip="Pick up or put down the clone brush: Option-click the place to copy from, then paint (Shift-C)"
+        clearCloneButton.image=SmudgeIcon.eraseClone;clearCloneButton.bezelStyle = .rounded;clearCloneButton.controlSize = .small;clearCloneButton.imagePosition = .imageOnly
+        clearCloneButton.target=self;clearCloneButton.action=#selector(removeClones);clearCloneButton.toolTip="Remove what the clone brush painted (Option-Shift-C)"
+        for button in [smudgeButton,clearSmudgeButton,cloneButton,clearCloneButton] {button.widthAnchor.constraint(equalToConstant:44).isActive=true}
         let smudgeButtons=NSStackView(views:[smudgeButton,clearSmudgeButton,NSView()]);smudgeButtons.spacing=8
+        let cloneButtons=NSStackView(views:[cloneButton,clearCloneButton,NSView()]);cloneButtons.spacing=8
+        if let grain=UserDefaults.standard.object(forKey:"smudgeGrain") as? Double {smudgeGrainSlider.doubleValue=grain}
+        smudgeGrainValue.font = .monospacedDigitSystemFont(ofSize:11,weight:.regular);smudgeGrainValue.textColor = .secondaryLabelColor;smudgeGrainValue.alignment = .right;smudgeGrainValue.widthAnchor.constraint(equalToConstant:26).isActive=true
+        smudgeGrainSlider.isContinuous=true;smudgeGrainSlider.target=self;smudgeGrainSlider.action=#selector(smudgeBrushChanged(_:));smudgeGrainSlider.controlSize = .small
+        smudgeGrainSlider.toolTip="How much grain is laid over the next smudges, so that they stand out less from the paper around them"
+        let brushGrain=NSStackView(views:[smudgeGrainSlider,smudgeGrainValue])
         if let size=UserDefaults.standard.object(forKey:"smudgeSize") as? Double {smudgeSizeSlider.doubleValue=size}
         if let strength=UserDefaults.standard.object(forKey:"smudgeStrength") as? Double {smudgeStrengthSlider.doubleValue=strength}
         for slider in [smudgeSizeSlider,smudgeStrengthSlider] {slider.isContinuous=true;slider.target=self;slider.action=#selector(smudgeBrushChanged(_:));slider.controlSize = .small}
         for value in [smudgeSizeValue,smudgeStrengthValue] {value.font = .monospacedDigitSystemFont(ofSize:11,weight:.regular);value.textColor = .secondaryLabelColor;value.alignment = .right;value.widthAnchor.constraint(equalToConstant:26).isActive=true}
-        smudgeSizeSlider.toolTip="Width of the smudge brush";smudgeStrengthSlider.toolTip="How heavily the next strokes blur the print"
+        smudgeSizeSlider.toolTip="Width of the smudge and clone brushes";smudgeStrengthSlider.toolTip="How heavily the next strokes blur the print"
         let brushSize=NSStackView(views:[smudgeSizeSlider,smudgeSizeValue]),brushStrength=NSStackView(views:[smudgeStrengthSlider,smudgeStrengthValue])
         smudgeBrushChanged(nil)
-        let frame=NSGridView(views:[[caption("Proposal:"),candidates],[caption("Frame:"),crop],[caption("Corner:"),corners],[caption("Size:"),size],[caption("Split:"),splits],[caption("Deskew:"),tilt],[caption("Pictures:"),pictures],[caption("Smudge:"),smudgeButtons],[caption("Brush:"),brushSize],[caption("Strength:"),brushStrength]])
-        // The brush's width and strength show only while it is in hand.
-        smudgeRows=[frame.row(at:frame.numberOfRows-2),frame.row(at:frame.numberOfRows-1)];showSmudgeState()
+        let frame=NSGridView(views:[[caption("Proposal:"),candidates],[caption("Frame:"),crop],[caption("Corner:"),corners],[caption("Size:"),size],[caption("Split:"),splits],[caption("Deskew:"),tilt],[caption("Pictures:"),pictures],[caption("Smudge:"),smudgeButtons],[caption("Clone:"),cloneButtons],[caption("Brush:"),brushSize],[caption("Strength:"),brushStrength],[caption("Grain:"),brushGrain]])
+        // A brush's own settings show only while it is in hand: width for either, strength and grain for the smudge.
+        brushRow=frame.row(at:frame.numberOfRows-3);smudgeRows=[frame.row(at:frame.numberOfRows-2),frame.row(at:frame.numberOfRows-1)];showSmudgeState()
         frame.rowSpacing=7;frame.columnSpacing=8;frame.column(at:0).xPlacement = .trailing;frame.column(at:0).width=78;frame.column(at:1).xPlacement = .fill
         section("Cropping Frame",key:"crop",[detail,note,frame])
         // Image settings
@@ -146,7 +160,7 @@ extension AppDelegate {
         })
         shortcuts.rowSpacing=4;shortcuts.columnSpacing=8;shortcuts.column(at:0).xPlacement = .trailing;shortcuts.column(at:0).width=58;shortcuts.rowAlignment = .firstBaseline
         section("Shortcuts",key:"shortcuts",[shortcuts])
-        inspectorControls=[candidates,crop,corners,size,splits,tilt,pictures,reset,smudgeButton,smudgeSizeSlider,smudgeStrengthSlider,cleanupControl,exposureSlider,brightnessSlider,contrastSlider,sharpnessSlider,widthField,heightField,fitPopup,all]
+        inspectorControls=[candidates,crop,corners,size,splits,tilt,pictures,reset,smudgeButton,cloneButton,smudgeSizeSlider,smudgeStrengthSlider,smudgeGrainSlider,cleanupControl,exposureSlider,brightnessSlider,contrastSlider,sharpnessSlider,widthField,heightField,fitPopup,all]
         NSLayoutConstraint.activate([
             scroll.topAnchor.constraint(equalTo:root.topAnchor),scroll.bottomAnchor.constraint(equalTo:root.bottomAnchor),scroll.leadingAnchor.constraint(equalTo:root.leadingAnchor),scroll.trailingAnchor.constraint(equalTo:root.trailingAnchor),
             document.topAnchor.constraint(equalTo:scroll.contentView.topAnchor),document.leadingAnchor.constraint(equalTo:scroll.contentView.leadingAnchor),document.widthAnchor.constraint(equalTo:scroll.contentView.widthAnchor),

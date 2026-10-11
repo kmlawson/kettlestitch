@@ -83,6 +83,10 @@ final class SettingsController: NSObject {
     let message=NSTextField(wrappingLabelWithString:"")
     let sends=NSTextField(wrappingLabelWithString:"")
     static let autosaveKey="autosaveProject"
+    /// How picture zones on Black & White pages are rendered, in the order offered.
+    static let zoneKey="pictureZoneMode",zoneModes:[(title:String,mode:Cleanup)]=[("Grayscale",.grayscale),("Color",.color),("None",.none)]
+    static var zoneMode:Cleanup {zoneModes.first{$0.mode.rawValue==UserDefaults.standard.string(forKey:zoneKey)}?.mode ?? .grayscale}
+    let zones=NSPopUpButton()
     let autosave=NSButton(checkboxWithTitle:"Save changes automatically every 5 minutes",target:nil,action:nil)
     /// Called when the provider changes, so the main window's command can say who it sends to.
     var onChange:(()->Void)?
@@ -104,9 +108,13 @@ final class SettingsController: NSObject {
         sends.font = .systemFont(ofSize:11);sends.textColor = .secondaryLabelColor;sends.preferredMaxLayoutWidth=330
         let empty=NSGridCell.emptyContentView
         autosave.target=self;autosave.action=#selector(autosaveChanged);autosave.state=UserDefaults.standard.bool(forKey:Self.autosaveKey) ? .on:.off
+        zones.addItems(withTitles:Self.zoneModes.map{$0.title});zones.selectItem(at:Self.zoneModes.firstIndex{$0.mode==Self.zoneMode} ?? 0)
+        zones.target=self;zones.action=#selector(zonesChanged)
         let grid=NSGridView(views:[
             [label("Project:"),autosave],
             [empty,help("Applies once the project has been saved to a file; File ▸ Save writes it at any time. An untitled session is always kept as you work.")],
+            [label("Picture Zones:"),zones],
+            [empty,help("How a picture zone on a Black & White page is kept. Grayscale keeps its gray tones and Color its colours, both with the page's exposure, brightness and contrast. None leaves it exactly as photographed.")],
             [label("Second Opinion From:"),provider],
             [empty,help("Optional. Sends a page's crop to a model of your choice to be checked, using your own API key for that provider. Nothing else needs to be installed.")],
             [keyLabel,key],
@@ -151,6 +159,10 @@ final class SettingsController: NSObject {
         if Keychain.read(chosen) != value {state.stringValue="Saved, but it cannot be read back";state.textColor = .systemRed;explain("Your key is saved. "+Keychain.refusal)}
     }
     @objc func removeKey(){Keychain.remove(chosen);key.stringValue="";refresh()}
+    @objc func zonesChanged(){
+        let mode=Self.zoneModes[max(0,zones.indexOfSelectedItem)].mode
+        UserDefaults.standard.set(mode.rawValue,forKey:Self.zoneKey);Imaging.pictureZoneMode=mode;onChange?()
+    }
     @objc func autosaveChanged(){UserDefaults.standard.set(autosave.state == .on,forKey:Self.autosaveKey)}
     @objc func modelChanged(){UserDefaults.standard.set(ReviewModel.models(for:chosen)[max(0,model.indexOfSelectedItem)].id,forKey:ReviewChoice.modelKey(chosen))}
 }

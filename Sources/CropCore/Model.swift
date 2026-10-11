@@ -145,6 +145,7 @@ public struct Page: Codable, Identifiable {
     /// True once the user has placed the split: dragged it, moved it with the keys or chosen another candidate.
     public var splitByHand: Bool?
     public var smudges: [Smudge]?
+    public var clones: [CloneStroke]?
     /// Claude's latest comment on this crop.
     public var reviewNote: String?
     public init(path: String) {self.path=path;imageAspectRatio=Imaging.aspectRatio(URL(fileURLWithPath:path))}

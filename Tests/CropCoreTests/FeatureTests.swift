@@ -231,6 +231,7 @@ final class PictureZoneTests:XCTestCase {
         let plain=try Exporter.render(p,options:options)
         XCTAssertEqual(plain.image.bitsPerPixel,1,"Without zones the page is a one-bit image")
         p.pictureZones=[PictureZone(from:(0,0),to:(0.5,1))]
+        let before=Imaging.pictureZoneMode;defer{Imaging.pictureZoneMode=before};Imaging.pictureZoneMode = .grayscale
         let mixed=try Exporter.render(p,options:options)
         XCTAssertEqual(mixed.image.bitsPerPixel,8,"A page with a picture needs gray levels")
         let out=pixels(mixed.image),w=mixed.image.width
@@ -240,6 +241,45 @@ final class PictureZoneTests:XCTestCase {
         var gray=p;gray.adjustments?.cleanup = .grayscale
         XCTAssertEqual(try Exporter.render(gray,options:options).image.bitsPerPixel,8,"Zones change nothing in other modes")
     }
+    func testPictureZonesAreRenderedInTheModeChosenInSettings() throws {
+        // A reddish "picture" on the left of pale paper, with one dark bar of print on the right.
+        let w=400,h=300
+        let c=CGContext(data:nil,width:w,height:h,bitsPerComponent:8,bytesPerRow:0,space:CGColorSpaceCreateDeviceRGB(),bitmapInfo:CGImageAlphaInfo.premultipliedLast.rawValue)!
+        c.setFillColor(CGColor(red:0.85,green:0.85,blue:0.85,alpha:1));c.fill(CGRect(x:0,y:0,width:w,height:h))
+        c.setFillColor(CGColor(red:0.7,green:0.3,blue:0.25,alpha:1));c.fill(CGRect(x:0,y:0,width:200,height:h))
+        c.setFillColor(CGColor(gray:0.1,alpha:1));c.fill(CGRect(x:280,y:100,width:20,height:100))
+        let photo=try temporaryPhoto(c.makeImage()!);defer{try? FileManager.default.removeItem(at:photo)}
+        var p=Page(path:photo.path);var a=Adjustments();a.cleanup = .blackAndWhite;p.adjustments=a
+        p.pictureZones=[PictureZone(from:(0,0),to:(0.5,1))]
+        var options=ExportOptions();options.format = .png
+        /// Red, green and blue at a pixel of the rendered page, whatever its depth.
+        func colour(_ image:CGImage,_ x:Int,_ y:Int)->(Int,Int,Int) {
+            var px=[UInt8](repeating:0,count:4)
+            let one=CGContext(data:&px,width:1,height:1,bitsPerComponent:8,bytesPerRow:4,space:CGColorSpaceCreateDeviceRGB(),bitmapInfo:CGImageAlphaInfo.premultipliedLast.rawValue)!
+            one.draw(image,in:CGRect(x:-x,y:-(image.height-1-y),width:image.width,height:image.height))
+            return (Int(px[0]),Int(px[1]),Int(px[2]))
+        }
+        let before=Imaging.pictureZoneMode;defer{Imaging.pictureZoneMode=before}
+        XCTAssertEqual(before,.grayscale,"Gray is the setting until another is chosen")
+        // No mode: the picture is left exactly as photographed, whatever the page's settings, on a black-and-white page.
+        Imaging.pictureZoneMode = .none
+        let asTaken=colour(try Exporter.render(p,options:options).image,100,150)
+        p.adjustments?.brightness=0.3
+        let untouched=try Exporter.render(p,options:options).image
+        let red=colour(untouched,100,150);XCTAssertGreaterThan(red.0-red.2,60,"The picture keeps its colour: \(red)")
+        XCTAssertEqual(red.0,asTaken.0,accuracy:2,"and is the same whatever the page's brightness")
+        let paper=colour(untouched,350,40),bar=colour(untouched,290,150)
+        XCTAssertGreaterThan(paper.0,250);XCTAssertLessThan(bar.0,5,"Outside the zone the page is pure black and white")
+        // Colour: in colour too, but with the page's brightness, here raised.
+        Imaging.pictureZoneMode = .color
+        let coloured=colour(try Exporter.render(p,options:options).image,100,150);XCTAssertGreaterThan(coloured.0-coloured.2,30,"\(coloured)")
+        XCTAssertGreaterThan(coloured.0,red.0+10,"The page's brightness applies: \(coloured) against \(red)")
+        // Grayscale: gray tones, in an image that holds no colour.
+        Imaging.pictureZoneMode = .grayscale
+        let gray=try Exporter.render(p,options:options).image
+        XCTAssertEqual(gray.bitsPerPixel,8);let tone=colour(gray,100,150);XCTAssertLessThan(abs(tone.0-tone.2),3,"\(tone)")
+        XCTAssertLessThan(colour(gray,290,150).0,5)
+    }
     func testZoneStaysOnItsPictureWhenThePageIsSplit() throws {
         var g=[Double](repeating:0.85,count:800*300)
         for y in 50..<250 {for x in 450..<750 {g[y*800+x]=0.5}}
@@ -248,6 +288,7 @@ final class PictureZoneTests:XCTestCase {
         var p=Page(path:photo.path);var a=Adjustments();a.cleanup = .blackAndWhite;p.adjustments=a;p.split = .centre
         p.pictureZones=[PictureZone(from:(0.55,0.1),to:(0.95,0.9))]
         var options=ExportOptions();options.format = .png
+        let before=Imaging.pictureZoneMode;defer{Imaging.pictureZoneMode=before};Imaging.pictureZoneMode = .grayscale
         let parts=try Exporter.renderAll(p,options:options)
         XCTAssertEqual(parts[0].image.bitsPerPixel,1,"The left page has no picture and stays one-bit")
         XCTAssertEqual(parts[1].image.bitsPerPixel,8)

@@ -56,7 +56,7 @@ The user steers by small, frequent interaction changes. Follow the newest reques
 | `Sources/KettleStitch/Canvas.swift` | Drawing, crop and split overlays, magnifier, mouse editing, zoom, smudge painting |
 | `Sources/KettleStitch/Smoke.swift` | UI smoke test, import smoke, paging benchmark, thumbnail test |
 | `Sources/CropCheck/` | Diagnostic command-line tool |
-| `Tests/CropCoreTests/` | 120 unit tests; file names are looser than their contents |
+| `Tests/CropCoreTests/` | 124 unit tests; file names are looser than their contents |
 
 ## Data and geometry invariants
 
@@ -91,6 +91,10 @@ Coordinates are fractions of the **upright, EXIF-oriented photograph**, origin t
 
 **Keychain.** One item per provider, service `local.kettlestitch.app.<provider>`. Test mode leaves the keychain alone unless `KETTLESTITCH_TEST_KEYCHAIN` is set. A running copy whose program file has been replaced by a rebuild is refused its keys; `Keychain.replacedSinceLaunch` detects this.
 
+**Retouching.** Smudges (with per-stroke strength and grain) and clone strokes are in photograph coordinates and applied by `Imaging.retouched` before perspective correction: clones first, then smudges. `Imaging.pictureZoneMode` is a single app-wide value set from Settings; a zone is always rendered as a photograph, in gray, in colour, or untouched.
+
+**Updates.** `checkForUpdates` runs only from the menu and asks GitHub's API for the latest release (`UpdateCheck`); nothing is checked automatically.
+
 **Export.** Progress counts output pages. A PDF is written to a temporary file, its information dictionary blanked in place (Quartz always writes Producer and dates), then moved into place.
 
 ## Interaction contract
@@ -112,7 +116,7 @@ The README has the complete shortcut list and is the reference. Points that are 
 
 **The user asked on 2026-10-10 for red/green test-first work**: write the test, see it fail, then implement. Put decision logic in `CropCore` where it can be tested; the smoke test is a second check.
 
-- `swift test --disable-sandbox`: 120 tests.
+- `swift test --disable-sandbox`: 124 tests.
 - The smoke, benchmark and thumbnail modes are described in [Building and releasing](Building.md). The UI smoke occasionally fails its first menu-state check (`Smoke.swift`, the line after the settings screenshot) when the test window is not frontmost, and passes on rerun; this is a flaw in the test, not yet fixed.
 - Under a restricted execution environment, tests that use Vision or Core Image may need an unrestricted run.
 - No labelled accuracy measurement exists for crops or splits. The split detector was tuned on synthetic spreads and compared on the 23 sample photographs. **Save Bad Crop/Split Example** (⌥⌘B) is how real failures are collected.

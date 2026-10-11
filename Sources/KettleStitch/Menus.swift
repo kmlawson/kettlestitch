@@ -57,6 +57,7 @@ extension AppDelegate: NSMenuItemValidation, NSMenuDelegate {
         let plain:NSEvent.ModifierFlags=[]
         let app=menu("KettleStitch")
         add(app,"About KettleStitch",#selector(NSApplication.orderFrontStandardAboutPanel(_:)),own:false)
+        add(app,"Check for Updates…",#selector(checkForUpdates))
         app.addItem(.separator());add(app,"Settings…",#selector(showSettings),",")
         app.addItem(.separator());add(app,"Hide KettleStitch",#selector(NSApplication.hide(_:)),"h",own:false)
         add(app,"Hide Others",#selector(NSApplication.hideOtherApplications(_:)),"h",[.command,.option],own:false);add(app,"Show All",#selector(NSApplication.unhideAllApplications(_:)),own:false)
@@ -106,6 +107,7 @@ extension AppDelegate: NSMenuItemValidation, NSMenuDelegate {
         crop.addItem(.separator())
         add(crop,"Add Picture Zone",#selector(addZone),"w",plain);add(crop,"Remove Picture Zones",#selector(removeZones),"w",[.shift])
         crop.addItem(.separator());add(crop,"Smudge Brush",#selector(toggleSmudge),"b",[.shift]);add(crop,"Remove Smudges",#selector(removeSmudges),"b",[.option,.shift])
+        add(crop,"Clone Brush",#selector(toggleClone),"c",[.shift]);add(crop,"Remove Cloning",#selector(removeClones),"c",[.option,.shift])
         crop.addItem(.separator())
         add(crop,"Send to Claude",#selector(sendToClaude),"a",plain);add(crop,"Second Opinion Usage Log…",#selector(showUsageLog))
         crop.addItem(.separator())

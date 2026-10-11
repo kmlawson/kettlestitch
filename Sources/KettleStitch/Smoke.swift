@@ -240,6 +240,23 @@ extension AppDelegate {
             precondition(self.clearSmudgeButton.isEnabled,"With a smudge on the page it can be erased")
             self.undo();precondition((self.project.pages[0].smudges?.count ?? 0)==strokes)
             key("\u{1b}",53);precondition(!canvas.smudgeMode && self.smudgeRows.allSatisfy{$0.isHidden} && self.smudgeButton.state == .off)
+            // The grain a stroke gets is what its slider says.
+            self.smudgeGrainSlider.doubleValue=0.8;self.smudgeBrushChanged(nil);key("b",11,.shift);canvas.onSmudgeCommit?([Point(0.3,0.3),Point(0.5,0.3)])
+            precondition(self.project.pages[0].smudges?.last?.grain==0.8 && self.smudgeGrainValue.stringValue=="80");self.undo();key("\u{1b}",53)
+            self.smudgeGrainSlider.doubleValue=Imaging.smudgeGrain;self.smudgeBrushChanged(nil)
+            // The clone brush: its own button, the shared width, a source chosen first, strokes that Undo takes back.
+            key("c",8,.shift);precondition(canvas.cloneMode && !canvas.smudgeMode && self.cloneButton.state == .on && self.smudgeButton.state == .off,"Shift-C picks up the clone brush")
+            precondition(self.brushRow?.isHidden==false && self.smudgeRows.allSatisfy{$0.isHidden},"Only the width belongs to the clone brush")
+            precondition(!self.clearCloneButton.isEnabled,"Nothing cloned yet, so nothing to remove")
+            canvas.onCloneCommit?([Point(0.2,0.2),Point(0.3,0.2)],Point(0.4,0.1))
+            precondition(self.project.pages[0].clones==[CloneStroke(points:[Point(0.2,0.2),Point(0.3,0.2)],radius:self.smudgeSizeSlider.doubleValue,offset:Point(0.4,0.1))] && self.clearCloneButton.isEnabled)
+            snapshot(self.window.contentView!,"clone-on.png")
+            self.removeClones();precondition(self.project.pages[0].clones==nil);self.undo();precondition(self.project.pages[0].clones?.count==1);self.undo();precondition(self.project.pages[0].clones==nil)
+            key("b",11,.shift);precondition(canvas.smudgeMode && !canvas.cloneMode,"Picking up one brush puts the other down");key("\u{1b}",53)
+            precondition(!canvas.smudgeMode && !canvas.cloneMode && self.brushRow?.isHidden==true)
+            // A sidebar picture of a turned page is turned too.
+            let wide=NSImage(size:NSSize(width:120,height:90),flipped:false){rect in NSColor.gray.setFill();rect.fill();return true}
+            let upright=ThumbnailPolicy.turned(wide,by:ViewTurn(1));precondition(upright.size.width<upright.size.height && ThumbnailPolicy.turned(wide,by:ViewTurn(2)).size.width>90)
             print("SMUDGE passed")
             // The hidden tool for collecting detector mistakes keeps the photograph, its data and a marked-up picture.
             self.project.selected=0;self.selectCurrent();self.saveBadExample()

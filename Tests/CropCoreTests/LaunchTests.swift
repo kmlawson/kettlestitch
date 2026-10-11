@@ -42,6 +42,22 @@ final class LaunchPolicyTests:XCTestCase {
         XCTAssertEqual(LaunchPolicy.onQuit(hasProjectFile:false,unsaved:false,untitledChanged:false,pageCount:9,autosave:true),.nothing)
         XCTAssertEqual(LaunchPolicy.onQuit(hasProjectFile:false,unsaved:false,untitledChanged:true,pageCount:0,autosave:true),.nothing)
     }
+    func testANewerReleaseIsRecognisedByItsNumber() throws {
+        XCTAssertTrue(UpdateCheck.isNewer("v0.4.8",than:"0.4.6"));XCTAssertFalse(UpdateCheck.isNewer("v0.4.6",than:"0.4.6"));XCTAssertFalse(UpdateCheck.isNewer("0.4.4",than:"0.4.6"))
+        XCTAssertTrue(UpdateCheck.isNewer("0.4.10",than:"0.4.9"),"Compared as numbers, not as text");XCTAssertTrue(UpdateCheck.isNewer("0.5",than:"0.4.9"));XCTAssertFalse(UpdateCheck.isNewer("0.4",than:"0.4.0"))
+        XCTAssertFalse(UpdateCheck.isNewer("nightly",than:"0.4.6"),"A tag that is not a version is not an update");XCTAssertFalse(UpdateCheck.isNewer("",than:"0.4.6"))
+        let reply=Data(#"{"tag_name":"v0.4.8","name":"KettleStitch 0.4.8","html_url":"https://github.com/kmlawson/kettlestitch/releases/tag/v0.4.8","draft":false}"#.utf8)
+        let release=try XCTUnwrap(UpdateCheck.latest(from:reply))
+        XCTAssertEqual(release.version,"0.4.8");XCTAssertEqual(release.page.absoluteString,"https://github.com/kmlawson/kettlestitch/releases/tag/v0.4.8")
+        // The page to open is only ever the project's own on GitHub, whatever the reply says.
+        let odd=Data(#"{"tag_name":"v9.0","html_url":"https://example.com/download"}"#.utf8)
+        XCTAssertEqual(try XCTUnwrap(UpdateCheck.latest(from:odd)).page.absoluteString,UpdateCheck.releasesPage)
+        XCTAssertNil(UpdateCheck.latest(from:Data("not json".utf8)));XCTAssertNil(UpdateCheck.latest(from:Data(#"{"message":"Not Found"}"#.utf8)))
+        // The request names no one: one address, no credentials, a plain description of the app.
+        let request=UpdateCheck.request()
+        XCTAssertEqual(request.url?.absoluteString,"https://api.github.com/repos/kmlawson/kettlestitch/releases/latest")
+        XCTAssertNil(request.value(forHTTPHeaderField:"Authorization"));XCTAssertEqual(request.value(forHTTPHeaderField:"User-Agent"),ReviewAPI.userAgent);XCTAssertNil(request.httpBody)
+    }
     func testUntitledNamesAreDistinctAndSortByTime() {
         let first=LaunchPolicy.untitledName(Date(timeIntervalSince1970:1_800_000_000)),later=LaunchPolicy.untitledName(Date(timeIntervalSince1970:1_800_000_061))
         XCTAssertTrue(first.hasPrefix("Untitled ") && first.hasSuffix(".kettlestitch"));XCTAssertNotEqual(first,later);XCTAssertLessThan(first,later)

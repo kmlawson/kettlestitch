@@ -19,7 +19,7 @@ It is named after the kettle stitch, a knot that links one sewn section of a boo
 - **Page splitting.** The fold between facing pages is found in the gutter between their print, starting from where you put the split on the previous page. Press **t** again to step through other candidates.
 - **Deskew** to level the lines of text, separately for each half of a split spread. Currently does not work very well.
 - **Cleanup**: grayscale, black and white with speck removal, exposure, brightness, contrast and sharpness, with picture zones that keep their tones on a black-and-white page.
-- **Smudge brush** to blur text that should not be readable in the output.
+- **Smudge brush** to blur text that should not be readable in the output, with adjustable grain so the patch stands out less, and a **clone brush** to paint a copy of one part of the page over another.
 - **Preview** of exactly what will be exported, kept on as you move from page to page.
 - **Export** to PDF or to JPEG, PNG or TIFF. Exports carry no metadata from the photographs (no location, camera or owner), and PDFs carry no producer, creator or dates. OCR via Apple Vision is offered.
 - **Review tools**: accept pages as you go, flag ones to return to, and jump to pages whose crop is unlike the rest of the book.
@@ -147,6 +147,8 @@ Single keys act on the main window and are off while you type in a field. Letter
 | --- | --- |
 | Shift B | Pick up or put down the smudge brush |
 | Option Shift B | Remove the smudges |
+| Shift C | Pick up or put down the clone brush; Option-click the place to copy from, then paint |
+| Option Shift C | Remove what the clone brush painted |
 
 ### Output and view
 
@@ -219,7 +221,8 @@ The second-opinion feature is optional and off until you add a key. You choose a
 **Where a key goes**
 
 - A key is read from the keychain at one moment only: when you choose Send. It is put in a single header of an HTTPS request to that provider's own address, and nowhere else. It is never part of the address or the body of the request.
-- The app contacts no other server, for this or anything else. It has no analytics, no update check and no telemetry.
+- The app contacts no other server on its own. It has no analytics, no telemetry and no automatic update check.
+- **KettleStitch ▸ Check for Updates…** is the one other thing that uses the network, and only when you choose it: it asks GitHub (`api.github.com`) which release is the latest. That request carries no key, no identifier and nothing about your work. See `UpdateCheck` in [`Sources/CropCore/Launch.swift`](Sources/CropCore/Launch.swift) and `checkForUpdates` in `Sources/KettleStitch/main.swift`.
 - The connection keeps nothing on disk (no cache, no cookies) and refuses redirects, so a request cannot be passed on to another address with the key attached.
 
 **What is sent with it**
@@ -243,7 +246,7 @@ All of it is in three short places in the source:
 | The three addresses, the header the key goes in, and the no-redirect connection | `ReviewAPI` in [`Sources/CropCore/ReviewProviders.swift`](Sources/CropCore/ReviewProviders.swift) |
 | The one network call in the app | `ClaudeReview.run` in [`Sources/CropCore/ClaudeReview.swift`](Sources/CropCore/ClaudeReview.swift) |
 
-These commands, run in the repository, list every network call, every address and every use of the keychain in the app:
+These commands, run in the repository, list every network call, every address and every use of the keychain in the app. The addresses are the three providers' and GitHub's two, for the update check and its download page:
 
 ```sh
 grep -rn 'URLSession\|URLRequest' Sources          # every network call

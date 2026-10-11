@@ -160,8 +160,24 @@ public struct Smudge: Codable, Equatable {
     public var radius: Double
     /// How heavily the print is blurred, 0...1.
     public var strength: Double
-    public init(points: [Point], radius: Double, strength: Double) {
+    /// How much gray grain is laid over the blur, 0 (none) to 1, to make the smudge stand out less from the paper
+    /// around it. Optional so that strokes saved before it existed still decode; nil is the standard amount.
+    public var grain: Double?
+    public init(points: [Point], radius: Double, strength: Double, grain: Double? = nil) {
         self.points=points;self.radius=min(0.25,max(0.002,radius.isFinite ? radius:0.02));self.strength=min(1,max(0,strength.isFinite ? strength:0.5))
+        self.grain=grain.map{min(1,max(0,$0.isFinite ? $0:Imaging.smudgeGrain))}
+    }
+}
+/// One stroke of the clone brush: what it passes over is replaced by a copy of the photograph a fixed distance away.
+public struct CloneStroke: Codable, Equatable {
+    /// The brush's path, in fractions of the photograph from its top-left corner.
+    public var points: [Point]
+    /// Half the stroke's width, as a fraction of the photograph's longer side.
+    public var radius: Double
+    /// From each painted point to the point it copies, in the same fractions.
+    public var offset: Point
+    public init(points: [Point], radius: Double, offset: Point) {
+        self.points=points;self.radius=min(0.25,max(0.002,radius.isFinite ? radius:0.02));self.offset=offset
     }
 }
 public struct DeviationRow: Equatable {

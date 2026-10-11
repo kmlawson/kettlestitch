@@ -37,6 +37,19 @@ final class CropCanvas: NSView {
     var smudgeRadius=0.02
     var onSmudgeCommit: (([Point])->Void)?
     private var smudgeDraft: [Point]=[]
+    /// While on, Option-click picks the place to copy from and a drag paints a copy of it. The brush's width is
+    /// `smudgeRadius`, shared with the smudge brush.
+    var cloneMode=false {didSet{cloneDraft=[];needsDisplay=true;window?.invalidateCursorRects(for:self)}}
+    /// The place to copy from, on the photograph, and how far it lies from where painting began. The distance is
+    /// fixed by the first stroke after a source is chosen and kept for the strokes that follow.
+    private(set) var cloneSource: Point?
+    private(set) var cloneOffset: Point?
+    var onCloneCommit: (([Point],Point)->Void)?
+    /// Called with true when a source has just been chosen, false when a drag began with none.
+    var onCloneSource: ((Bool)->Void)?
+    private var cloneDraft: [Point]=[]
+    static let cloneColor=NSColor.systemTeal
+    func forgetCloneSource(){cloneSource=nil;cloneOffset=nil;needsDisplay=true}
     private var zoneStart: (Double,Double)?
     private var zoneDraft: PictureZone?
     static let splitColor=NSColor.systemPink
@@ -123,6 +136,23 @@ final class CropCanvas: NSView {
             stroke.move(to:position(first));stroke.line(to:position(first));for p in smudgeDraft.dropFirst() {stroke.line(to:position(p))}
             NSColor.systemPink.withAlphaComponent(0.45).setStroke();stroke.stroke()
         }
+        if cloneMode {
+            let r=imageRect,width=max(2,2*smudgeRadius*max(r.width,r.height))
+            if let first=cloneDraft.first {
+                let stroke=NSBezierPath();stroke.lineCapStyle = .round;stroke.lineJoinStyle = .round;stroke.lineWidth=width
+                stroke.move(to:position(first));stroke.line(to:position(first));for p in cloneDraft.dropFirst() {stroke.line(to:position(p))}
+                CropCanvas.cloneColor.withAlphaComponent(0.4).setStroke();stroke.stroke()
+            }
+            // A ring where the copy is taken from: the chosen source, or while painting the place under the brush's twin.
+            var from=cloneSource
+            if let last=cloneDraft.last,let offset=cloneOffset {from=Point(last.x+offset.x,last.y+offset.y)}
+            if let from {
+                let at=position(from),ring=NSBezierPath(ovalIn:CGRect(x:at.x-width/2,y:at.y-width/2,width:width,height:width))
+                NSColor.black.withAlphaComponent(0.5).setStroke();ring.lineWidth=3;ring.stroke()
+                CropCanvas.cloneColor.setStroke();ring.lineWidth=1.5;ring.stroke()
+                let cross=NSBezierPath();cross.move(to:CGPoint(x:at.x-5,y:at.y));cross.line(to:CGPoint(x:at.x+5,y:at.y));cross.move(to:CGPoint(x:at.x,y:at.y-5));cross.line(to:CGPoint(x:at.x,y:at.y+5));cross.stroke()
+            }
+        }
         if let edge {
             NSColor.white.setStroke();let selected=NSBezierPath()
             selected.move(to:position(quad.points[edge]));selected.line(to:position(quad.points[(edge+1)%4]));selected.lineWidth=3;selected.stroke()
@@ -157,7 +187,7 @@ final class CropCanvas: NSView {
     override func rightMouseDown(with event:NSEvent){
         if let index=zone(at:convert(event.locationInWindow,from:nil)) {onZoneRemove?(index)} else {super.rightMouseDown(with:event)}
     }
-    override func resetCursorRects(){if zoneMode || smudgeMode {addCursorRect(bounds,cursor:.crosshair)}}
+    override func resetCursorRects(){if zoneMode || smudgeMode || cloneMode {addCursorRect(bounds,cursor:.crosshair)}}
     /// The split's two ends in view coordinates while the photograph is shown.
     var splitEnds: (CGPoint,CGPoint)? {
         guard image != nil,let split,let line=SplitGeometry.line(split,quad:quad,rotation:rotation) else{return nil}
@@ -186,6 +216,14 @@ final class CropCanvas: NSView {
         guard !preview else {return}
         if zoneMode {zoneStart=outputPosition(start);zoneDraft=nil;return}
         if smudgeMode {if image != nil,imageRect.contains(start) {smudgeDraft=[normalized(start)];needsDisplay=true};return}
+        if cloneMode {
+            guard image != nil,imageRect.contains(start) else {return}
+            if event.modifierFlags.contains(.option) {cloneSource=normalized(start);cloneOffset=nil;needsDisplay=true;onCloneSource?(true);return}
+            guard let source=cloneSource else {onCloneSource?(false);return}
+            let first=normalized(start)
+            if cloneOffset == nil {cloneOffset=Point(source.x-first.x,source.y-first.y)}
+            cloneDraft=[first];needsDisplay=true;return
+        }
         corner=(0..<4).min{hypot(position(quad.points[$0]).x-start.x,position(quad.points[$0]).y-start.y)<hypot(position(quad.points[$1]).x-start.x,position(quad.points[$1]).y-start.y)}
         if let c=corner, hypot(position(quad.points[c]).x-start.x,position(quad.points[c]).y-start.y)>24 {corner=nil}
         moving=event.modifierFlags.contains(.option)
@@ -209,6 +247,10 @@ final class CropCanvas: NSView {
         if smudgeMode,!preview {
             // Points closer together than a few pixels add nothing to the stroke.
             if let last=smudgeDraft.last.map(position),hypot(p.x-last.x,p.y-last.y)>=3 {smudgeDraft.append(normalized(p));needsDisplay=true}
+            return
+        }
+        if cloneMode,!preview {
+            if let last=cloneDraft.last.map(position),hypot(p.x-last.x,p.y-last.y)>=3 {cloneDraft.append(normalized(p));needsDisplay=true}
             return
         }
         if let corner, !preview {
@@ -243,6 +285,11 @@ final class CropCanvas: NSView {
         if smudgeMode {
             let stroke=smudgeDraft;smudgeDraft=[];needsDisplay=true
             if !stroke.isEmpty,!preview {onSmudgeCommit?(stroke)}
+            return
+        }
+        if cloneMode {
+            let stroke=cloneDraft;cloneDraft=[];needsDisplay=true
+            if !stroke.isEmpty,!preview,let offset=cloneOffset {onCloneCommit?(stroke,offset)}
             return
         }
         if splitGrip != nil {splitGrip=nil;if let split,split != splitBefore {onSplitCommit?(split)}}

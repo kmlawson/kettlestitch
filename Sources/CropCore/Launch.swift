@@ -87,3 +87,42 @@ public enum LegacyNames {
     public static func shouldCarryOver(oldExists: Bool, newExists: Bool) -> Bool {oldExists && !newExists}
     public static func firstExisting(_ names: [String], where exists: (String) -> Bool) -> String? {names.first(where:exists)}
 }
+/// Asks GitHub which release of the app is the latest. This happens only when the user chooses Check for Updates;
+/// the request carries no key, no identifier and nothing about the user's work.
+public enum UpdateCheck {
+    public static let latestRelease = "https://api.github.com/repos/kmlawson/kettlestitch/releases/latest"
+    public static let releasesPage = "https://github.com/kmlawson/kettlestitch/releases/latest"
+    public struct Release: Equatable {
+        public var version: String
+        public var page: URL
+    }
+    public static func request() -> URLRequest {
+        var request=URLRequest(url:URL(string:latestRelease)!,timeoutInterval:20)
+        request.setValue("application/vnd.github+json",forHTTPHeaderField:"Accept")
+        request.setValue(ReviewAPI.userAgent,forHTTPHeaderField:"User-Agent")
+        return request
+    }
+    /// The numbers of a version such as "v0.4.6", or nil if it is not one.
+    static func numbers(_ version: String) -> [Int]? {
+        let text=version.hasPrefix("v") ? String(version.dropFirst()):version
+        let parts=text.split(separator:".",omittingEmptySubsequences:false).map{Int($0)}
+        guard !parts.isEmpty,parts.allSatisfy({$0 != nil && $0! >= 0}) else {return nil}
+        return parts.map{$0!}
+    }
+    public static func isNewer(_ candidate: String, than current: String) -> Bool {
+        guard let new=numbers(candidate),let old=numbers(current) else {return false}
+        for i in 0..<max(new.count,old.count) {
+            let a=i<new.count ? new[i]:0,b=i<old.count ? old[i]:0
+            if a != b {return a>b}
+        }
+        return false
+    }
+    /// The latest release named in GitHub's reply. The page to open is the release's own when it is on the
+    /// project's part of github.com, and otherwise the project's releases page.
+    public static func latest(from data: Data) -> Release? {
+        guard let reply=try? JSONSerialization.jsonObject(with:data) as? [String:Any],let tag=reply["tag_name"] as? String,numbers(tag) != nil else {return nil}
+        let stated=(reply["html_url"] as? String).flatMap(URL.init(string:))
+        let own=stated.flatMap{$0.scheme == "https" && $0.host == "github.com" && $0.path.hasPrefix("/kmlawson/kettlestitch/") ? $0:nil}
+        return Release(version:tag.hasPrefix("v") ? String(tag.dropFirst()):tag,page:own ?? URL(string:releasesPage)!)
+    }
+}

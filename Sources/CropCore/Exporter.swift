@@ -86,7 +86,7 @@ public enum Exporter {
                 partDPI=OutputGeometry.layout(pixelWidth:Double(size.width),pixelHeight:Double(size.height),format:page.format).dpi
             }
             let scale=options.maxDPI.map{min(1,$0/partDPI)} ?? 1
-            var image=try Imaging.corrected(source,quad:quad,rotation:page.rotation,adjustments:settings,scale:scale,deskew:page.deskewAngle(part:part,of:crops.count),zones:zones,smudges:page.smudges ?? [])
+            var image=try Imaging.corrected(source,quad:quad,rotation:page.rotation,adjustments:settings,scale:scale,deskew:page.deskewAngle(part:part,of:crops.count),zones:zones,smudges:page.smudges ?? [],clones:page.clones ?? [])
             // A page with a picture on it needs its gray levels; pure text packs into one bit.
             if settings.cleanup == .blackAndWhite,options.format != .jpeg,!Imaging.hasPictures(zones,quad:quad,rotation:page.rotation) {image=try Imaging.bilevel(image)}
             let width=Double(image.width)/scale,height=Double(image.height)/scale
@@ -114,7 +114,7 @@ public enum Exporter {
         let zones=(page.pictureZones ?? []).compactMap{$0.outline(quad:page.quad,rotation:page.rotation)}
         let settings=page.adjustments ?? Adjustments()
         let parts=try crops.enumerated().map{part,quad in
-            try Imaging.corrected(source,quad:quad,rotation:page.rotation,adjustments:settings,deskew:page.deskewAngle(part:part,of:crops.count),zones:zones,smudges:page.smudges ?? [])
+            try Imaging.corrected(source,quad:quad,rotation:page.rotation,adjustments:settings,deskew:page.deskewAngle(part:part,of:crops.count),zones:zones,smudges:page.smudges ?? [],clones:page.clones ?? [])
         }
         guard parts.count>1 else {return parts[0]}
         let gap=previewGap(between:parts.map{$0.width})

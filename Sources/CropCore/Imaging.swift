@@ -101,21 +101,31 @@ public enum Imaging {
         return CIImage(cgImage:mask).transformed(by:CGAffineTransform(scaleX:extent.width/CGFloat(mw),y:extent.height/CGFloat(mh)))
             .clampedToExtent().applyingFilter("CIGaussianBlur",parameters:[kCIInputRadiusKey:max(1,radius*Double(longer)*0.25)]).cropped(to:extent)
     }
-    /// How strong the gray grain laid over a smudge is, 0 (none) to 1.
+    /// How strong the gray grain laid over a smudge is when the stroke does not say, 0 (none) to 1.
     public static let smudgeGrain = 0.35
+    /// How a picture zone on a Black & White page is rendered. A zone is always kept as a photograph, never
+    /// whitened like the paper, since that washes a picture out. `.grayscale` keeps its gray tones and `.color` its
+    /// colours, both with the page's exposure, brightness, contrast and sharpness; `.none` leaves it exactly as
+    /// photographed. `.blackAndWhite` is not a choice. Set once from the app's settings; it is a single value for
+    /// the whole app, read by every render.
+    public static var pictureZoneMode = Cleanup.grayscale
     /// The photograph with its smudges blurred in. The blur follows the photograph's size, so the preview and the
     /// full-resolution export hide the same print equally.
     public static func smudged(_ image: CIImage, _ smudges: [Smudge]) -> CIImage {
         var result=image
         let extent=image.extent,longer=Double(max(extent.width,extent.height))
-        for strength in Set(smudges.map{$0.strength}).sorted() {
-            guard let mask=smudgeMask(smudges.filter{$0.strength == strength},extent:extent) else {continue}
+        // Strokes of one strength and one amount of grain are blurred together.
+        struct Kind: Hashable {let strength: Double, grain: Double}
+        func kind(_ smudge: Smudge) -> Kind {Kind(strength:smudge.strength,grain:smudge.grain ?? smudgeGrain)}
+        for each in Set(smudges.map(kind)).sorted(by:{($0.strength,$0.grain)<($1.strength,$1.grain)}) {
+            let strength=each.strength
+            guard let mask=smudgeMask(smudges.filter{kind($0) == each},extent:extent) else {continue}
             var blurred=result.clampedToExtent().applyingFilter("CIGaussianBlur",parameters:[kCIInputRadiusKey:longer*(0.002+0.02*strength)]).cropped(to:extent)
             // A little gray grain over the blur, so the smudge reads as paper texture rather than a smooth patch
             // and what lay under it is harder still to recover. The grain's size follows the photograph's.
-            if let noise=CIFilter(name:"CIRandomGenerator")?.outputImage {
+            if each.grain>0,let noise=CIFilter(name:"CIRandomGenerator")?.outputImage {
                 // Noise drawn in towards middle gray leaves the smudge's own tone unchanged on average.
-                let amount=smudgeGrain,grain=max(1,longer/1600)
+                let amount=each.grain,grain=max(1,longer/1600)
                 let keep=CIVector(x:amount,y:0,z:0,w:0),offset=0.5-amount/2
                 let gray=noise.applyingFilter("CIColorMatrix",parameters:["inputRVector":keep,"inputGVector":keep,"inputBVector":keep,"inputAVector":CIVector(x:0,y:0,z:0,w:0),"inputBiasVector":CIVector(x:offset,y:offset,z:offset,w:1)])
                     .transformed(by:CGAffineTransform(scaleX:grain,y:grain)).cropped(to:extent)
@@ -125,15 +135,28 @@ public enum Imaging {
         }
         return result
     }
-    public static func smudged(_ image: CGImage, _ smudges: [Smudge]) throws -> CGImage {
-        guard !smudges.isEmpty else {return image}
+    /// The photograph with its clone strokes copied in and then its smudges blurred in.
+    public static func retouched(_ image: CIImage, smudges: [Smudge], clones: [CloneStroke]) -> CIImage {
+        var result=image
+        let extent=image.extent
+        for stroke in clones {
+            guard let mask=smudgeMask([Smudge(points:stroke.points,radius:stroke.radius,strength:0)],extent:extent) else {continue}
+            // The picture slid so that what lies `offset` away sits under the brush. Core Image counts upward, photographs downward.
+            let source=result.clampedToExtent().transformed(by:CGAffineTransform(translationX:-stroke.offset.x*extent.width,y:stroke.offset.y*extent.height)).cropped(to:extent)
+            result=source.applyingFilter("CIBlendWithMask",parameters:[kCIInputBackgroundImageKey:result,kCIInputMaskImageKey:mask])
+        }
+        return smudged(result,smudges)
+    }
+    public static func retouched(_ image: CGImage, smudges: [Smudge], clones: [CloneStroke]) throws -> CGImage {
+        guard !smudges.isEmpty || !clones.isEmpty else {return image}
         let input=CIImage(cgImage:image)
-        guard let result=context.createCGImage(smudged(input,smudges),from:input.extent) else {throw CropError.message("Could not render smudges")}
+        guard let result=context.createCGImage(retouched(input,smudges:smudges,clones:clones),from:input.extent) else {throw CropError.message("Could not render smudges")}
         return result
     }
-    public static func corrected(_ image: CGImage, quad: Quad, rotation: Int = 0, adjustments: Adjustments = Adjustments(), scale: Double = 1, deskew: Double = 0, zones: [[Point]] = [], smudges: [Smudge] = []) throws -> CGImage {
+    public static func smudged(_ image: CGImage, _ smudges: [Smudge]) throws -> CGImage {try retouched(image,smudges:smudges,clones:[])}
+    public static func corrected(_ image: CGImage, quad: Quad, rotation: Int = 0, adjustments: Adjustments = Adjustments(), scale: Double = 1, deskew: Double = 0, zones: [[Point]] = [], smudges: [Smudge] = [], clones: [CloneStroke] = []) throws -> CGImage {
         guard quad.valid else {throw CropError.message("Invalid crop corners")}
-        let input=smudged(CIImage(cgImage:image),smudges), w=Double(image.width), h=Double(image.height)
+        let input=retouched(CIImage(cgImage:image),smudges:smudges,clones:clones), w=Double(image.width), h=Double(image.height)
         func vector(_ p: Point) -> CIVector {CIVector(x:p.x*w, y:(1-p.y)*h)}
         let p=quad.points
         let output=input.applyingFilter("CIPerspectiveCorrection", parameters:["inputTopLeft":vector(p[0]),"inputTopRight":vector(p[1]),"inputBottomRight":vector(p[2]),"inputBottomLeft":vector(p[3])])
@@ -154,9 +177,27 @@ public enum Imaging {
             let pictures=zonePolygons(zones,quad:quad,rotation:rotation,deskew:deskew,width:pw,height:ph)
             if !pictures.isEmpty {
                 // Inside a zone the page is shown as a photograph: no paper whitening, no threshold.
+                let mode=pictureZoneMode == .blackAndWhite ? Cleanup.grayscale:pictureZoneMode
                 var plain=adjustments;plain.cleanup = .none;plain.despeckle=nil
-                let tones=process(rotated,plain).applyingFilter("CIColorControls",parameters:[kCIInputSaturationKey:0.0])
-                let photo=try grayBytes(tones,area:area).pixels
+                let tones=mode == .none ? rotated:process(rotated,plain)
+                if mode != .grayscale {
+                    // A picture in colour needs a colour image: the black-and-white page with the zones laid over it.
+                    guard let provider=CGDataProvider(data:Data(pixels) as CFData),
+                          let page=CGImage(width:pw,height:ph,bitsPerComponent:8,bitsPerPixel:8,bytesPerRow:pw,space:CGColorSpace(name:CGColorSpace.genericGrayGamma2_2) ?? CGColorSpaceCreateDeviceGray(),bitmapInfo:CGBitmapInfo(rawValue:CGImageAlphaInfo.none.rawValue),provider:provider,decode:nil,shouldInterpolate:false,intent:.defaultIntent),
+                          let stencil=CGContext(data:nil,width:pw,height:ph,bitsPerComponent:8,bytesPerRow:0,space:CGColorSpaceCreateDeviceGray(),bitmapInfo:CGImageAlphaInfo.none.rawValue) else {throw CropError.message("Could not render picture zones")}
+                    stencil.setFillColor(gray:0,alpha:1);stencil.fill(CGRect(x:0,y:0,width:pw,height:ph));stencil.setFillColor(gray:1,alpha:1)
+                    for corners in pictures {
+                        stencil.beginPath();stencil.move(to:CGPoint(x:corners[0].x,y:CGFloat(ph)-corners[0].y))
+                        for corner in corners.dropFirst() {stencil.addLine(to:CGPoint(x:corner.x,y:CGFloat(ph)-corner.y))}
+                        stencil.closePath();stencil.fillPath()
+                    }
+                    guard let mask=stencil.makeImage() else {throw CropError.message("Could not render picture zones")}
+                    let picture=tones.transformed(by:CGAffineTransform(translationX:-area.minX,y:-area.minY))
+                    let mixed=picture.applyingFilter("CIBlendWithMask",parameters:[kCIInputBackgroundImageKey:CIImage(cgImage:page),kCIInputMaskImageKey:CIImage(cgImage:mask)])
+                    guard let result=context.createCGImage(mixed,from:CGRect(x:0,y:0,width:pw,height:ph)) else {throw CropError.message("Could not render picture zones")}
+                    return result
+                }
+                let photo=try grayBytes(tones.applyingFilter("CIColorControls",parameters:[kCIInputSaturationKey:0.0]),area:area).pixels
                 for corners in pictures {
                     let minX=max(0,Int(corners.map{$0.x}.min()!.rounded(.down))),maxX=min(pw-1,Int(corners.map{$0.x}.max()!.rounded(.up)))
                     let minY=max(0,Int(corners.map{$0.y}.min()!.rounded(.down))),maxY=min(ph-1,Int(corners.map{$0.y}.max()!.rounded(.up)))

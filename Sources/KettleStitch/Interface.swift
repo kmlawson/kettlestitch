@@ -36,6 +36,17 @@ enum ThumbnailPolicy {
     /// How many pictures are held before the farthest pages' are dropped: fewer of the large ones, which take about
     /// half a megabyte each.
     static var kept:Int {large ? 300:3000}
+    /// A picture turned clockwise by a page's rotation.
+    static func turned(_ image:NSImage,by turn:ViewTurn)->NSImage {
+        guard let source=image.cgImage(forProposedRect:nil,context:nil,hints:nil),turn.quarterTurns != 0 else{return image}
+        let w=turn.sideways ? source.height:source.width,h=turn.sideways ? source.width:source.height
+        guard let c=CGContext(data:nil,width:w,height:h,bitsPerComponent:8,bytesPerRow:0,space:CGColorSpaceCreateDeviceRGB(),bitmapInfo:CGImageAlphaInfo.premultipliedLast.rawValue) else{return image}
+        // Core Graphics turns counterclockwise for a positive angle, with its origin at the bottom left.
+        c.translateBy(x:CGFloat(w)/2,y:CGFloat(h)/2);c.rotate(by:-CGFloat(turn.quarterTurns) * .pi/2)
+        c.draw(source,in:CGRect(x:-CGFloat(source.width)/2,y:-CGFloat(source.height)/2,width:CGFloat(source.width),height:CGFloat(source.height)))
+        guard let made=c.makeImage() else{return image}
+        return NSImage(cgImage:made,size:NSSize(width:w,height:h))
+    }
     static func reduced(_ image:CGImage,to longest:Int)->CGImage {
         let scale=Double(longest)/Double(max(image.width,image.height));guard scale<1 else{return image}
         let w=max(1,Int((Double(image.width)*scale).rounded())),h=max(1,Int((Double(image.height)*scale).rounded()))
@@ -48,7 +59,7 @@ enum ThumbnailPolicy {
 final class PreviewThumbnail {
     let image:NSImage,look:String
     init(_ image:NSImage,_ look:String){self.image=image;self.look=look}
-    static func look(_ p:Page)->String {"\(p.quad)|\(p.rotation)|\(String(describing:p.adjustments))|\(String(describing:p.split))|\(String(describing:p.deskew))|\(String(describing:p.pictureZones))|\(String(describing:p.smudges))"}
+    static func look(_ p:Page)->String {"\(p.quad)|\(p.rotation)|\(String(describing:p.adjustments))|\(String(describing:p.split))|\(String(describing:p.deskew))|\(String(describing:p.pictureZones))|\(String(describing:p.smudges))|\(String(describing:p.clones))"}
 }
 /// A small rounded label, used for a photograph's file type beside its name.
 final class PillLabel: NSTextField {

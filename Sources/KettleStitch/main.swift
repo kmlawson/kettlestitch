@@ -44,8 +44,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
     let smudgeSizeSlider=NSSlider(value:0.02,minValue:0.005,maxValue:0.08,target:nil,action:nil)
     let smudgeStrengthSlider=NSSlider(value:0.5,minValue:0,maxValue:1,target:nil,action:nil)
     let smudgeSizeValue=NSTextField(labelWithString:""),smudgeStrengthValue=NSTextField(labelWithString:"")
-    let smudgeButton=NSButton(),clearSmudgeButton=NSButton()
-    var smudgeRows:[NSGridRow]=[]
+    let smudgeButton=NSButton(),clearSmudgeButton=NSButton(),cloneButton=NSButton(),clearCloneButton=NSButton()
+    /// How much grain the next smudges get, and its value label.
+    let smudgeGrainSlider=NSSlider(value:Imaging.smudgeGrain,minValue:0,maxValue:1,target:nil,action:nil),smudgeGrainValue=NSTextField(labelWithString:"")
+    var smudgeRows:[NSGridRow]=[],brushRow:NSGridRow?
     let brightnessValue=NSTextField(labelWithString:"0"),contrastValue=NSTextField(labelWithString:"0"),sharpnessValue=NSTextField(labelWithString:"0")
     let widthField=NSTextField()
     let heightField=NSTextField()
@@ -125,6 +127,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
     /// Sidebar pictures by photograph, and by page as the preview shows them. See `trimThumbnails`.
     var thumbs:[String:NSImage]=[:]
     var previewThumbs:[UUID:PreviewThumbnail]=[:]
+    /// Photographs' pictures turned for rotated pages, by path and number of quarter turns.
+    var turnedThumbs:[String:NSImage]=[:]
     /// When each picture was asked for, how often loading one has failed, and how many times the regular check
     /// had to put a blank row right.
     var thumbnailPending:[String:Date]=[:]
@@ -160,15 +164,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
             do {project=try Project.read(asked);project.selected=min(max(0,project.selected),max(0,project.pages.count-1));projectURL=asked} catch {showError(error)}
         }
         if let data=UserDefaults.standard.data(forKey:"exportOptions"),let saved=try? JSONDecoder().decode(ExportOptions.self,from:data) {exportOptions=saved}
-        Keychain.noteLaunch()
+        Keychain.noteLaunch();Imaging.pictureZoneMode=SettingsController.zoneMode
         ThumbnailPolicy.large=UserDefaults.standard.bool(forKey:"sidebarLargePictures")
         buildUI();buildMenus();window.makeKeyAndOrderFront(nil);NSApp.activate(ignoringOtherApps:true)
         canvas.onCommit={[weak self] q in self?.edit{$0.setManualCrop(q)}}
         canvas.onSplitCommit={[weak self] s in self?.edit(geometry:false){$0.split=s;$0.splitByHand=true}}
         canvas.onZoneCommit={[weak self] z in self?.edit(geometry:false){$0.pictureZones=($0.pictureZones ?? [])+[z]};self?.zoneDrawn()}
-        canvas.onSmudgeCommit={[weak self] points in guard let self else{return};let radius=self.smudgeSizeSlider.doubleValue,strength=self.smudgeStrengthSlider.doubleValue
-            self.edit(geometry:false){$0.smudges=($0.smudges ?? [])+[Smudge(points:points,radius:radius,strength:strength)]}
+        canvas.onSmudgeCommit={[weak self] points in guard let self else{return};let radius=self.smudgeSizeSlider.doubleValue,strength=self.smudgeStrengthSlider.doubleValue,grain=self.smudgeGrainSlider.doubleValue
+            self.edit(geometry:false){$0.smudges=($0.smudges ?? [])+[Smudge(points:points,radius:radius,strength:strength,grain:grain)]}
             self.status.stringValue="Smudged · keep painting, Command-Z undoes a stroke, Escape puts the brush down"
+        }
+        canvas.onCloneCommit={[weak self] points,offset in guard let self else{return};let radius=self.smudgeSizeSlider.doubleValue
+            self.edit(geometry:false){$0.clones=($0.clones ?? [])+[CloneStroke(points:points,radius:radius,offset:offset)]}
+            self.status.stringValue="Cloned · keep painting from the same place, Option-click for another, Command-Z undoes a stroke"
+        }
+        canvas.onCloneSource={[weak self] chosen in
+            if !chosen {NSSound.beep()}
+            self?.status.stringValue=chosen ? "Copying from here · now drag where the copy should go":"Option-click the place to copy from first"
         }
         canvas.onZoneRemove={[weak self] i in self?.edit(geometry:false){$0.pictureZones?.remove(at:i);if $0.pictureZones?.isEmpty==true{$0.pictureZones=nil}}}
         canvas.onNavigate={[weak self] delta in self?.navigate(delta)}
@@ -234,7 +246,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
     /// different size in each, so they are loaded again.
     func setSidebarLarge(_ on:Bool){
         ThumbnailPolicy.large=on;UserDefaults.standard.set(on,forKey:"sidebarLargePictures")
-        thumbs=[:];previewThumbs=[:];thumbnailFailures=[:]
+        thumbs=[:];previewThumbs=[:];turnedThumbs=[:];thumbnailFailures=[:]
         table.rowHeight=ThumbnailPolicy.rowHeight
         let selected=table.selectedRowIndexes
         reloadPages()
@@ -259,6 +271,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
                 if let image {
                     self.thumbnailFailures[path]=nil
                     self.thumbs[path]=NSImage(cgImage:image,size:NSSize(width:image.width,height:image.height))
+                    self.turnedThumbs=self.turnedThumbs.filter{!$0.key.hasPrefix(path+"#")}
                     self.trimThumbnails();self.reloadRows(showing:path)
                 } else {
                     let failures=(self.thumbnailFailures[path] ?? 0)+1;self.thumbnailFailures[path]=failures
@@ -279,12 +292,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
         let visible=table.rows(in:table.visibleRect),centre=visible.location+visible.length/2
         let order=project.pages.indices.sorted{abs($0-centre)<abs($1-centre)}.prefix(ThumbnailPolicy.kept*3/4)
         let paths=Set(order.map{project.pages[$0].path}),ids=Set(order.map{project.pages[$0].id})
-        thumbs=thumbs.filter{paths.contains($0.key)};previewThumbs=previewThumbs.filter{ids.contains($0.key)}
+        thumbs=thumbs.filter{paths.contains($0.key)};previewThumbs=previewThumbs.filter{ids.contains($0.key)};turnedThumbs=[:]
     }
     /// The sidebar picture for a page: the photograph, or in preview what export will make of it.
     func thumbnail(_ p:Page)->NSImage? {
         guard let plain=thumbs[p.path] else{return nil}
-        guard canvas.preview else{return plain}
+        // Outside the preview the photograph is shown turned as the page is, like the canvas.
+        guard canvas.preview else{return turned(plain,for:p)}
         let look=PreviewThumbnail.look(p),made=previewThumbs[p.id]
         if let made,made.look==look {return made.image}
         if !previewPending.contains(p.id) {
@@ -305,6 +319,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
         }
         // The last rendering stands in until the new one is ready.
         return made?.image ?? plain
+    }
+    /// The photograph's picture turned by the page's rotation, made once for each turn and kept.
+    func turned(_ plain:NSImage,for p:Page)->NSImage {
+        let turn=ViewTurn(p.rotation);guard turn.quarterTurns != 0 else{return plain}
+        let key="\(p.path)#\(turn.quarterTurns)"
+        if let made=turnedThumbs[key] {return made}
+        let made=ThumbnailPolicy.turned(plain,by:turn);turnedThumbs[key]=made;return made
     }
     /// Looks at the rows on screen every couple of seconds. A row with no picture and nothing under way to get one
     /// is asked for again, and a request that never came back is forgotten so that it can be made anew.
@@ -341,7 +362,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
     }
     func loadCurrent(){
         guard let i=current else{return};let p=project.pages[i],token=UUID();displayToken=token
-        original=nil;canvas.placeholder="";canvas.image=nil;canvas.quad=p.quad;canvas.fit();refreshDetail()
+        original=nil;canvas.placeholder="";canvas.image=nil;canvas.quad=p.quad;canvas.fit();canvas.forgetCloneSource();refreshDetail()
         displayQueue.cancelAllOperations()
         // A neighbour of the last photograph is usually decoded already.
         if let ready=decoded[p.path] {present(ready);readAhead(from:i);return}
@@ -675,8 +696,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
         if on {
             guard current != nil,original != nil else{return}
             if canvas.preview{setPreview(false)}
-            canvas.zoneMode=false;canvas.smudgeRadius=smudgeSizeSlider.doubleValue;window.makeFirstResponder(canvas)
-            status.stringValue="Smudge brush: drag over the print to blur it · Size and Strength are in the inspector · Escape puts the brush down"
+            canvas.zoneMode=false;canvas.cloneMode=false;canvas.smudgeRadius=smudgeSizeSlider.doubleValue;window.makeFirstResponder(canvas)
+            status.stringValue="Smudge brush: drag over the print to blur it · Brush, Strength and Grain are in the inspector · Escape puts the brush down"
         } else {status.stringValue="Smudge brush put down"}
         canvas.smudgeMode=on;showSmudgeState()
     }
@@ -684,26 +705,46 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
         let targets=targetIndexes.filter{project.pages[$0].smudges != nil};guard !targets.isEmpty else{status.stringValue="No smudges to remove";return}
         edit(targets,geometry:false){$0.smudges=nil};status.stringValue="Smudges removed"
     }
-    /// The brush button is lit while the brush is in hand, when its width and strength show; the crossed-out
-    /// button works only when a page it would act on has smudges.
+    // MARK: Clone brush
+    @objc func toggleClone(){setCloning(!canvas.cloneMode);showSmudgeState()}
+    func setCloning(_ on:Bool){
+        guard on != canvas.cloneMode else{return}
+        if on {
+            guard current != nil,original != nil else{return}
+            if canvas.preview{setPreview(false)}
+            canvas.zoneMode=false;canvas.smudgeMode=false;canvas.smudgeRadius=smudgeSizeSlider.doubleValue;window.makeFirstResponder(canvas)
+            status.stringValue="Clone brush: Option-click the place to copy from, then drag where the copy should go · Escape puts the brush down"
+        } else {status.stringValue="Clone brush put down"}
+        canvas.cloneMode=on;showSmudgeState()
+    }
+    @objc func removeClones(){
+        let targets=targetIndexes.filter{project.pages[$0].clones != nil};guard !targets.isEmpty else{status.stringValue="Nothing cloned to remove";return}
+        edit(targets,geometry:false){$0.clones=nil};status.stringValue="Cloned areas removed"
+    }
+    /// A brush's button is lit while that brush is in hand, when its settings show: width for either brush, strength
+    /// and grain for the smudge alone. A crossed-out button works only when a page it would act on has something to remove.
     func showSmudgeState(){
-        smudgeButton.state=canvas.smudgeMode ? .on:.off
+        smudgeButton.state=canvas.smudgeMode ? .on:.off;cloneButton.state=canvas.cloneMode ? .on:.off
+        brushRow?.isHidden = !(canvas.smudgeMode || canvas.cloneMode)
         for row in smudgeRows {row.isHidden = !canvas.smudgeMode}
         clearSmudgeButton.isEnabled=targetIndexes.contains{project.pages[$0].smudges != nil}
+        clearCloneButton.isEnabled=targetIndexes.contains{project.pages[$0].clones != nil}
     }
     @objc func smudgeBrushChanged(_ sender:Any?){
         canvas.smudgeRadius=smudgeSizeSlider.doubleValue
         smudgeSizeValue.stringValue=String(Int((smudgeSizeSlider.doubleValue/smudgeSizeSlider.maxValue*100).rounded()));smudgeStrengthValue.stringValue=String(Int((smudgeStrengthSlider.doubleValue*100).rounded()))
-        UserDefaults.standard.set(smudgeSizeSlider.doubleValue,forKey:"smudgeSize");UserDefaults.standard.set(smudgeStrengthSlider.doubleValue,forKey:"smudgeStrength")
+        smudgeGrainValue.stringValue=String(Int((smudgeGrainSlider.doubleValue*100).rounded()))
+        UserDefaults.standard.set(smudgeSizeSlider.doubleValue,forKey:"smudgeSize");UserDefaults.standard.set(smudgeStrengthSlider.doubleValue,forKey:"smudgeStrength");UserDefaults.standard.set(smudgeGrainSlider.doubleValue,forKey:"smudgeGrain")
+        if canvas.cloneMode {canvas.needsDisplay=true}
     }
     /// Outside preview the canvas shows the photograph with its smudges blurred in, where they were painted.
     func showPhotograph(){
         guard let image=original,let i=current,!canvas.preview else{return}
-        let smudges=project.pages[i].smudges ?? []
-        guard !smudges.isEmpty else{if canvas.image !== image {displayToken=UUID();canvas.image=image};return}
+        let smudges=project.pages[i].smudges ?? [],clones=project.pages[i].clones ?? []
+        guard !smudges.isEmpty || !clones.isEmpty else{if canvas.image !== image {displayToken=UUID();canvas.image=image};return}
         let token=UUID();displayToken=token
         displayQueue.cancelAllOperations()
-        displayQueue.addOperation{[weak self] in let result=try? Imaging.smudged(image,smudges)
+        displayQueue.addOperation{[weak self] in let result=try? Imaging.retouched(image,smudges:smudges,clones:clones)
             DispatchQueue.main.async{guard let self,self.displayToken==token,!self.canvas.preview,let result else{return};self.canvas.image=result}
         }
     }
@@ -762,7 +803,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
         let changed=canvas.preview != on
         canvas.preview=on;previewItem?.setSelected(on,at:0)
         if changed {table.reloadData(forRowIndexes:IndexSet(integersIn:0..<project.pages.count),columnIndexes:IndexSet(integer:0))}
-        if on{canvas.smudgeMode=false;showSmudgeState();renderPreview()}else if original != nil{displayToken=UUID();canvas.image=original;canvas.fit();showPhotograph()}
+        if on{canvas.smudgeMode=false;canvas.cloneMode=false;showSmudgeState();renderPreview()}else if original != nil{displayToken=UUID();canvas.image=original;canvas.fit();showPhotograph()}
     }
     @objc func togglePreview(){setPreview(!canvas.preview)}
     func renderPreview(){guard let image=original,let i=current else{return};let p=project.pages[i],token=UUID();displayToken=token
@@ -906,7 +947,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
     @objc func openProject(){let panel=NSOpenPanel();panel.allowedContentTypes=ImportPolicy.projectExtensions.compactMap{UTType(filenameExtension:$0)}+[.json];guard confirmUnsaved(),panel.runModal() == .OK,let url=panel.url else{return};open(url)}
     @objc func openRecent(_ sender:NSMenuItem){if let url=sender.representedObject as? URL,confirmUnsaved(){open(url)}}
     func open(_ url:URL){
-        do{let loaded=try Project.read(url);writeUntitled();stop();generation=UUID();decoded=[:];project=loaded;project.selected=min(max(0,project.selected),max(0,project.pages.count-1));projectURL=url;unsaved=false;untitledChanged=false;noteRecent();updateTitle();undoStack=[];redoStack=[];thumbs=[:];previewThumbs=[:];thumbnailPending=[:];thumbnailFailures=[:];pixelSizes=[:];reloadPages();selectCurrent();status.stringValue="Opened \(url.lastPathComponent)";DispatchQueue.main.async{self.findMissingPhotographs()}}catch{showError(error)}
+        do{let loaded=try Project.read(url);writeUntitled();stop();generation=UUID();decoded=[:];project=loaded;project.selected=min(max(0,project.selected),max(0,project.pages.count-1));projectURL=url;unsaved=false;untitledChanged=false;noteRecent();updateTitle();undoStack=[];redoStack=[];thumbs=[:];previewThumbs=[:];turnedThumbs=[:];thumbnailPending=[:];thumbnailFailures=[:];pixelSizes=[:];reloadPages();selectCurrent();status.stringValue="Opened \(url.lastPathComponent)";DispatchQueue.main.async{self.findMissingPhotographs()}}catch{showError(error)}
     }
     @objc func locatePhotographs(){findMissingPhotographs();if Relink.missing(project.pages,exists:FileManager.default.fileExists(atPath:)).isEmpty {status.stringValue="Every photograph is where the project expects it"}}
     /// A project holds each photograph's full path. When some are gone, the project's own folder is tried first;
@@ -1073,12 +1114,45 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
             if testDirectory == nil {NSWorkspace.shared.activateFileViewerSelecting([folder])}
         }catch{showError(error)}
     }
+    /// Asks GitHub for the latest release and says whether it is newer than this copy. Only ever run from the menu.
+    @objc func checkForUpdates(){
+        let current=Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0"
+        status.stringValue="Checking for updates…"
+        ReviewAPI.session.dataTask(with:UpdateCheck.request()){[weak self] data,response,error in
+            let code=(response as? HTTPURLResponse)?.statusCode ?? 0
+            let release=code==200 ? data.flatMap(UpdateCheck.latest(from:)):nil
+            DispatchQueue.main.async{guard let self else{return}
+                let alert=NSAlert()
+                if let release,UpdateCheck.isNewer(release.version,than:current) {
+                    self.status.stringValue="KettleStitch \(release.version) is available"
+                    alert.messageText="KettleStitch \(release.version) is available";alert.informativeText="You have \(current). The download page says what is new and has the disk images."
+                    alert.addButton(withTitle:"Open Download Page");alert.addButton(withTitle:"Later")
+                    if alert.runModal() == .alertFirstButtonReturn {NSWorkspace.shared.open(release.page)}
+                } else if release != nil {
+                    self.status.stringValue="KettleStitch \(current) is the latest version"
+                    alert.messageText="You have the latest version";alert.informativeText="KettleStitch \(current) is the newest release.";alert.runModal()
+                } else {
+                    self.status.stringValue="Could not check for updates"
+                    alert.messageText="Could not check for updates";alert.informativeText=(error?.localizedDescription ?? "GitHub did not answer as expected (\(code)).")+" You can look at the releases page yourself."
+                    alert.addButton(withTitle:"Open Releases Page");alert.addButton(withTitle:"Cancel")
+                    if alert.runModal() == .alertFirstButtonReturn,let page=URL(string:UpdateCheck.releasesPage) {NSWorkspace.shared.open(page)}
+                }
+            }
+        }.resume()
+    }
     @objc func showUsageLog(){
         if usageLog == nil {usageLog=UsageLogController(url:usageURL)}
         usageLog!.show()
     }
     @objc func showSettings(){
-        if settings == nil {settings=SettingsController()}
+        if settings == nil {
+            settings=SettingsController()
+            // A change to how picture zones are kept shows at once, in the preview and in the sidebar's pictures.
+            settings!.onChange={[weak self] in guard let self else{return}
+                self.previewThumbs=[:];self.table.reloadData(forRowIndexes:IndexSet(integersIn:0..<self.project.pages.count),columnIndexes:IndexSet(integer:0))
+                if self.canvas.preview {self.renderPreview()}
+            }
+        }
         settings!.show()
     }
     /// Asks Claude to judge the crop of every targeted page. A fix is selected at once and stays among the proposals; Undo puts the old crop back.
@@ -1192,6 +1266,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
         }
         switch key {
         case "b" where e.modifierFlags.contains(.shift):e.modifierFlags.contains(.option) ? removeSmudges():toggleSmudge()
+        case "c" where e.modifierFlags.contains(.shift):e.modifierFlags.contains(.option) ? removeClones():toggleClone()
         case "g":newProject();case "i":importImages();case "o":openProject();case "s":if e.modifierFlags.contains(.shift) {saveAs()} else {saveProject()}
         case "d":targetIndexes.count>1 ? detectPending():detectCurrent();case "b":detectPending();case "e":exportImages()
         case "p":togglePreview()
@@ -1214,7 +1289,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
         case "5","6","7","8":if canvas.preview{setPreview(false)};canvas.selectEdge(canvas.turn.storedEdge(seenAt:[0,3,1,2][Int(key)!-5]),keyboard:true);window.makeFirstResponder(canvas)
         case "?","/":help()
         default:
-            if e.keyCode==53 {if canvas.smudgeMode{setSmudging(false)}else if canvas.zoneMode{canvas.zoneMode=false;status.stringValue="Picture zone cancelled"}else if canvas.hasSelection{canvas.releaseCorner()}else{stop()}}
+            if e.keyCode==53 {if canvas.smudgeMode{setSmudging(false)}else if canvas.cloneMode{setCloning(false)}else if canvas.zoneMode{canvas.zoneMode=false;status.stringValue="Picture zone cancelled"}else if canvas.hasSelection{canvas.releaseCorner()}else{stop()}}
             else if e.keyCode==123 {navigate(-1)}
             else if e.keyCode==124 {
                 // With Shift the crop comes along: the same as stepping on and pressing C.
