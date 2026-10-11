@@ -1,6 +1,6 @@
 # KettleStitch developer overview
 
-Updated 2026-10-11 for version 0.4.2. This describes the implementation as it stands, for whoever picks the code up next. Read the source before changing it; the validation logs under `docs/validation/` describe earlier states and older shortcuts.
+Updated 2026-10-11 for version 0.4.4. This describes the implementation as it stands, for whoever picks the code up next. Read the source before changing it; the validation logs under `docs/validation/` describe earlier states and older shortcuts.
 
 Related notes: [Architecture](Architecture.md), [Building and releasing](Building.md), [How detection works](Detection.md).
 
@@ -28,7 +28,7 @@ The user steers by small, frequent interaction changes. Follow the newest reques
 - `sample-images/1940.3/` holds 23 sample photographs, also ignored. Build test fixtures only from photographs that exist.
 - `.qa/` is for disposable evaluations and test-project copies, ignored.
 - The repository is public. Commits use a GitHub no-reply address; do not commit a personal email address, a home-folder path or an API key.
-- The version (0.4.2, build 6) is set by hand in `scripts/build-app.sh` and changed only when the user asks.
+- The version (0.4.4, build 7) is set by hand in `scripts/build-app.sh` and changed only when the user asks.
 
 ## Source map
 
@@ -56,7 +56,7 @@ The user steers by small, frequent interaction changes. Follow the newest reques
 | `Sources/KettleStitch/Canvas.swift` | Drawing, crop and split overlays, magnifier, mouse editing, zoom, smudge painting |
 | `Sources/KettleStitch/Smoke.swift` | UI smoke test, import smoke, paging benchmark, thumbnail test |
 | `Sources/CropCheck/` | Diagnostic command-line tool |
-| `Tests/CropCoreTests/` | 117 unit tests; file names are looser than their contents |
+| `Tests/CropCoreTests/` | 118 unit tests; file names are looser than their contents |
 
 ## Data and geometry invariants
 
@@ -110,7 +110,7 @@ The README has the complete shortcut list and is the reference. Points that are 
 
 **The user asked on 2026-10-10 for red/green test-first work**: write the test, see it fail, then implement. Put decision logic in `CropCore` where it can be tested; the smoke test is a second check.
 
-- `swift test --disable-sandbox`: 117 tests.
+- `swift test --disable-sandbox`: 118 tests.
 - The smoke, benchmark and thumbnail modes are described in [Building and releasing](Building.md). The UI smoke occasionally fails its first menu-state check (`Smoke.swift`, the line after the settings screenshot) when the test window is not frontmost, and passes on rerun; this is a flaw in the test, not yet fixed.
 - Under a restricted execution environment, tests that use Vision or Core Image may need an unrestricted run.
 - No labelled accuracy measurement exists for crops or splits. The split detector was tuned on synthetic spreads and compared on the 23 sample photographs. **Save Bad Crop/Split Example** (⌥⌘B) is how real failures are collected.
