@@ -13,12 +13,33 @@ enum Keychain {
         let environment=ProcessInfo.processInfo.environment
         return environment["KETTLESTITCH_TEST_DIR"] == nil || environment["KETTLESTITCH_TEST_KEYCHAIN"] != nil
     }()
+    /// What macOS answered the last time a key was asked for, to explain a refusal.
+    private(set) static var lastStatus:OSStatus=errSecSuccess
     static func read(_ service:[CFString:Any])->String? {
         guard enabled else{return nil}
         var request=service;request[kSecReturnData]=true;request[kSecMatchLimit]=kSecMatchLimitOne
         var item:CFTypeRef?
-        guard SecItemCopyMatching(request as CFDictionary,&item)==errSecSuccess,let data=item as? Data else{return nil}
+        lastStatus=SecItemCopyMatching(request as CFDictionary,&item)
+        guard lastStatus==errSecSuccess,let data=item as? Data else{return nil}
         return String(data:data,encoding:.utf8)
+    }
+    /// The app's own program file as it was at launch. macOS ties access to a keychain item to the program that
+    /// asks; when the file is replaced by a newer build while this copy is still running, the running copy no
+    /// longer matches what is on disk and is refused its own key until it is reopened.
+    private static let launched=fingerprint()
+    private static func fingerprint()->String? {
+        guard let path=Bundle.main.executablePath,let attributes=try? FileManager.default.attributesOfItem(atPath:path) else{return nil}
+        return "\(attributes[.systemFileNumber] ?? 0)/\(attributes[.modificationDate] ?? Date.distantPast)"
+    }
+    /// Call once at launch, before anything can have replaced the file.
+    static func noteLaunch(){_=launched}
+    static var replacedSinceLaunch:Bool {launched != nil && fingerprint() != launched}
+    static let reopenAdvice="KettleStitch was updated while it was running, so macOS will not let this copy read the keychain. Quit and reopen KettleStitch."
+    /// Why a key that should be there could not be read, in words for the user.
+    static var refusal:String {
+        if replacedSinceLaunch {return reopenAdvice}
+        let said=SecCopyErrorMessageString(lastStatus,nil) as String? ?? "error \(lastStatus)"
+        return "macOS would not hand the key back (\(said)). If it asked for permission, choose Always Allow; otherwise quit and reopen KettleStitch."
     }
     /// An Anthropic key saved under one of the app's earlier names is copied to the new one the first time it is needed.
     static func read(_ provider:ReviewProvider = .anthropic)->String? {
@@ -116,6 +137,8 @@ final class SettingsController: NSObject {
         state.stringValue=saved ? (justSaved ? "✓ Key saved in your keychain":"✓ A key is saved"):"No key saved"
         state.textColor=saved ? .systemGreen:.secondaryLabelColor
         key.placeholderString=saved ? "A key is saved — paste another to replace it":chosen.keyHint
+        // A key may be there and yet unreadable by this copy of the app; say why instead of "No key saved".
+        if !saved,Keychain.replacedSinceLaunch {state.stringValue="Cannot read the keychain until reopened";state.textColor = .systemOrange;explain(Keychain.reopenAdvice)}
     }
     func explain(_ text:String){message.stringValue=text;message.isHidden=false;window.setContentSize(window.contentView!.fittingSize)}
     func show(){provider.selectItem(at:ReviewProvider.allCases.firstIndex(of:ReviewChoice.provider) ?? 0);showProvider();window.makeKeyAndOrderFront(nil);window.makeFirstResponder(key)}
@@ -125,7 +148,7 @@ final class SettingsController: NSObject {
         guard Keychain.write(value,chosen) else{state.stringValue="The keychain refused the key";state.textColor = .systemRed;return}
         key.stringValue="";message.isHidden=true;refresh(justSaved:true)
         // Written but not readable back would fail later, at Send; say so now.
-        if Keychain.read(chosen) != value {state.stringValue="The key was saved but cannot be read back from the keychain";state.textColor = .systemRed}
+        if Keychain.read(chosen) != value {state.stringValue="Saved, but it cannot be read back";state.textColor = .systemRed;explain("Your key is saved. "+Keychain.refusal)}
     }
     @objc func removeKey(){Keychain.remove(chosen);key.stringValue="";refresh()}
     @objc func autosaveChanged(){UserDefaults.standard.set(autosave.state == .on,forKey:Self.autosaveKey)}

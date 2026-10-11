@@ -36,7 +36,7 @@ open -n "$PWD/dist/KettleStitch.app"
 
 Under the agent's restricted execution environment, Vision/CoreImage tests can need an approved unrestricted tool execution because CVPixelBuffer/graphics access fails in the restricted sandbox. `--disable-sandbox` concerns SwiftPM, not that outer restriction. Test files already live in the writable workspace; do not ask for Desktop access repeatedly.
 
-Before restarting the user's app, quit normally so it saves:
+Rebuilding while the user's app is open leaves that running copy unable to read its keychain items (macOS ties access to the program file, which has just been replaced): a key saved then is stored but "cannot be read back" until the app is reopened. The app detects this (`Keychain.replacedSinceLaunch`) and says so. Before restarting the user's app, quit normally so it saves:
 
 ```sh
 osascript -e 'if application id "local.kettlestitch.app" is running then tell application id "local.kettlestitch.app" to quit'

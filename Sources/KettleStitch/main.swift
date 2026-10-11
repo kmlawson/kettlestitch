@@ -156,6 +156,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
             do {project=try Project.read(asked);project.selected=min(max(0,project.selected),max(0,project.pages.count-1));projectURL=asked} catch {showError(error)}
         }
         if let data=UserDefaults.standard.data(forKey:"exportOptions"),let saved=try? JSONDecoder().decode(ExportOptions.self,from:data) {exportOptions=saved}
+        Keychain.noteLaunch()
         ThumbnailPolicy.large=UserDefaults.standard.bool(forKey:"sidebarLargePictures")
         buildUI();buildMenus();window.makeKeyAndOrderFront(nil);NSApp.activate(ignoringOtherApps:true)
         canvas.onCommit={[weak self] q in self?.edit{$0.setManualCrop(q)}}
@@ -1035,7 +1036,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
         let targets=targetIndexes;guard !reviewing,!targets.isEmpty else{return}
         // The key goes from the keychain to the request for this provider and nowhere else: it is not logged, saved or shown.
         let model=ReviewChoice.model,reviewer=model.provider.name
-        guard let key=Keychain.read(model.provider),!key.isEmpty else{showSettings();settings?.explain("Add \(model.provider.company == "Anthropic" ? "an":"a") \(model.provider.company) API key to send crops to \(reviewer).");return}
+        guard let key=Keychain.read(model.provider),!key.isEmpty else{showSettings();if Keychain.replacedSinceLaunch {settings?.explain(Keychain.reopenAdvice);return};settings?.explain("Add \(model.provider.company == "Anthropic" ? "an":"a") \(model.provider.company) API key to send crops to \(reviewer).");return}
         let pages=targets.map{project.pages[$0]},token=generation
         beginReview(pages,model:ReviewChoice.displayName(model))
         reviewQueue.addOperation{[weak self] in
