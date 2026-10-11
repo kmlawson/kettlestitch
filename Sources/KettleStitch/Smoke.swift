@@ -439,6 +439,27 @@ extension AppDelegate {
                 self.project.pages[0]=kept;self.undoStack.removeAll();self.redoStack.removeAll();self.loadCurrent();canvas.fit()
                 print("DRAG_CROP passed")
             }
+            // A page with a smudge and a cloned area shows them in every mode, in the preview and in the sidebar.
+            do {
+                func settle(_ done:()->Bool){let end=Date()+30;while !done() && Date()<end {RunLoop.current.run(until:Date()+0.05)};RunLoop.current.run(until:Date()+0.3)}
+                self.project.selected=0;self.selectCurrent();self.table.selectRowIndexes(IndexSet(integer:0),byExtendingSelection:false);self.setPreview(false)
+                let kept=self.project.pages[0]
+                self.edit{$0.adjustments=nil;$0.smudges=nil;$0.clones=nil}
+                key("c",8,.shift);canvas.onCloneCommit?([Point(0.3,0.6),Point(0.6,0.6)],Point(0,0.15))
+                key("b",11,.shift);canvas.onSmudgeCommit?([Point(0.3,0.3),Point(0.6,0.3)])
+                settle{canvas.image != nil && canvas.image !== self.original};precondition(canvas.image !== self.original && !canvas.preview,"The photograph is shown retouched")
+                for (segment,mode) in Cleanup.allCases.enumerated().reversed() {
+                    canvas.showOutput(self.original!);let stand=canvas.image
+                    self.cleanupControl.selectedSegment=segment;self.adjustmentChanged(self.cleanupControl)
+                    precondition(canvas.preview && !canvas.smudgeMode && !canvas.cloneMode,"Choosing a mode shows the preview")
+                    settle{canvas.image !== stand}
+                    precondition(canvas.image !== stand && canvas.outputShown && self.window.attachedSheet==nil,"The preview arrives in \(mode.title)")
+                    precondition((self.project.pages[0].adjustments?.cleanup ?? Cleanup.none)==mode && self.project.pages[0].smudges?.count==1 && self.project.pages[0].clones?.count==1,"The retouching stays through \(mode.title)")
+                    snapshot(self.window.contentView!,"retouch-\(mode.rawValue).png")
+                }
+                self.commitAdjustments();self.project.pages[0]=kept;self.undoStack.removeAll();self.redoStack.removeAll();self.setPreview(false);self.loadCurrent()
+                print("RETOUCH_MODES passed")
+            }
             // Pages are reordered by moving their rows; the page on screen stays on screen and Undo puts them back.
             let order=self.project.pages.map{$0.id}
             self.project.selected=0;self.selectCurrent();self.table.selectRowIndexes(IndexSet(integer:0),byExtendingSelection:false)
@@ -597,6 +618,31 @@ extension AppDelegate {
                         let shares=(0..<4).map{ink(cell($0)?.thumb.image)}
                         print("THUMBS preview with black and white, dark share of rows 0-3: \(shares.map{String(format:"%.3f",$0)})")
                         precondition(shares.allSatisfy{$0>0.02},"A black-and-white preview picture still shows the page")
+                        // Image settings changed on every page at once, twice in quick succession, with the selection
+                        // moving on before either change is recorded: every picture must end up showing the latest settings.
+                        let all=IndexSet(integersIn:0..<self.project.pages.count)
+                        var gray=Adjustments();gray.cleanup = .grayscale;gray.brightness=0.25
+                        self.table.selectRowIndexes(all,byExtendingSelection:false);self.setAdjustments(gray)
+                        self.table.selectRowIndexes(IndexSet(integer:0),byExtendingSelection:false)
+                        gray.contrast=0.2
+                        self.table.selectRowIndexes(all,byExtendingSelection:false);self.setAdjustments(gray)
+                        self.table.selectRowIndexes(IndexSet(integer:0),byExtendingSelection:false)
+                        precondition(self.project.pages.allSatisfy{$0.adjustments==gray})
+                        after(12){
+                        let rows=self.table.rows(in:self.table.visibleRect)
+                        let stale=(rows.location..<NSMaxRange(rows)).filter{row in
+                            guard self.project.pages.indices.contains(row),self.thumbs[self.project.pages[row].path] != nil else{return false}
+                            let page=self.project.pages[row],made=self.previewThumbs[page.id]
+                            return made?.look != PreviewThumbnail.look(page) || cell(row)?.thumb.image !== made?.image
+                        }
+                        print("THUMBS after settings changed on \(self.project.pages.count) pages: \(rows.length) rows on screen, stale \(stale)")
+                        precondition(stale.isEmpty,"Every picture on screen shows the settings its page has now")
+                        // A picture that was missed is noticed by the regular check.
+                        let missed=self.project.pages[1].id,noticed=self.thumbnailRecoveries
+                        self.project.pages[1].adjustments?.brightness = -0.3
+                        after(7){
+                        precondition(self.previewThumbs[missed]?.look==PreviewThumbnail.look(self.project.pages[1]) && cell(1)?.thumb.image === self.previewThumbs[missed]?.image && self.thumbnailRecoveries>noticed,"A picture left behind is noticed and remade")
+                        print("THUMBS a stale picture was noticed and remade")
                         self.setPreview(false)
                         // A picture lost from memory, and a request that never came back, are both put right by the regular check.
                         let lost=self.project.pages[0].path,stuck=self.project.pages[1].path,before=self.thumbnailRecoveries
@@ -609,6 +655,8 @@ extension AppDelegate {
                             precondition(self.thumbnailRecoveries>before,"and counts that it had to")
                             precondition(cell(2)?.unreadable==true && cell(2)?.thumb.image != nil,"A missing photograph shows a mark")
                             print("THUMBS check restored \(self.thumbnailRecoveries-before) blank rows; the missing photograph is marked");self.unsaved=false;exit(0)
+                        }
+                        }
                         }
                     }
                 }

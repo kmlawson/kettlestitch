@@ -47,6 +47,8 @@ enum ThumbnailPolicy {
         guard let made=c.makeImage() else{return image}
         return NSImage(cgImage:made,size:NSSize(width:w,height:h))
     }
+    /// How often a preview picture that cannot be made is tried again before the row is left with what it has.
+    static let previewAttempts=3
     static func reduced(_ image:CGImage,to longest:Int)->CGImage {
         let scale=Double(longest)/Double(max(image.width,image.height));guard scale<1 else{return image}
         let w=max(1,Int((Double(image.width)*scale).rounded())),h=max(1,Int((Double(image.height)*scale).rounded()))

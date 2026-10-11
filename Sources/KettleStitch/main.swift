@@ -125,6 +125,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
     var reviewTotal=0
     var reviewNumber=0
     var adjusting=false
+    /// The pages whose image settings a run of slider changes has touched, so their rows are redrawn when it is
+    /// recorded, whatever is selected by then.
+    var adjustedPages=Set<UUID>()
+    /// How many times in a row a page's preview picture could not be made, with the settings it was for.
+    var previewFailures:[UUID:(look:String,count:Int)]=[:]
     var reloading=false
     /// Decoded photographs around the one on screen, by path, and the way the user last stepped.
     var decoded:[String:CGImage]=[:]
@@ -382,7 +387,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
                 let source=(try? Imaging.load(URL(fileURLWithPath:p.path),maxPixel:ThumbnailPolicy.previewSourcePixels)) ?? small
                 let image=source.flatMap{try? Exporter.preview($0,page:p)}.map{ThumbnailPolicy.reduced($0,to:ThumbnailPolicy.previewPixels)}
                 DispatchQueue.main.async {guard let self else{return};self.previewPending.remove(p.id)
-                    guard let image else{return}
+                    guard let image else{self.previewFailures[p.id]=(look,(self.previewFailures[p.id]?.look==look ? self.previewFailures[p.id]!.count:0)+1);return}
+                    self.previewFailures[p.id]=nil
                     self.previewThumbs[p.id]=PreviewThumbnail(NSImage(cgImage:image,size:NSSize(width:image.width,height:image.height)),look)
                     self.trimThumbnails()
                     if let row=self.project.pages.firstIndex(where:{$0.id==p.id}) {self.table.reloadData(forRowIndexes:IndexSet(integer:row),columnIndexes:IndexSet(integer:0))}
@@ -412,6 +418,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
             let path=project.pages[row].path
             // Blank with nothing coming, or still marked unreadable though the picture has since arrived.
             if cell.thumb.image == nil ? thumbnailPending[path] == nil:(cell.unreadable && thumbs[path] != nil) {blank.insert(row)}
+            // In the preview, a picture made for settings the page no longer has, with no new one on its way.
+            else if canvas.preview,thumbs[path] != nil {
+                let page=project.pages[row],look=PreviewThumbnail.look(page),made=previewThumbs[page.id]
+                let givenUp=previewFailures[page.id].map{$0.look==look && $0.count>=ThumbnailPolicy.previewAttempts} ?? false
+                if !previewPending.contains(page.id),!givenUp,made?.look != look || cell.thumb.image !== made?.image {blank.insert(row)}
+            }
         }
         guard !blank.isEmpty else{return}
         thumbnailRecoveries+=blank.count
@@ -1087,7 +1099,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
     func setAdjustments(_ a:Adjustments){
         let targets=targetIndexes;guard !targets.isEmpty else{return}
         if !adjusting {undoStack.append(.pages(targets.map{project.pages[$0]}));redoStack.removeAll();adjusting=true}
-        for i in targets {project.pages[i].adjustments=a.isIdentity ? nil:a}
+        for i in targets {project.pages[i].adjustments=a.isIdentity ? nil:a;adjustedPages.insert(project.pages[i].id)}
         cleanupName.stringValue=a.cleanup.title
         NSObject.cancelPreviousPerformRequests(withTarget:self,selector:#selector(commitAdjustments),object:nil)
         perform(#selector(commitAdjustments),with:nil,afterDelay:0.2)
@@ -1095,7 +1107,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
     }
     @objc func commitAdjustments(){
         NSObject.cancelPreviousPerformRequests(withTarget:self,selector:#selector(commitAdjustments),object:nil)
-        guard adjusting else{return};adjusting=false;save();table.reloadData(forRowIndexes:IndexSet(targetIndexes),columnIndexes:IndexSet(integer:0))
+        guard adjusting else{return};adjusting=false;save()
+        // The rows of the pages that were changed, which need not be the ones selected now.
+        let rows=IndexSet(project.pages.indices.filter{adjustedPages.contains(project.pages[$0].id)});adjustedPages=[]
+        table.reloadData(forRowIndexes:rows,columnIndexes:IndexSet(integer:0))
     }
     @objc func formatChanged(_ sender:NSControl){
         guard let i=current else{return}
