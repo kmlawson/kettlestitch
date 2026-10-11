@@ -103,6 +103,7 @@ The README has the complete shortcut list and is the reference. Points that are 
 - **t** proposes a split, then cycles candidates. **Option t** proposes on every unsplit page and is never run unasked.
 - A mouse wheel zooms about the pointer; a precise-scrolling device (trackpad, Magic Mouse) pans.
 - The preview stays on across pages; selecting a corner or edge, the smudge brush and drawing a picture zone turn it off.
+- The photograph is shown turned by the page's rotation (`ViewTurn`), in and out of the preview. Stored geometry stays in the photograph's own coordinates; corner and edge numbers, h j k l and nudges are mapped from what is seen.
 - Stepping past either end of the book flashes the canvas and reloads nothing.
 - Importing starts detection on the new pages. Nothing else is detected or proposed unasked.
 

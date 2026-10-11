@@ -533,7 +533,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
         let had=project.pages[i].split != nil
         edit{$0.rotation=($0.rotation+quarter+4)%4;$0.split=$0.split?.rotated(quarterTurns:quarter)}
         if had,project.pages[i].split==nil {proposeSplits([i],record:false)}
-        if !canvas.preview{setPreview(true)}
+        // The photograph is shown turned as well as the preview, so the view stays as it was.
     }
 
     // MARK: Page split
@@ -725,9 +725,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
     }
     func resizeSide(_ key:String,inward:Bool){
         guard let i=current else{return}
-        let edge=["h":3,"j":2,"k":0,"l":1][key]!
+        // h j k l are the left, bottom, top and right as seen, whichever way the page is turned.
+        let turn=ViewTurn(project.pages[i].rotation),edge=turn.storedEdge(seenAt:["h":3,"j":2,"k":0,"l":1][key]!)
         let step=0.005*(inward ? -1.0:1.0)
-        let delta=Point(key=="h" ? -step:key=="l" ? step:0,key=="k" ? -step:key=="j" ? step:0)
+        let delta=turn.photographDelta(Point(key=="h" ? -step:key=="l" ? step:0,key=="k" ? -step:key=="j" ? step:0))
         guard let q=project.pages[i].quad.movingEdge(edge,by:delta),q != project.pages[i].quad else{return}
         edit{$0.setManualCrop(q)}
     }
@@ -750,7 +751,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
             case .success(let output):
                 // Keep zoom and pan while only the tones change.
                 let resized=self.canvas.image?.width != output.width || self.canvas.image?.height != output.height
-                self.canvas.image=output;if resized{self.canvas.fit()}
+                self.canvas.showOutput(output);if resized{self.canvas.fit()}
             case .failure(let e):self.showError(e)}}}
     }
     @objc func candidateChanged(){guard let i=current else{return};let j=candidates.indexOfSelectedItem-1;guard project.pages[i].candidates.indices.contains(j) else{return};let q=project.pages[i].candidates[j].quad;edit{$0.selectProposal(q)}}
@@ -1153,7 +1154,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
 
     func showError(_ error:Error){let alert=NSAlert(error:error);alert.runModal()}
     @objc func cornerSegment(_ sender:NSSegmentedControl){selectCorner([0,1,3,2][sender.selectedSegment])}
-    func selectCorner(_ i:Int,keyboard:Bool=false){if canvas.preview{setPreview(false)};canvas.selectCorner(i,keyboard:keyboard);window.makeFirstResponder(canvas)}
+    /// `i` is the corner as seen, clockwise from top-left; the canvas wants the stored one.
+    func selectCorner(_ i:Int,keyboard:Bool=false){if canvas.preview{setPreview(false)};canvas.selectCorner(canvas.turn.storedCorner(seenAt:i),keyboard:keyboard);window.makeFirstResponder(canvas)}
     func handleKey(_ e:NSEvent)->Bool {
         guard !e.modifierFlags.contains(.command),!e.modifierFlags.contains(.control),let key=e.charactersIgnoringModifiers?.lowercased() else{return false}
         if [123,124,125,126].contains(e.keyCode),canvas.keyboardSelection {let mapping:[UInt16:String]=[123:"a",124:"d",125:"s",126:"w"];canvas.nudge(mapping[e.keyCode]!,large:e.modifierFlags.contains(.shift));return true}
@@ -1161,7 +1163,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
             if e.modifierFlags.contains(.option) {
                 guard let i=current else{return true}
                 let step=e.modifierFlags.contains(.shift) ? 0.02:0.005
-                let delta=Point(key=="h" ? -step:key=="l" ? step:0,key=="k" ? -step:key=="j" ? step:0)
+                let delta=ViewTurn(project.pages[i].rotation).photographDelta(Point(key=="h" ? -step:key=="l" ? step:0,key=="k" ? -step:key=="j" ? step:0))
                 if let q=project.pages[i].quad.translated(by:delta),q != project.pages[i].quad {
                     edit{$0.setManualCrop(q)}
                 }
@@ -1189,7 +1191,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
         case "f","0":fit();case "+","=":zoomIn();case "-":zoomOut();case "c":copyPrevious();case ";":shrinkCrop();case "'":expandCrop();case "x":resetCrop();case "z":if e.modifierFlags.contains(.shift) {redo()} else {undo()}
         case "n":nextReview();case "[":cycleCandidate(-1);case "]":cycleCandidate(1)
         case "1","2","3","4":selectCorner([0,1,3,2][Int(key)!-1],keyboard:true)
-        case "5","6","7","8":if canvas.preview{setPreview(false)};canvas.selectEdge([0,3,1,2][Int(key)!-5],keyboard:true);window.makeFirstResponder(canvas)
+        case "5","6","7","8":if canvas.preview{setPreview(false)};canvas.selectEdge(canvas.turn.storedEdge(seenAt:[0,3,1,2][Int(key)!-5]),keyboard:true);window.makeFirstResponder(canvas)
         case "?","/":help()
         default:
             if e.keyCode==53 {if canvas.smudgeMode{setSmudging(false)}else if canvas.zoneMode{canvas.zoneMode=false;status.stringValue="Picture zone cancelled"}else if canvas.hasSelection{canvas.releaseCorner()}else{stop()}}

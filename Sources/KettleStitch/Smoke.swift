@@ -100,10 +100,10 @@ extension AppDelegate {
             }
             // Rotation in both directions, flags, multi-page settings and structural undo.
             let turned=self.project.pages[1].rotation
-            key("r",15);precondition(self.project.pages[1].rotation==(turned+1)%4 && canvas.preview)
+            key("r",15);precondition(self.project.pages[1].rotation==(turned+1)%4 && !canvas.preview,"Turning the page leaves the view on the photograph")
             key("r",15,.shift);key("r",15,.shift);precondition(self.project.pages[1].rotation==(turned+3)%4)
             key("r",15);precondition(self.project.pages[1].rotation==turned)
-            key("p",35);precondition(!canvas.preview)
+            precondition(!canvas.preview)
             key("m",46);precondition(self.project.pages[1].flagged==true);key("m",46);precondition(self.project.pages[1].flagged==nil)
             self.table.selectRowIndexes(IndexSet([0,1]),byExtendingSelection:false)
             precondition(self.project.selected==1 && self.targetIndexes==[0,1])
@@ -287,6 +287,25 @@ extension AppDelegate {
             snapshot(view.superview ?? view,"sidebar-large.png")
             self.toggleSidebarLayout();precondition(!ThumbnailPolicy.large && self.table.rowHeight==58)
             print("SIDEBAR_LAYOUT passed")
+            // Turning the page turns the photograph on screen too, so the crop is adjusted the way round it comes out.
+            self.project.selected=0;self.selectCurrent();canvas.image=smokeImage;self.original=smokeImage;self.setPreview(false)
+            let level=canvas.imageRect,turnedBefore=self.project.pages[0].rotation
+            key("r",15)
+            precondition(!canvas.preview && self.project.pages[0].rotation==(turnedBefore+1)%4 && canvas.turn.quarterTurns==(turnedBefore+1)%4,"The view stays on the photograph, turned")
+            precondition((canvas.imageRect.width>canvas.imageRect.height) != (level.width>level.height),"A quarter turn stands the picture on its side")
+            // The crop's corners are where they are seen: the handle drawn top-left is the one key 1 selects.
+            let handles=self.project.pages[0].quad.points.map(canvas.position)
+            key("1",18);let chosen=canvas.selectedCorner!
+            precondition(handles.indices.allSatisfy{handles[chosen].x+handles[chosen].y<=handles[$0].x+handles[$0].y+0.5},"1 takes the corner seen top-left")
+            snapshot(self.window.contentView!,"turned.png")
+            key("\u{1b}",53)
+            // h still pushes out the side seen on the left.
+            let leftBefore=self.project.pages[0].quad.points.map(canvas.position).map{$0.x}.min()!
+            key("h",4,.shift);let leftAfter=self.project.pages[0].quad.points.map(canvas.position).map{$0.x}.min()!
+            precondition(leftAfter>leftBefore,"Shift-H pulls in the side seen on the left");self.undo()
+            self.setPreview(true);snapshot(self.window.contentView!,"turned-preview.png");self.setPreview(false)
+            key("r",15,.shift);precondition(self.project.pages[0].rotation==turnedBefore)
+            print("TURNED_VIEW passed")
             // A project file is written by Save, not by each edit.
             if self.hasProjectFile {
                 func onDisk()->Project? {try? Project.read(self.projectURL)}

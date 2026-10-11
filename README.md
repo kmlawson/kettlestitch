@@ -154,8 +154,8 @@ Single keys act on the main window and are off while you type in a field. Letter
 | --- | --- |
 | p | Corrected preview |
 | v | Copy the previous photograph's image settings (cleanup, exposure, brightness, contrast, sharpness), with the preview on |
-| r | Rotate the output clockwise |
-| Shift R | Rotate the output counterclockwise |
+| r | Turn the page clockwise |
+| Shift R | Turn the page counterclockwise |
 | + / − | Zoom in / out |
 | f or 0 | Zoom to fit |
 | a | Send the page to Claude, OpenAI or Gemini for a second opinion |

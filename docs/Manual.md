@@ -66,7 +66,7 @@ To adjust a crop:
 - **c** copies the previous photograph's crop. **Shift →** goes to the next photograph and takes the current crop along.
 - **x** sets the crop to the whole photograph. **d** detects again.
 
-**Return** marks the page reviewed and moves on; **n** jumps to the next unreviewed page. **m** flags a page to come back to. **r** and **Shift R** turn the output a quarter turn. Stepping past the first or last page flashes a red frame instead of moving.
+**Return** marks the page reviewed and moves on; **n** jumps to the next unreviewed page. **m** flags a page to come back to. **r** and **Shift R** turn the page a quarter turn. The photograph is shown turned the same way, so you adjust the crop the way round it will come out; the corner keys, **h j k l** and the arrow keys all go by what you see. Stepping past the first or last page flashes a red frame instead of moving.
 
 Things to know about the proposals:
 

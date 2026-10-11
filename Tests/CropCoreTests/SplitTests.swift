@@ -134,6 +134,39 @@ final class PageSplitTests:XCTestCase {
     }
 }
 
+final class ViewTurnTests:XCTestCase {
+    func testThePhotographIsShownTurnedAndPointsMapBothWays() {
+        // A quarter turn clockwise: the photograph's top-left ends up top-right, its bottom-left top-left.
+        let once=ViewTurn(1)
+        XCTAssertEqual(once.shown(Point(0,0)),Point(1,0));XCTAssertEqual(once.shown(Point(0,1)),Point(0,0));XCTAssertEqual(once.shown(Point(1,1)),Point(0,1))
+        XCTAssertEqual(ViewTurn(2).shown(Point(0.2,0.3)),Point(0.8,0.7))
+        XCTAssertEqual(ViewTurn(3).shown(Point(0,0)),Point(0,1),"Counterclockwise: top-left goes to bottom-left")
+        XCTAssertEqual(ViewTurn(0).shown(Point(0.2,0.3)),Point(0.2,0.3));XCTAssertEqual(ViewTurn(-1).quarterTurns,3);XCTAssertEqual(ViewTurn(5).quarterTurns,1)
+        for turns in 0..<4 {
+            let turn=ViewTurn(turns),p=Point(0.23,0.71),back=turn.photograph(turn.shown(p))
+            XCTAssertEqual(back.x,p.x,accuracy:1e-12);XCTAssertEqual(back.y,p.y,accuracy:1e-12)
+            // A movement on screen becomes the matching movement on the photograph.
+            let a=Point(0.4,0.4),moved=Point(turn.shown(a).x+0.1,turn.shown(a).y-0.05),delta=turn.photographDelta(Point(0.1,-0.05)),there=turn.photograph(moved)
+            XCTAssertEqual(a.x+delta.x,there.x,accuracy:1e-12);XCTAssertEqual(a.y+delta.y,there.y,accuracy:1e-12)
+        }
+    }
+    func testCornersAndSidesAreNamedAsTheyAreSeen() {
+        let quad=Quad([Point(0.1,0.1),Point(0.9,0.1),Point(0.9,0.8),Point(0.1,0.8)])
+        for turns in 0..<4 {
+            let turn=ViewTurn(turns)
+            // The stored corner that is seen top-left really is the one nearest the top-left of the view.
+            let seen=quad.points.map(turn.shown)
+            let topLeft=seen.indices.min{seen[$0].x+seen[$0].y<seen[$1].x+seen[$1].y}!,bottomRight=seen.indices.max{seen[$0].x+seen[$0].y<seen[$1].x+seen[$1].y}!
+            XCTAssertEqual(turn.storedCorner(seenAt:0),topLeft,"turns \(turns)");XCTAssertEqual(turn.storedCorner(seenAt:2),bottomRight)
+            // The stored edge seen at the top joins the two corners seen at the top.
+            let top=turn.storedEdge(seenAt:0),ends=[seen[top],seen[(top+1)%4]]
+            XCTAssertTrue(ends.allSatisfy{$0.y<0.5},"turns \(turns): \(ends)")
+            let left=turn.storedEdge(seenAt:3),sides=[seen[left],seen[(left+1)%4]]
+            XCTAssertTrue(sides.allSatisfy{$0.x<0.5},"turns \(turns): \(sides)")
+        }
+    }
+}
+
 final class SplitDetectorTests:XCTestCase {
     func testFindsLeaningFoldAwayFromCentre() throws {
         let proposal=try SplitDetector.detect(spread(fold:0.45,lean:0.03),quad:.full,rotation:0)

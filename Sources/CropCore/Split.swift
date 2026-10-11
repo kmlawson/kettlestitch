@@ -57,6 +57,31 @@ public struct Homography {
         return ((a*p.x+b*p.y+c)/w,(d*p.x+e*p.y+f)/w)
     }
 }
+/// How the photograph is shown when the page's output is turned: the same number of quarter turns clockwise, so
+/// that the crop is adjusted the way round it will come out. Stored geometry stays in the photograph's own
+/// coordinates; this only maps between them and what is seen.
+public struct ViewTurn: Equatable {
+    public let quarterTurns: Int
+    public init(_ quarterTurns: Int) {self.quarterTurns=((quarterTurns%4)+4)%4}
+    /// True when the photograph is seen on its side, so its width and height change places.
+    public var sideways: Bool {quarterTurns%2 == 1}
+    /// Where a point of the photograph is seen, in fractions of the turned picture.
+    public func shown(_ p: Point) -> Point {
+        switch quarterTurns {case 1:return Point(1-p.y,p.x);case 2:return Point(1-p.x,1-p.y);case 3:return Point(p.y,1-p.x);default:return p}
+    }
+    /// The point of the photograph seen at a place in the turned picture.
+    public func photograph(_ p: Point) -> Point {
+        switch quarterTurns {case 1:return Point(p.y,1-p.x);case 2:return Point(1-p.x,1-p.y);case 3:return Point(1-p.y,p.x);default:return p}
+    }
+    /// A movement in the turned picture as the movement it makes on the photograph.
+    public func photographDelta(_ d: Point) -> Point {
+        switch quarterTurns {case 1:return Point(d.y,-d.x);case 2:return Point(-d.x,-d.y);case 3:return Point(-d.y,d.x);default:return d}
+    }
+    /// The stored corner seen at a position, both counted clockwise from top-left.
+    public func storedCorner(seenAt position: Int) -> Int {(position+4-quarterTurns)%4}
+    /// The stored edge seen at a position, both counted clockwise from the top. Edge `i` joins corners `i` and `i+1`.
+    public func storedEdge(seenAt position: Int) -> Int {(position+4-quarterTurns)%4}
+}
 public enum SplitGeometry {
     /// The crop's corners in the order they appear in the rotated output: TL, TR, BR, BL.
     public static func outputCorners(_ quad: Quad, rotation: Int) -> [Point] {

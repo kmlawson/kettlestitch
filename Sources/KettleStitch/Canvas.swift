@@ -13,7 +13,12 @@ final class CropCanvas: NSView {
     }
     static let emptyProjectMessage="Drop photographs or a folder here\nor choose File ▸ Import Photographs.\n\nYour originals stay untouched."
     var placeholder=CropCanvas.emptyProjectMessage {didSet{needsDisplay=true}}
-    var image: CGImage? {didSet {needsDisplay=true}}
+    /// The picture on the canvas: the photograph, or after `showOutput` the corrected output.
+    var image: CGImage? {didSet {if !settingOutput {outputShown=false};needsDisplay=true}}
+    private var settingOutput=false
+    /// True while the picture is the corrected output, which is already turned; false for the photograph.
+    private(set) var outputShown=false
+    func showOutput(_ output: CGImage){settingOutput=true;image=output;settingOutput=false;outputShown=true}
     var quad=Quad.full {didSet{needsDisplay=true}}
     var preview=false {didSet{needsDisplay=true}}
     /// The proposed division between facing pages, and the output rotation it is measured in.
@@ -58,14 +63,34 @@ final class CropCanvas: NSView {
     private var moving=false
     override var isFlipped: Bool {true}
     override var acceptsFirstResponder: Bool {true}
-    var imageRect: CGRect {
+    /// How the photograph is turned on screen: by the page's output rotation, so the crop is adjusted the way round
+    /// it will come out. The corrected output is already turned; the photograph standing in while a preview is
+    /// being made is turned like any other.
+    var turn: ViewTurn {ViewTurn(outputShown ? 0:rotation)}
+    /// The picture's size as it is shown, in its own pixels.
+    private var shownSize: CGSize {
         guard let image else {return .zero}
-        let scale=min((bounds.width-64)/CGFloat(image.width),(bounds.height-64)/CGFloat(image.height))*zoom
-        let size=CGSize(width:CGFloat(image.width)*scale,height:CGFloat(image.height)*scale)
+        return turn.sideways ? CGSize(width:image.height,height:image.width):CGSize(width:image.width,height:image.height)
+    }
+    var imageRect: CGRect {
+        guard image != nil else {return .zero}
+        let shown=shownSize,scale=min((bounds.width-64)/shown.width,(bounds.height-64)/shown.height)*zoom
+        let size=CGSize(width:shown.width*scale,height:shown.height*scale)
         return CGRect(x:(bounds.width-size.width)/2+pan.x,y:(bounds.height-size.height)/2+pan.y,width:size.width,height:size.height)
     }
-    func position(_ p: Point) -> CGPoint {let r=imageRect;return CGPoint(x:r.minX+p.x*r.width,y:r.minY+p.y*r.height)}
-    func normalized(_ p: CGPoint) -> Point {let r=imageRect;return Point(min(1,max(0,(p.x-r.minX)/r.width)),min(1,max(0,(p.y-r.minY)/r.height)))}
+    /// Where a point of the photograph is on screen, and the point of the photograph at a place on screen.
+    func position(_ p: Point) -> CGPoint {let r=imageRect,s=turn.shown(p);return CGPoint(x:r.minX+s.x*r.width,y:r.minY+s.y*r.height)}
+    func normalized(_ p: CGPoint) -> Point {let r=imageRect;return turn.photograph(Point(min(1,max(0,(p.x-r.minX)/r.width)),min(1,max(0,(p.y-r.minY)/r.height))))}
+    /// Draws the picture into `rect`, which has the shape it is shown in, turned as it is shown.
+    private func drawPicture(_ image: CGImage, in rect: CGRect) {
+        let picture=NSImage(cgImage:image,size:NSSize(width:image.width,height:image.height))
+        guard turn.quarterTurns != 0 else {picture.draw(in:rect);return}
+        NSGraphicsContext.saveGraphicsState()
+        let around=NSAffineTransform();around.translateX(by:rect.midX,yBy:rect.midY);around.rotate(byDegrees:CGFloat(turn.quarterTurns)*90);around.concat()
+        let w=turn.sideways ? rect.height:rect.width,h=turn.sideways ? rect.width:rect.height
+        picture.draw(in:CGRect(x:-w/2,y:-h/2,width:w,height:h))
+        NSGraphicsContext.restoreGraphicsState()
+    }
     override func draw(_ dirtyRect: NSRect) {
         NSColor(calibratedWhite:0.105,alpha:1).setFill();bounds.fill()
         guard let image else {
@@ -74,7 +99,7 @@ final class CropCanvas: NSView {
             let attrs: [NSAttributedString.Key:Any]=[.font:NSFont.systemFont(ofSize:18),.foregroundColor:NSColor.lightGray,.paragraphStyle:centred]
             (s as NSString).draw(in:CGRect(x:40,y:bounds.midY-50,width:max(0,bounds.width-80),height:120),withAttributes:attrs);return
         }
-        NSImage(cgImage:image,size:NSSize(width:image.width,height:image.height)).draw(in:imageRect)
+        drawPicture(image,in:imageRect)
         if preview {
             // The corrected output is shown, so the split is simply a line across it.
             // A split spread is shown as its two pages, so there is no single output to draw zones over.
@@ -114,7 +139,7 @@ final class CropCanvas: NSView {
             NSGraphicsContext.saveGraphicsState();NSBezierPath(roundedRect:box,xRadius:10,yRadius:10).addClip()
             let r=imageRect,scale:CGFloat=3
             let dest=CGRect(x:box.midX+(r.minX-pos.x)*scale,y:box.midY+(r.minY-pos.y)*scale,width:r.width*scale,height:r.height*scale)
-            NSColor.black.setFill();box.fill();NSImage(cgImage:image,size:NSSize(width:image.width,height:image.height)).draw(in:dest)
+            NSColor.black.setFill();box.fill();drawPicture(image,in:dest)
             NSColor.systemMint.setStroke();let cross=NSBezierPath();cross.move(to:CGPoint(x:box.midX-12,y:box.midY));cross.line(to:CGPoint(x:box.midX+12,y:box.midY));cross.move(to:CGPoint(x:box.midX,y:box.midY-12));cross.line(to:CGPoint(x:box.midX,y:box.midY+12));cross.stroke();NSGraphicsContext.restoreGraphicsState()
         }
     }
@@ -200,11 +225,11 @@ final class CropCanvas: NSView {
         }
         else if let edge,!preview {
             let r=imageRect
-            if let q=before.movingEdge(edge,by:Point((p.x-start.x)/r.width,(p.y-start.y)/r.height)){quad=q}
+            if let q=before.movingEdge(edge,by:turn.photographDelta(Point((p.x-start.x)/r.width,(p.y-start.y)/r.height))){quad=q}
         }
         else if moving && !preview {
-            let r=imageRect,dx=(p.x-start.x)/r.width,dy=(p.y-start.y)/r.height
-            let q=Quad(before.points.map{Point($0.x+dx,$0.y+dy)});if q.valid {quad=q}
+            let r=imageRect,d=turn.photographDelta(Point((p.x-start.x)/r.width,(p.y-start.y)/r.height))
+            let q=Quad(before.points.map{Point($0.x+d.x,$0.y+d.y)});if q.valid {quad=q}
         } else {pan=CGPoint(x:oldPan.x+p.x-start.x,y:oldPan.y+p.y-start.y);needsDisplay=true}
     }
     override func mouseUp(with event: NSEvent) {
@@ -254,10 +279,11 @@ final class CropCanvas: NSView {
     func selectEdge(_ i: Int, keyboard:Bool=false){keyboardSelection=keyboard;edge=i;corner=nil;showMagnifier=false;needsDisplay=true}
     func releaseCorner(){keyboardSelection=false;corner=nil;edge=nil;showMagnifier=false;needsDisplay=true}
     func nudge(_ key: String, large: Bool){
-        guard let image,!preview else{return}
-        let step=large ? 10.0:1.0
-        let dx=(key=="d" ? step:key=="a" ? -step:0)/Double(image.width)
-        let dy=(key=="s" ? step:key=="w" ? -step:0)/Double(image.height)
+        guard image != nil,!preview else{return}
+        // A step is so many pixels of the picture as it is shown; the keys move it the way they point on screen.
+        let step=large ? 10.0:1.0,shown=shownSize
+        let d=turn.photographDelta(Point((key=="d" ? step:key=="a" ? -step:0)/Double(shown.width),(key=="s" ? step:key=="w" ? -step:0)/Double(shown.height)))
+        let dx=d.x,dy=d.y
         var q=quad
         if let c=corner {q.points[c].x+=dx;q.points[c].y+=dy;showMagnifier=true}
         else if let edge,let moved=quad.movingEdge(edge,by:Point(dx,dy)){q=moved}
