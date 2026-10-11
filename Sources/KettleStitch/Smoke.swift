@@ -230,11 +230,16 @@ extension AppDelegate {
             print("END_OF_BOOK passed")
             // The smudge brush: a stroke is kept on the page, Undo takes it back, and Escape puts the brush down.
             self.project.selected=0;self.selectCurrent();canvas.image=smokeImage;self.original=smokeImage;let strokes=self.project.pages[0].smudges?.count ?? 0
+            precondition(self.smudgeRows.count==2 && self.smudgeRows.allSatisfy{$0.isHidden} && self.smudgeButton.state == .off,"The brush's width and strength are out of sight until it is picked up")
+            precondition(!self.clearSmudgeButton.isEnabled || strokes>0,"Nothing to erase, so the crossed-out button is off")
             key("b",11,.shift);precondition(canvas.smudgeMode && !canvas.preview,"Shift-B picks up the brush")
+            precondition(self.smudgeRows.allSatisfy{!$0.isHidden} && self.smudgeButton.state == .on)
+            snapshot(self.window.contentView!,"smudge-on.png")
             canvas.onSmudgeCommit?([Point(0.3,0.3),Point(0.5,0.3)])
             precondition(self.project.pages[0].smudges?.count==strokes+1 && self.project.pages[0].smudges?.last?.strength==self.smudgeStrengthSlider.doubleValue)
+            precondition(self.clearSmudgeButton.isEnabled,"With a smudge on the page it can be erased")
             self.undo();precondition((self.project.pages[0].smudges?.count ?? 0)==strokes)
-            key("\u{1b}",53);precondition(!canvas.smudgeMode)
+            key("\u{1b}",53);precondition(!canvas.smudgeMode && self.smudgeRows.allSatisfy{$0.isHidden} && self.smudgeButton.state == .off)
             print("SMUDGE passed")
             // The hidden tool for collecting detector mistakes keeps the photograph, its data and a marked-up picture.
             self.project.selected=0;self.selectCurrent();self.saveBadExample()

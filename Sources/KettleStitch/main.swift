@@ -44,7 +44,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
     let smudgeSizeSlider=NSSlider(value:0.02,minValue:0.005,maxValue:0.08,target:nil,action:nil)
     let smudgeStrengthSlider=NSSlider(value:0.5,minValue:0,maxValue:1,target:nil,action:nil)
     let smudgeSizeValue=NSTextField(labelWithString:""),smudgeStrengthValue=NSTextField(labelWithString:"")
-    let smudgeControl=NSSegmentedControl()
+    let smudgeButton=NSButton(),clearSmudgeButton=NSButton()
+    var smudgeRows:[NSGridRow]=[]
     let brightnessValue=NSTextField(labelWithString:"0"),contrastValue=NSTextField(labelWithString:"0"),sharpnessValue=NSTextField(labelWithString:"0")
     let widthField=NSTextField()
     let heightField=NSTextField()
@@ -369,6 +370,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
     func refreshDetail(){
         let reviewed=project.pages.filter{$0.reviewed}.count
         inspectorControls.forEach{$0.isEnabled=current != nil}
+        showSmudgeState()
         canvas.zones=current.flatMap{project.pages[$0].pictureZones} ?? []
         if !canvas.isDraggingSplit {canvas.split=current.flatMap{project.pages[$0].split}};canvas.rotation=current.map{project.pages[$0].rotation} ?? 0
         guard let i=current else{
@@ -626,7 +628,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
         edit(targets,geometry:false){$0.pictureZones=nil};status.stringValue="Picture zones removed"
     }
     // MARK: Smudge brush
-    @objc func toggleSmudge(){setSmudging(!canvas.smudgeMode)}
+    @objc func toggleSmudge(){setSmudging(!canvas.smudgeMode);showSmudgeState()}
     func setSmudging(_ on:Bool){
         guard on != canvas.smudgeMode else{return}
         if on {
@@ -635,16 +637,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
             canvas.zoneMode=false;canvas.smudgeRadius=smudgeSizeSlider.doubleValue;window.makeFirstResponder(canvas)
             status.stringValue="Smudge brush: drag over the print to blur it · Size and Strength are in the inspector · Escape puts the brush down"
         } else {status.stringValue="Smudge brush put down"}
-        canvas.smudgeMode=on;smudgeControl.setSelected(on,forSegment:0)
+        canvas.smudgeMode=on;showSmudgeState()
     }
     @objc func removeSmudges(){
         let targets=targetIndexes.filter{project.pages[$0].smudges != nil};guard !targets.isEmpty else{status.stringValue="No smudges to remove";return}
         edit(targets,geometry:false){$0.smudges=nil};status.stringValue="Smudges removed"
     }
-    @objc func smudgeSegment(_ sender:NSSegmentedControl){
-        // The first segment shows whether the brush is in hand; the control itself does not keep a selection.
-        let segment=sender.selectedSegment;sender.setSelected(canvas.smudgeMode,forSegment:0);sender.setSelected(false,forSegment:1)
-        segment==0 ? toggleSmudge():removeSmudges()
+    /// The brush button is lit while the brush is in hand, when its width and strength show; the crossed-out
+    /// button works only when a page it would act on has smudges.
+    func showSmudgeState(){
+        smudgeButton.state=canvas.smudgeMode ? .on:.off
+        for row in smudgeRows {row.isHidden = !canvas.smudgeMode}
+        clearSmudgeButton.isEnabled=targetIndexes.contains{project.pages[$0].smudges != nil}
     }
     @objc func smudgeBrushChanged(_ sender:Any?){
         canvas.smudgeRadius=smudgeSizeSlider.doubleValue
@@ -716,7 +720,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
         let changed=canvas.preview != on
         canvas.preview=on;previewItem?.setSelected(on,at:0)
         if changed {table.reloadData(forRowIndexes:IndexSet(integersIn:0..<project.pages.count),columnIndexes:IndexSet(integer:0))}
-        if on{canvas.smudgeMode=false;smudgeControl.setSelected(false,forSegment:0);renderPreview()}else if original != nil{displayToken=UUID();canvas.image=original;canvas.fit();showPhotograph()}
+        if on{canvas.smudgeMode=false;showSmudgeState();renderPreview()}else if original != nil{displayToken=UUID();canvas.image=original;canvas.fit();showPhotograph()}
     }
     @objc func togglePreview(){setPreview(!canvas.preview)}
     func renderPreview(){guard let image=original,let i=current else{return};let p=project.pages[i],token=UUID();displayToken=token
