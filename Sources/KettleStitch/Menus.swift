@@ -91,7 +91,7 @@ extension AppDelegate: NSMenuItemValidation, NSMenuDelegate {
         page.addItem(.separator())
         add(page,"Reverse Pages Order",#selector(reversePages));add(page,"Remove from Project",#selector(removePages),"\u{8}")
 
-        let crop=menu("Crop")
+        let crop=menu("Tools")
         add(crop,"Detect Cropping Frame",#selector(detectCurrent),"d",plain);add(crop,"Detect All Pending Pages",#selector(detectPending),"b",plain)
         add(crop,"Next Proposal",#selector(nextCandidate),"]",plain);add(crop,"Previous Proposal",#selector(previousCandidate),"[",plain)
         crop.addItem(.separator())

@@ -65,4 +65,4 @@ Always run these against a copy of a project, never a real one: they edit it.
 
 ## Collecting detector mistakes
 
-Holding Option while opening the Crop menu shows **Save Bad Crop/Split Example** (⌥⌘B at any time). It writes the photograph, `example.json` (the page's crop, split and proposals, and the page before it, with file names only) and `overlay.jpg` into a new folder under `Bad Examples` in the support folder.
+Holding Option while opening the Tools menu shows **Save Bad Crop/Split Example** (⌥⌘B at any time). It writes the photograph, `example.json` (the page's crop, split and proposals, and the page before it, with file names only) and `overlay.jpg` into a new folder under `Bad Examples` in the support folder.

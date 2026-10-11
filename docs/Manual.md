@@ -206,7 +206,7 @@ Then **a**, or the toolbar's Second Opinion button, sends the page on screen, or
 - **While you wait:** the status bar names the model and page and counts the seconds; the page dims under a spinner in the sidebar. **Esc** stops.
 - **The answer:** if the model moves a corner, its crop is selected at once and added to the proposals under the provider's name. A corrected split line is applied the same way. ⌘Z puts either back. Its comment, of a few words, appears under the file name.
 - **If you edited the crop while waiting,** the answer is discarded.
-- **Cost:** the status bar shows the tokens used and, where the price is known, an estimate of the cost. **Crop ▸ Second Opinion Usage Log…** lists every request.
+- **Cost:** the status bar shows the tokens used and, where the price is known, an estimate of the cost. **Tools ▸ Second Opinion Usage Log…** lists every request.
 - **Failures:** a busy service is retried up to three times. A rejected key, or a model declining a page, is reported once and stops a batch.
 
 A model's corners are estimates; treat them like any other proposal.
