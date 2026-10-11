@@ -117,10 +117,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
     /// Where the history of requests to Claude is kept.
     var usageURL=URL(fileURLWithPath:"/dev/null")
     var shortcutMonitor: Any?
-    var thumbs=NSCache<NSString,NSImage>()
-    var thumbnailPending=Set<String>()
-    var previewThumbs=NSCache<NSString,PreviewThumbnail>()
+    /// Sidebar pictures by photograph, and by page as the preview shows them. See `trimThumbnails`.
+    var thumbs:[String:NSImage]=[:]
+    var previewThumbs:[UUID:PreviewThumbnail]=[:]
+    /// When each picture was asked for, how often loading one has failed, and how many times the regular check
+    /// had to put a blank row right.
+    var thumbnailPending:[String:Date]=[:]
+    var thumbnailFailures:[String:Int]=[:]
     var previewPending=Set<UUID>()
+    var thumbnailRecoveries=0
+    var thumbnailTimer: Timer?
     var current: Int? {project.pages.indices.contains(project.selected) ? project.selected:nil}
     /// Pages a settings change applies to: the sidebar selection when it includes the photograph on screen.
     var targetIndexes: [Int] {
@@ -135,7 +141,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
         reviewQueue.maxConcurrentOperationCount=1;reviewQueue.qualityOfService = .utility
         splitQueue.maxConcurrentOperationCount=1;splitQueue.qualityOfService = .userInitiated
         thumbnailQueue.maxConcurrentOperationCount=3;thumbnailQueue.qualityOfService = .utility
-        thumbs.totalCostLimit=24*1024*1024;previewThumbs.countLimit=400
         let library=FileManager.default.urls(for:.applicationSupportDirectory,in:.userDomainMask)[0]
         let support=testDirectory.map{URL(fileURLWithPath:$0)} ?? library.appendingPathComponent("KettleStitch")
         if testDirectory == nil {carryOverLegacyData(in:library,to:support)}
@@ -165,6 +170,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
         }
         reloadPages();selectCurrent();updateTitle()
         UserDefaults.standard.register(defaults:[SettingsController.autosaveKey:true])
+        thumbnailTimer=Timer.scheduledTimer(withTimeInterval:ThumbnailPolicy.checkInterval,repeats:true){[weak self] _ in self?.checkThumbnails()}
         autosaveTimer=Timer.scheduledTimer(withTimeInterval:LaunchPolicy.autosaveInterval,repeats:true){[weak self] _ in
             guard let self,LaunchPolicy.shouldAutosave(enabled:UserDefaults.standard.bool(forKey:SettingsController.autosaveKey),hasProjectFile:self.hasProjectFile,unsaved:self.unsaved) else{return}
             if self.write() {self.status.stringValue="Auto-saved \(self.projectURL.lastPathComponent)"}
@@ -204,42 +210,94 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
     func tableView(_ tableView:NSTableView,viewFor tableColumn:NSTableColumn?,row:Int)->NSView? {
         let p=project.pages[row]
         let cell=(tableView.makeView(withIdentifier:PageCell.identifier,owner:nil) as? PageCell) ?? PageCell()
-        cell.show(p,number:row+1,thumbnail:thumbnail(p),unusual:deviationRows.indices.contains(row) ? deviationRows[row].reason:nil,review:ReviewProgress.state(p.id,active:reviewActive,pending:reviewPending))
-        if cell.thumb.image==nil && !thumbnailPending.contains(p.path) {
-            // A picture belongs to its file, not to the page list as it was when asked for: it is kept whatever has
-            // been removed, reordered or stopped since, and shown in whichever rows now hold that photograph.
-            thumbnailPending.insert(p.path);let path=p.path
-            thumbnailQueue.addOperation{[weak self] in
-                let image=try? Imaging.load(URL(fileURLWithPath:path),maxPixel:120)
-                DispatchQueue.main.async {guard let self else{return};self.thumbnailPending.remove(path)
-                    guard let image else{return}
-                    self.thumbs.setObject(NSImage(cgImage:image,size:NSSize(width:image.width,height:image.height)),forKey:path as NSString,cost:image.width*image.height*4)
-                    let rows=IndexSet(self.project.pages.indices.filter{self.project.pages[$0].path==path})
-                    if !rows.isEmpty {self.table.reloadData(forRowIndexes:rows,columnIndexes:IndexSet(integer:0))}
-                }
-            }
+        let picture=thumbnail(p)
+        cell.show(p,number:row+1,thumbnail:picture,unusual:deviationRows.indices.contains(row) ? deviationRows[row].reason:nil,review:ReviewProgress.state(p.id,active:reviewActive,pending:reviewPending))
+        // No picture yet: ask for it, or say plainly that the photograph cannot be read, so a row is never just blank.
+        if picture == nil {
+            if thumbnailUnreadable(p.path) {cell.showUnreadable()} else {requestThumbnail(p.path)}
         }
         return cell
     }
+    /// True when the photograph is missing, or has failed to load as often as is worth trying.
+    func thumbnailUnreadable(_ path:String)->Bool {
+        (thumbnailFailures[path] ?? 0)>=ThumbnailPolicy.attempts || !FileManager.default.fileExists(atPath:path)
+    }
+    /// Loads a photograph's sidebar picture in the background. A picture belongs to its file, not to the page list
+    /// as it was when asked for: it is kept whatever has been removed, reordered or stopped since, and shown in
+    /// whichever rows now hold that photograph. A load that fails is tried again a little later.
+    func requestThumbnail(_ path:String){
+        guard thumbnailPending[path] == nil else{return}
+        thumbnailPending[path]=Date()
+        thumbnailQueue.addOperation{[weak self] in
+            let image=try? Imaging.load(URL(fileURLWithPath:path),maxPixel:ThumbnailPolicy.plainPixels)
+            DispatchQueue.main.async {guard let self else{return};self.thumbnailPending[path]=nil
+                if let image {
+                    self.thumbnailFailures[path]=nil
+                    self.thumbs[path]=NSImage(cgImage:image,size:NSSize(width:image.width,height:image.height))
+                    self.trimThumbnails();self.reloadRows(showing:path)
+                } else {
+                    let failures=(self.thumbnailFailures[path] ?? 0)+1;self.thumbnailFailures[path]=failures
+                    // Reloading the row asks again, or shows the mark for a photograph that cannot be read.
+                    DispatchQueue.main.asyncAfter(deadline:.now()+ThumbnailPolicy.retryDelay(after:failures)){[weak self] in self?.reloadRows(showing:path)}
+                }
+            }
+        }
+    }
+    func reloadRows(showing path:String){
+        let rows=IndexSet(project.pages.indices.filter{project.pages[$0].path==path})
+        if !rows.isEmpty {table.reloadData(forRowIndexes:rows,columnIndexes:IndexSet(integer:0))}
+    }
+    /// Sidebar pictures are held firmly, not in a cache the system may empty when memory is short: an emptied cache
+    /// showed as rows going blank. They are small, and only a very long book has any dropped, farthest pages first.
+    func trimThumbnails(){
+        guard thumbs.count>ThumbnailPolicy.kept || previewThumbs.count>ThumbnailPolicy.kept else{return}
+        let visible=table.rows(in:table.visibleRect),centre=visible.location+visible.length/2
+        let order=project.pages.indices.sorted{abs($0-centre)<abs($1-centre)}.prefix(ThumbnailPolicy.kept*3/4)
+        let paths=Set(order.map{project.pages[$0].path}),ids=Set(order.map{project.pages[$0].id})
+        thumbs=thumbs.filter{paths.contains($0.key)};previewThumbs=previewThumbs.filter{ids.contains($0.key)}
+    }
     /// The sidebar picture for a page: the photograph, or in preview what export will make of it.
     func thumbnail(_ p:Page)->NSImage? {
-        guard let plain=thumbs.object(forKey:p.path as NSString) else{return nil}
+        guard let plain=thumbs[p.path] else{return nil}
         guard canvas.preview else{return plain}
-        let key=p.id.uuidString as NSString,look=PreviewThumbnail.look(p),made=previewThumbs.object(forKey:key)
+        let look=PreviewThumbnail.look(p),made=previewThumbs[p.id]
         if let made,made.look==look {return made.image}
-        if !previewPending.contains(p.id),let source=plain.cgImage(forProposedRect:nil,context:nil,hints:nil) {
-            previewPending.insert(p.id)
+        if !previewPending.contains(p.id) {
+            previewPending.insert(p.id);let small=plain.cgImage(forProposedRect:nil,context:nil,hints:nil)
             thumbnailQueue.addOperation{[weak self] in
-                let image=try? Exporter.preview(source,page:p)
+                // Cleanup is tuned for print at reading size: worked on the tiny sidebar picture it wipes a page of
+                // text to plain white, which looked as if the picture had gone. So the preview is made from a
+                // larger copy of the photograph and then reduced.
+                let source=(try? Imaging.load(URL(fileURLWithPath:p.path),maxPixel:ThumbnailPolicy.previewSourcePixels)) ?? small
+                let image=source.flatMap{try? Exporter.preview($0,page:p)}.map{ThumbnailPolicy.reduced($0,to:ThumbnailPolicy.previewPixels)}
                 DispatchQueue.main.async {guard let self else{return};self.previewPending.remove(p.id)
                     guard let image else{return}
-                    self.previewThumbs.setObject(PreviewThumbnail(NSImage(cgImage:image,size:NSSize(width:image.width,height:image.height)),look),forKey:key)
+                    self.previewThumbs[p.id]=PreviewThumbnail(NSImage(cgImage:image,size:NSSize(width:image.width,height:image.height)),look)
+                    self.trimThumbnails()
                     if let row=self.project.pages.firstIndex(where:{$0.id==p.id}) {self.table.reloadData(forRowIndexes:IndexSet(integer:row),columnIndexes:IndexSet(integer:0))}
                 }
             }
         }
         // The last rendering stands in until the new one is ready.
         return made?.image ?? plain
+    }
+    /// Looks at the rows on screen every couple of seconds. A row with no picture and nothing under way to get one
+    /// is asked for again, and a request that never came back is forgotten so that it can be made anew.
+    func checkThumbnails(){
+        guard window.isVisible,!project.pages.isEmpty else{return}
+        for (path,asked) in thumbnailPending where Date().timeIntervalSince(asked)>ThumbnailPolicy.patience && thumbnailQueue.operationCount==0 {
+            thumbnailPending[path]=nil;thumbnailRecoveries+=1
+        }
+        let visible=table.rows(in:table.visibleRect);var blank=IndexSet()
+        for row in visible.location..<NSMaxRange(visible) where project.pages.indices.contains(row) {
+            guard let cell=table.view(atColumn:0,row:row,makeIfNecessary:false) as? PageCell else{continue}
+            let path=project.pages[row].path
+            // Blank with nothing coming, or still marked unreadable though the picture has since arrived.
+            if cell.thumb.image == nil ? thumbnailPending[path] == nil:(cell.unreadable && thumbs[path] != nil) {blank.insert(row)}
+        }
+        guard !blank.isEmpty else{return}
+        thumbnailRecoveries+=blank.count
+        table.reloadData(forRowIndexes:blank,columnIndexes:IndexSet(integer:0))
     }
     /// A full reload resets the table's selection; that must not change the photograph on screen.
     func reloadPages(){reloading=true;table.reloadData();reloading=false}
@@ -447,6 +505,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
             return
         }
         proposeSplits(targets,record:true)
+    }
+    /// Proposes a split on every page that has none, working down the book so each goes by the one before.
+    /// Pages already split are left alone, since those may have been put right by hand. Never done unasked.
+    @objc func proposeAllSplits(){
+        let unsplit=project.pages.indices.filter{project.pages[$0].split == nil}
+        guard !unsplit.isEmpty else{status.stringValue=project.pages.isEmpty ? "There are no pages to split":"Every page already has a split";return}
+        proposeSplits(unsplit,record:true)
     }
     /// Looks for the fold on each page in the background. One undo step covers the whole request.
     func proposeSplits(_ indexes:[Int],record:Bool){
@@ -773,7 +838,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
     @objc func openProject(){let panel=NSOpenPanel();panel.allowedContentTypes=ImportPolicy.projectExtensions.compactMap{UTType(filenameExtension:$0)}+[.json];guard confirmUnsaved(),panel.runModal() == .OK,let url=panel.url else{return};open(url)}
     @objc func openRecent(_ sender:NSMenuItem){if let url=sender.representedObject as? URL,confirmUnsaved(){open(url)}}
     func open(_ url:URL){
-        do{let loaded=try Project.read(url);writeUntitled();stop();generation=UUID();decoded=[:];project=loaded;project.selected=min(max(0,project.selected),max(0,project.pages.count-1));projectURL=url;unsaved=false;noteRecent();updateTitle();undoStack=[];redoStack=[];thumbs.removeAllObjects();thumbnailPending=[];pixelSizes=[:];reloadPages();selectCurrent();status.stringValue="Opened \(url.lastPathComponent)";DispatchQueue.main.async{self.findMissingPhotographs()}}catch{showError(error)}
+        do{let loaded=try Project.read(url);writeUntitled();stop();generation=UUID();decoded=[:];project=loaded;project.selected=min(max(0,project.selected),max(0,project.pages.count-1));projectURL=url;unsaved=false;noteRecent();updateTitle();undoStack=[];redoStack=[];thumbs=[:];previewThumbs=[:];thumbnailPending=[:];thumbnailFailures=[:];pixelSizes=[:];reloadPages();selectCurrent();status.stringValue="Opened \(url.lastPathComponent)";DispatchQueue.main.async{self.findMissingPhotographs()}}catch{showError(error)}
     }
     @objc func locatePhotographs(){findMissingPhotographs();if Relink.missing(project.pages,exists:FileManager.default.fileExists(atPath:)).isEmpty {status.stringValue="Every photograph is where the project expects it"}}
     /// A project holds each photograph's full path. When some are gone, the project's own folder is tried first;
@@ -799,7 +864,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
             }
         }
         guard found>0 else{return}
-        thumbnailPending=[];save();reloadPages();selectCurrent()
+        thumbnailPending=[:];thumbnailFailures=[:];save();reloadPages();selectCurrent()
         status.stringValue="Found \(found) photograph\(found==1 ? "":"s")"+(missing.isEmpty ? "":" · \(missing.count) still missing — File ▸ Locate Missing Photographs")
     }
     @objc func saveAs(){let panel=NSSavePanel();panel.nameFieldStringValue="Book.kettlestitch";guard panel.runModal() == .OK,let url=panel.url else{return};do{try project.save(url);projectURL=url;write();status.stringValue="Saved \(url.lastPathComponent)"}catch{showError(error)}}
@@ -1058,6 +1123,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
         case "p":togglePreview()
         case "r":e.modifierFlags.contains(.shift) ? rotateLeft():rotate()
         case "a":sendToClaude();case "m":toggleFlag()
+        case "t" where e.modifierFlags.contains(.option) && !e.modifierFlags.contains(.shift):proposeAllSplits()
         case "t":e.modifierFlags.contains(.shift) ? removeSplit():proposeSplit()
         case "v" where !e.modifierFlags.contains(.shift):copyPreviousAdjustments()
         case ",","<":e.modifierFlags.contains(.option) ? turnDeskew(-0.1):moveSplit(e.modifierFlags.contains(.shift) ? -0.01:-0.002)

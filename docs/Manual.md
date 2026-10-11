@@ -187,7 +187,7 @@ Every automatic crop remains unreviewed. No score is presented as a calibrated a
 ## Foundations and limits
 
 - Swift/AppKit UI, ImageIO decoding, Vision detection and text recognition, Core Image perspective rendering and cleanup; no external package dependencies. Nothing leaves the Mac except through Send to Claude.
-- Bounded queues for current preview, thumbnails, detection and export. Thumbnail cache capped at 24 MiB. Detection, export, Claude review and split proposals each process one image at a time and share one progress bar; full originals are decoded only for export.
+- Bounded queues for current preview, thumbnails, detection and export. Sidebar pictures are kept in memory for the whole book (up to 3,000, nearest pages first), reloaded if one is ever found missing, and a photograph that cannot be read is marked with a warning sign rather than left blank. Detection, export, Claude review and split proposals each process one image at a time and share one progress bar; full originals are decoded only for export.
 - EXIF orientation normalized on load. Crop coordinates are normalized against the upright original, ordered top-left, top-right, bottom-right, bottom-left.
 - Versioned JSON projects written atomically. Revision checks prevent stale detection from replacing newer edits. Undo/redo covers crop geometry, review state, output rotation, flags, image adjustments, page format, page order and removal within the running session. A slider drag is one undo step.
 - Originals are referenced, not copied; moved photographs can be located again, by file name. File-change detection, portable project packages, and persistent undo history remain future work.

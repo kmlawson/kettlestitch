@@ -256,6 +256,12 @@ extension AppDelegate {
             key("t",17);precondition(self.project.pages[0].split==options[1]);key("t",17);precondition(self.project.pages[0].split==options[2])
             key("t",17);precondition(self.project.pages[0].split==options[0],"After the last candidate comes the first")
             self.project.pages[0].split=nil;self.splitOptions[cycled.id]=nil;self.refreshDetail()
+            // Option-t asks for a split on every page without one, and leaves those that have one alone.
+            self.project.pages[1].split=PageSplit(top:0.31,bottom:0.31)
+            let asked=NSEvent.keyEvent(with:.keyDown,location:.zero,modifierFlags:.option,timestamp:0,windowNumber:self.window.windowNumber,context:nil,characters:"†",charactersIgnoringModifiers:"t",isARepeat:false,keyCode:17)!
+            precondition(self.handleKey(asked) && self.tracker.isRunning(.split),"Option-t starts proposing splits through the book")
+            precondition(self.project.pages[1].split==PageSplit(top:0.31,bottom:0.31),"A page that already has a split keeps it")
+            self.stop();self.project.pages[1].split=nil;for i in self.project.pages.indices {self.project.pages[i].split=nil};self.refreshDetail()
             print("SPLIT_CANDIDATES passed")
             // V brings over the previous page's image adjustments and turns the preview on to show them.
             var borrowed=Adjustments();borrowed.cleanup = .grayscale;borrowed.brightness=0.25;borrowed.sharpness=0.4
@@ -361,13 +367,47 @@ extension AppDelegate {
             let (label,row)=plan.removeFirst();measure(label,row,run)
         }
         if CommandLine.arguments.contains("--thumbs") {
-            // Sidebar pictures after pages are removed: every visible row should still have one.
-            func missing()->[Int] {(0..<min(8,self.project.pages.count)).filter{(self.table.view(atColumn:0,row:$0,makeIfNecessary:true) as? PageCell)?.thumb.image==nil}}
-            DispatchQueue.main.asyncAfter(deadline:.now()+(CommandLine.arguments.contains("--early") ? 0.15:4)){
-                print("THUMBS before removal, rows without a picture: \(missing())")
+            // Sidebar pictures through the things that used to lose them: removing pages, the preview with
+            // black-and-white cleanup, a photograph that is missing, a picture or a request that goes astray.
+            setvbuf(stdout,nil,_IONBF,0)
+            func cell(_ row:Int)->PageCell? {self.table.view(atColumn:0,row:row,makeIfNecessary:true) as? PageCell}
+            func blank()->[Int] {(0..<min(8,self.project.pages.count)).filter{cell($0)?.thumb.image==nil}}
+            /// The share of a picture's pixels that are darker than light gray: near zero for a blank white one.
+            func ink(_ image:NSImage?)->Double {
+                guard let cg=image?.cgImage(forProposedRect:nil,context:nil,hints:nil) else{return -1}
+                let w=cg.width,h=cg.height;var gray=[UInt8](repeating:0,count:w*h)
+                gray.withUnsafeMutableBytes{b in CGContext(data:b.baseAddress,width:w,height:h,bitsPerComponent:8,bytesPerRow:w,space:CGColorSpaceCreateDeviceGray(),bitmapInfo:0)?.draw(cg,in:CGRect(x:0,y:0,width:w,height:h))}
+                return Double(gray.filter{$0<200}.count)/Double(max(1,w*h))
+            }
+            func after(_ seconds:Double,_ work:@escaping()->Void){DispatchQueue.main.asyncAfter(deadline:.now()+seconds,execute:work)}
+            after(CommandLine.arguments.contains("--early") ? 0.15:4){
+                print("THUMBS rows without a picture before removal: \(blank())")
                 self.table.selectRowIndexes(IndexSet([1,2,3]),byExtendingSelection:false);self.project.selected=1;self.removePages()
-                print("THUMBS just after removal: \(missing())")
-                DispatchQueue.main.asyncAfter(deadline:.now()+4){print("THUMBS 4 s after removal: \(missing())");self.unsaved=false;exit(0)}
+                after(4){
+                    precondition(blank().isEmpty,"Every row has its picture again after pages are removed");print("THUMBS after removal: all rows have pictures")
+                    // Preview with black-and-white cleanup: the picture must still show the page, not a white blank.
+                    var bw=Adjustments();bw.cleanup = .blackAndWhite
+                    for i in 0..<min(8,self.project.pages.count) {self.project.pages[i].adjustments=bw}
+                    self.project.selected=0;self.selectCurrent();self.setPreview(true)
+                    after(6){
+                        let shares=(0..<4).map{ink(cell($0)?.thumb.image)}
+                        print("THUMBS preview with black and white, dark share of rows 0-3: \(shares.map{String(format:"%.3f",$0)})")
+                        precondition(shares.allSatisfy{$0>0.02},"A black-and-white preview picture still shows the page")
+                        self.setPreview(false)
+                        // A picture lost from memory, and a request that never came back, are both put right by the regular check.
+                        let lost=self.project.pages[0].path,stuck=self.project.pages[1].path,before=self.thumbnailRecoveries
+                        self.thumbs[lost]=nil;cell(0)?.thumb.image=nil
+                        self.thumbs[stuck]=nil;cell(1)?.thumb.image=nil;self.thumbnailPending[stuck]=Date(timeIntervalSinceNow:-60)
+                        // A photograph that is not there is marked as such, not left blank.
+                        self.project.pages[2].path="/nowhere/missing-photograph.jpg";self.table.reloadData(forRowIndexes:IndexSet(integer:2),columnIndexes:IndexSet(integer:0))
+                        after(7){
+                            precondition(cell(0)?.thumb.image != nil && cell(1)?.thumb.image != nil && self.thumbs[lost] != nil && self.thumbs[stuck] != nil,"The check restores a lost picture and retries a request that went astray")
+                            precondition(self.thumbnailRecoveries>before,"and counts that it had to")
+                            precondition(cell(2)?.unreadable==true && cell(2)?.thumb.image != nil,"A missing photograph shows a mark")
+                            print("THUMBS check restored \(self.thumbnailRecoveries-before) blank rows; the missing photograph is marked");self.unsaved=false;exit(0)
+                        }
+                    }
+                }
             }
             return
         }

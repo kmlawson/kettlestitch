@@ -97,7 +97,7 @@ extension AppDelegate: NSMenuItemValidation, NSMenuDelegate {
         crop.addItem(.separator())
         add(crop,"Set Cropping Frame to Full Image",#selector(resetCrop),"x",plain);add(crop,"Copy Previous Cropping Frame",#selector(copyPrevious),"c",plain)
         crop.addItem(.separator())
-        add(crop,"Propose Page Split",#selector(proposeSplit),"t",plain);add(crop,"Remove Page Split",#selector(removeSplit),"t",[.shift])
+        add(crop,"Propose Page Split",#selector(proposeSplit),"t",plain);add(crop,"Remove Page Split",#selector(removeSplit),"t",[.shift]);add(crop,"Propose Splits on All Unsplit Pages",#selector(proposeAllSplits),"t",[.option])
         add(crop,"Move Split Left",#selector(moveSplitLeft),",",plain);add(crop,"Move Split Right",#selector(moveSplitRight),".",plain)
         crop.addItem(.separator())
         add(crop,"Deskew",#selector(deskew),"q",plain);add(crop,"Remove Deskew",#selector(removeDeskew),"q",[.shift])

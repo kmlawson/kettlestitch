@@ -128,6 +128,7 @@ Single keys act on the main window and are off while you type in a field. Letter
 | --- | --- |
 | t | Propose a split between facing pages; again for the next candidate |
 | Shift T | Remove the split |
+| Option t | Propose a split on every page that has none |
 | , / . | Move the split left / right; add Shift to move farther |
 
 ### Deskew and picture zones

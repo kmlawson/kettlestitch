@@ -18,6 +18,25 @@ final class PageTable: NSTableView {
     }
 }
 
+/// How sidebar pictures are sized, retried and watched over.
+enum ThumbnailPolicy {
+    /// Longest side of the plain picture, of the copy a preview picture is worked from, and of the finished preview picture.
+    static let plainPixels=120,previewSourcePixels=640,previewPixels=160
+    /// How many times a photograph is tried before its row is marked unreadable, and the pause before each new try.
+    static let attempts=3
+    static func retryDelay(after failures:Int)->TimeInterval {failures>=attempts ? 0:Double(failures)*1.5}
+    /// How often the rows on screen are checked, and how long a request may be out with nothing running before it is given up.
+    static let checkInterval:TimeInterval=2,patience:TimeInterval=20
+    /// How many pictures are held before the farthest pages' are dropped.
+    static let kept=3000
+    static func reduced(_ image:CGImage,to longest:Int)->CGImage {
+        let scale=Double(longest)/Double(max(image.width,image.height));guard scale<1 else{return image}
+        let w=max(1,Int((Double(image.width)*scale).rounded())),h=max(1,Int((Double(image.height)*scale).rounded()))
+        guard let c=CGContext(data:nil,width:w,height:h,bitsPerComponent:8,bytesPerRow:0,space:CGColorSpaceCreateDeviceRGB(),bitmapInfo:CGImageAlphaInfo.premultipliedLast.rawValue) else{return image}
+        c.interpolationQuality = .high;c.draw(image,in:CGRect(x:0,y:0,width:w,height:h))
+        return c.makeImage() ?? image
+    }
+}
 /// A sidebar picture of a page as export will render it, with the settings it was made from.
 final class PreviewThumbnail {
     let image:NSImage,look:String
@@ -61,8 +80,14 @@ final class PageCell: NSTableCellView {
             flag.trailingAnchor.constraint(equalTo:trailingAnchor,constant:-2),flag.centerYAnchor.constraint(equalTo:centerYAnchor),flag.widthAnchor.constraint(equalToConstant:13),flag.heightAnchor.constraint(equalToConstant:13)])
     }
     required init?(coder:NSCoder){nil}
+    /// True while the row shows the mark for a photograph that is missing or cannot be read.
+    private(set) var unreadable=false
+    func showUnreadable(){
+        thumb.image=symbol("exclamationmark.triangle","questionmark.square.dashed");thumb.contentTintColor = .tertiaryLabelColor;thumb.imageScaling = .scaleNone;unreadable=true
+        thumb.toolTip="This photograph is missing or cannot be read. File ▸ Locate Missing Photographs… finds moved files."
+    }
     func show(_ page:Page,number:Int,thumbnail:NSImage?,unusual:String?=nil,review:ReviewProgress.State?=nil){
-        thumb.image=thumbnail;flag.isHidden=page.flagged != true
+        thumb.image=thumbnail;thumb.toolTip=nil;thumb.contentTintColor=nil;thumb.imageScaling = .scaleProportionallyUpOrDown;unreadable=false;flag.isHidden=page.flagged != true
         // The photograph Claude is looking at dims under a spinner; queued ones only say so.
         thumb.alphaValue=review == nil ? 1:0.35
         if review == .active {spinner.startAnimation(nil)} else {spinner.stopAnimation(nil)}
