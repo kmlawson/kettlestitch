@@ -588,7 +588,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
                     self.stepProgress(.split,finished)
                     if finished==pages.count {
                         self.endProgress(.split)
-                        self.status.stringValue=pages.count==1 ? (found==1 ? "Split proposed at the fold — t again tries another place; drag it, or press , and . to move it":guided==1 ? "Split placed by the page before, adjusted to this page — t again tries another place; drag it, or press , and . to move it":"No clear fold found; split placed at the centre — drag it, or press , and . to move it"):"Split proposed on \(pages.count) pages: \(found) at a fold, \(guided) where the page before has it, \(pages.count-found-guided) at the centre"
+                        self.status.stringValue=pages.count==1 ? (found==1 ? "Split proposed at the fold — t again tries another place; drag it, or press y and u to move it":guided==1 ? "Split placed by the page before, adjusted to this page — t again tries another place; drag it, or press y and u to move it":"No clear fold found; split placed at the centre — drag it, or press y and u to move it"):"Split proposed on \(pages.count) pages: \(found) at a fold, \(guided) where the page before has it, \(pages.count-found-guided) at the centre"
                     }
                 }
             }
@@ -1178,12 +1178,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
         case "t" where e.modifierFlags.contains(.option) && !e.modifierFlags.contains(.shift):proposeAllSplits()
         case "t":e.modifierFlags.contains(.shift) ? removeSplit():proposeSplit()
         case "v" where !e.modifierFlags.contains(.shift):copyPreviousAdjustments()
-        case ",","<":e.modifierFlags.contains(.option) ? turnDeskew(-0.1):moveSplit(e.modifierFlags.contains(.shift) ? -0.01:-0.002)
-        case ".",">":e.modifierFlags.contains(.option) ? turnDeskew(0.1):moveSplit(e.modifierFlags.contains(.shift) ? 0.01:0.002)
+        // The split moves with y and u, which sit side by side; comma is free, and period goes to the next unusual page.
+        case "y":moveSplit(e.modifierFlags.contains(.shift) ? -0.01:-0.002)
+        case "u":moveSplit(e.modifierFlags.contains(.shift) ? 0.01:0.002)
+        case "," where e.modifierFlags.contains(.option):turnDeskew(-0.1)
+        case "." where e.modifierFlags.contains(.option):turnDeskew(0.1)
+        case "." where !e.modifierFlags.contains(.shift):nextOutlier()
         case "q":e.modifierFlags.contains(.shift) ? removeDeskew():deskew()
         case "w":e.modifierFlags.contains(.shift) ? removeZones():addZone()
-        case "u":nextOutlier()
-        case "f","0":fit();case "+","=":zoomIn();case "-":zoomOut();case "c":copyPrevious();case ";":shrinkCrop();case "'":expandCrop();case "x":resetCrop();case "z":undo();case "y":redo();case "n":nextReview();case "[":cycleCandidate(-1);case "]":cycleCandidate(1)
+        case "f","0":fit();case "+","=":zoomIn();case "-":zoomOut();case "c":copyPrevious();case ";":shrinkCrop();case "'":expandCrop();case "x":resetCrop();case "z":if e.modifierFlags.contains(.shift) {redo()} else {undo()}
+        case "n":nextReview();case "[":cycleCandidate(-1);case "]":cycleCandidate(1)
         case "1","2","3","4":selectCorner([0,1,3,2][Int(key)!-1],keyboard:true)
         case "5","6","7","8":if canvas.preview{setPreview(false)};canvas.selectEdge([0,3,1,2][Int(key)!-5],keyboard:true);window.makeFirstResponder(canvas)
         case "?","/":help()

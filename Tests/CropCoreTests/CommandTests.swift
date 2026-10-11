@@ -81,6 +81,6 @@ final class ShortcutReferenceTests:XCTestCase {
     }
     func testCoversTheCommandsAddedSinceTheFirstVersion() {
         let all=ShortcutReference.sections.flatMap{$0.entries}
-        for expected in ["t","Shift T","q","Shift Q",", / .","a","m","Shift R","e","[ / ]","1 2 3 4","5 6 7 8","h j k l","Shift H J K L","Option h j k l","f or 0","z / y","Esc","Page Up / Page Down","Option Shift B"] {XCTAssertTrue(all.contains{$0.keys==expected},"Missing \(expected)")}
+        for expected in ["t","Shift T","q","Shift Q","y / u",".","z","Shift Z","a","m","Shift R","e","[ / ]","1 2 3 4","5 6 7 8","h j k l","Shift H J K L","Option h j k l","f or 0","Esc","Page Up / Page Down","Option Shift B"] {XCTAssertTrue(all.contains{$0.keys==expected},"Missing \(expected)")}
     }
 }

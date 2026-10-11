@@ -136,8 +136,8 @@ extension AppDelegate {
             // Page split: keys, clamping, dragging the line and one end, rotation, removal and undo.
             self.project.selected=1;self.selectCurrent();canvas.image=smokeImage
             self.project.pages[1].quad=inset;self.project.pages[1].rotation=0;self.project.pages[1].split = .centre;self.refreshDetail();canvas.quad=inset
-            key(".",47);precondition(abs(self.project.pages[1].split!.top-0.502)<1e-9 && canvas.split==self.project.pages[1].split)
-            key(",",43,.shift);precondition(abs(self.project.pages[1].split!.bottom-0.492)<1e-9)
+            key("u",32);precondition(abs(self.project.pages[1].split!.top-0.502)<1e-9 && canvas.split==self.project.pages[1].split)
+            key("y",16,.shift);precondition(abs(self.project.pages[1].split!.bottom-0.492)<1e-9)
             let ends=canvas.splitEnds!,middle=CGPoint(x:(ends.0.x+ends.1.x)/2,y:(ends.0.y+ends.1.y)/2)
             canvas.mouseDown(with:mouse(.leftMouseDown,middle));precondition(canvas.isDraggingSplit && canvas.selectedEdge==nil)
             canvas.mouseDragged(with:mouse(.leftMouseDragged,CGPoint(x:middle.x+30,y:middle.y)));canvas.mouseUp(with:mouse(.leftMouseUp,CGPoint(x:middle.x+30,y:middle.y)))
@@ -182,7 +182,7 @@ extension AppDelegate {
             self.resetAdjustments();self.commitAdjustments();key("p",35);if canvas.preview {key("p",35)}
             let usual=self.project.pages[1].quad;self.project.pages[1].quad=Quad([Point(0.4,0.4),Point(0.6,0.4),Point(0.6,0.6),Point(0.4,0.6)]);self.save()
             precondition(self.deviationRows[1].reason=="size")
-            self.navigate(-1);key("u",32);precondition(self.project.selected==1,"U goes to the unusual page")
+            self.navigate(-1);key(".",47);precondition(self.project.selected==1,"Period goes to the unusual page")
             self.showDeviations();precondition(self.deviations!.rows.first?.index==1,"The deviations window lists the worst page first")
             snapshot(self.deviations!.window.contentView!,"deviations.png");self.deviations!.window.close()
             self.project.pages[1].quad=usual;self.save();canvas.quad=usual
@@ -207,7 +207,7 @@ extension AppDelegate {
             self.selectCorner(0);self.canvas.nudge("d",large:false)
             precondition(self.project.pages[0].quad != before)
             self.undo();precondition(self.project.pages[0].quad == before)
-            self.redo();precondition(self.project.pages[0].quad != before)
+            key("z",6,.shift);precondition(self.project.pages[0].quad != before,"Shift-Z redoes")
             self.accept();precondition(self.project.selected==1 && self.project.pages[0].reviewed)
             self.navigate(-1)
             do{

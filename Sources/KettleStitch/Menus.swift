@@ -82,7 +82,7 @@ extension AppDelegate: NSMenuItemValidation, NSMenuDelegate {
         add(page,"Next Page",#selector(next),arrow(NSRightArrowFunctionKey),plain);add(page,"Previous Page",#selector(previous),arrow(NSLeftArrowFunctionKey),plain)
         let go=NSMenu(title:"Go To");add(page,"Go To",nil,own:false).submenu=go
         add(go,"First Page",#selector(firstPage),arrow(NSHomeFunctionKey),plain);add(go,"Last Page",#selector(lastPage),arrow(NSEndFunctionKey),plain)
-        go.addItem(.separator());add(go,"Next Unreviewed",#selector(nextReview),"n",plain);add(go,"Next Flagged",#selector(nextFlagged),"u",[.command,.shift]);add(go,"Next Unusual Page",#selector(nextOutlier),"u",plain)
+        go.addItem(.separator());add(go,"Next Unreviewed",#selector(nextReview),"n",plain);add(go,"Next Flagged",#selector(nextFlagged),"u",[.command,.shift]);add(go,"Next Unusual Page",#selector(nextOutlier),".",plain)
         add(page,"Accept and Next",#selector(accept),"\r",plain)
         page.addItem(.separator())
         add(page,"Select All Pages",#selector(selectAllPages),"a",[.command,.shift]);add(page,"Add Flag",#selector(toggleFlag),"m",plain)
@@ -98,7 +98,7 @@ extension AppDelegate: NSMenuItemValidation, NSMenuDelegate {
         add(crop,"Set Cropping Frame to Full Image",#selector(resetCrop),"x",plain);add(crop,"Copy Previous Cropping Frame",#selector(copyPrevious),"c",plain)
         crop.addItem(.separator())
         add(crop,"Propose Page Split",#selector(proposeSplit),"t",plain);add(crop,"Remove Page Split",#selector(removeSplit),"t",[.shift]);add(crop,"Propose Splits on All Unsplit Pages",#selector(proposeAllSplits),"t",[.option])
-        add(crop,"Move Split Left",#selector(moveSplitLeft),",",plain);add(crop,"Move Split Right",#selector(moveSplitRight),".",plain)
+        add(crop,"Move Split Left",#selector(moveSplitLeft),"y",plain);add(crop,"Move Split Right",#selector(moveSplitRight),"u",plain)
         crop.addItem(.separator())
         add(crop,"Deskew",#selector(deskew),"q",plain);add(crop,"Remove Deskew",#selector(removeDeskew),"q",[.shift])
         add(crop,"Turn Counterclockwise by 0.1°",#selector(deskewCounterclockwise),",",[.option]);add(crop,"Turn Clockwise by 0.1°",#selector(deskewClockwise),".",[.option])

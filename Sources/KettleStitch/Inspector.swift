@@ -75,7 +75,7 @@ extension AppDelegate {
         let crop=segments(["Detect","Full","Previous"],#selector(cropSegment(_:)),tips:["Detect the cropping frame (d)","Set the cropping frame to the full image (x)","Copy the previous photograph's crop (c)"])
         let corners=segments(["↖","↗","↙","↘"],#selector(cornerSegment(_:)),tips:["Select the top-left corner (1)","Select the top-right corner (2)","Select the bottom-left corner (3)","Select the bottom-right corner (4)"])
         let size=segments(["Shrink","Expand"],#selector(sizeSegment(_:)),tips:["Shrink the crop (;)","Expand the crop (')"])
-        let splits=segments(["Propose","◀","▶","Remove"],#selector(splitSegment(_:)),tips:["Propose a split between facing pages (t)","Move the split left (,)","Move the split right (.)","Remove the split (Shift-T)"])
+        let splits=segments(["Propose","◀","▶","Remove"],#selector(splitSegment(_:)),tips:["Propose a split between facing pages (t)","Move the split left (y)","Move the split right (u)","Remove the split (Shift-T)"])
         let tilt=segments(["Auto","↺","↻","Reset"],#selector(deskewSegment(_:)),tips:["Level the lines of text (q)","Turn counterclockwise by 0.1° (Option-,)","Turn clockwise by 0.1° (Option-.)","Remove the deskew (Shift-Q)"])
         let pictures=segments(["Add Zone","Clear"],#selector(zoneSegment(_:)),tips:["Draw a picture zone that keeps its gray tones on a black-and-white page (w)","Remove the picture zones (Shift-W)"])
         // Two buttons: the brush, lit while it is in hand, and the same picture crossed out to remove the smudges.

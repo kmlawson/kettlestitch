@@ -97,7 +97,7 @@ Single keys act on the main window and are off while you type in a field. Letter
 | Page Up / Page Down | Back / forward ten |
 | Return | Accept the crop and go to the next |
 | n | Next unreviewed |
-| u | Next unusual page |
+| . | Next unusual page |
 | m | Add or remove a flag |
 
 ### Cropping frame
@@ -129,7 +129,7 @@ Single keys act on the main window and are off while you type in a field. Letter
 | t | Propose a split between facing pages; again for the next candidate |
 | Shift T | Remove the split |
 | Option t | Propose a split on every page that has none |
-| , / . | Move the split left / right; add Shift to move farther |
+| y / u | Move the split left / right; add Shift to move farther |
 
 ### Deskew and picture zones
 
@@ -159,7 +159,8 @@ Single keys act on the main window and are off while you type in a field. Letter
 | + / − | Zoom in / out |
 | f or 0 | Zoom to fit |
 | a | Send the page to Claude, OpenAI or Gemini for a second opinion |
-| z / y | Undo / redo |
+| z | Undo |
+| Shift Z | Redo |
 | / or ? | Show the shortcut reference |
 
 ### Command-key shortcuts

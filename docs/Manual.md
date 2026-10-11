@@ -89,7 +89,7 @@ Right-clicking a row acts on that row, or on the whole selection if the row is p
 
 - **t again** steps through up to three other candidates and back to the first, as long as you have not moved the line yourself.
 - Drag the line to move it; drag the square at either end to tilt it.
-- **,** and **.** move it left and right by 0.2% of the spread; with **Shift**, by 1%.
+- **y** and **u** move it left and right by 0.2% of the spread; with **Shift**, by 1%.
 - **Shift T** removes it.
 - **Option t** proposes a split on every page that has none, working down the book. It never runs unasked, and leaves pages that already have a split alone.
 
@@ -169,7 +169,7 @@ Selecting a corner or edge, picking up the smudge brush or drawing a picture zon
 
 **View ▸ Show Deviations** (⌘J) lists every page with how far its crop is from what is usual in the project, in four measures: **Size**, **Shape**, **Taper** (how unequal opposite sides are) and **Skew** (the deskew angle). Click a column heading to sort by it; click a row to go to that page.
 
-A page that stands well apart is marked ⚠︎ with the reason in the sidebar, and **u** goes to the next one. The scale is the project's own, so one mis-detected crop among hundreds of similar spreads stands out; covers and fold-outs will be marked too. A project of fewer than five pages marks nothing.
+A page that stands well apart is marked ⚠︎ with the reason in the sidebar, and **.** goes to the next one. The scale is the project's own, so one mis-detected crop among hundreds of similar spreads stands out; covers and fold-outs will be marked too. A project of fewer than five pages marks nothing.
 
 ## Export
 

@@ -99,6 +99,7 @@ The README has the complete shortcut list and is the reference. Points that are 
 
 - Mouse selection must **never capture the arrow keys**. `CropCanvas.keyboardSelection` is set only by the number keys and cleared by a canvas click, Escape, fit or navigation.
 - **c** copies the previous crop every time; **Shift →** steps on and copies. **v** copies the previous page's image settings and turns the preview on.
+- **y** and **u** move the split; **.** goes to the next unusual page; **z** undoes and **Shift Z** redoes. Comma is unassigned except with Option, for deskew.
 - **t** proposes a split, then cycles candidates. **Option t** proposes on every unsplit page and is never run unasked.
 - A mouse wheel zooms about the pointer; a precise-scrolling device (trackpad, Magic Mouse) pans.
 - The preview stays on across pages; selecting a corner or edge, the smudge brush and drawing a picture zone turn it off.

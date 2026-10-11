@@ -310,6 +310,6 @@ final class NewCommandTests:XCTestCase {
     }
     func testShortcutReferenceListsThem() {
         let all=ShortcutReference.sections.flatMap{$0.entries}
-        for expected in ["t","Shift T","Option , / .","w","Shift W","u"] {XCTAssertTrue(all.contains{$0.keys==expected},"Missing \(expected)")}
+        for expected in ["t","Shift T","Option , / .","w","Shift W","."] {XCTAssertTrue(all.contains{$0.keys==expected},"Missing \(expected)")}
     }
 }
