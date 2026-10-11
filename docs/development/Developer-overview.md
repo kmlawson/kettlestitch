@@ -1,6 +1,6 @@
 # KettleStitch developer overview
 
-Updated 2026-10-11 for version 0.4.6. This describes the implementation as it stands, for whoever picks the code up next. Read the source before changing it; the validation logs under `docs/validation/` describe earlier states and older shortcuts.
+Updated 2026-10-11 for version 0.4.8. This describes the implementation as it stands, for whoever picks the code up next. Read the source before changing it; the validation logs under `docs/validation/` describe earlier states and older shortcuts.
 
 Related notes: [Architecture](Architecture.md), [Building and releasing](Building.md), [How detection works](Detection.md).
 
@@ -28,7 +28,7 @@ The user steers by small, frequent interaction changes. Follow the newest reques
 - `sample-images/1940.3/` holds 23 sample photographs, also ignored. Build test fixtures only from photographs that exist.
 - `.qa/` is for disposable evaluations and test-project copies, ignored.
 - The repository is public. Commits use a GitHub no-reply address; do not commit a personal email address, a home-folder path or an API key.
-- The version (0.4.6, build 8) is set by hand in `scripts/build-app.sh` and changed only when the user asks.
+- The version (0.4.8, build 9) is set by hand in `scripts/build-app.sh` and changed only when the user asks.
 
 ## Source map
 
