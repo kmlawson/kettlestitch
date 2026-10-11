@@ -141,7 +141,7 @@ extension NSToolbarItem.Identifier {
 }
 
 extension AppDelegate: NSWindowDelegate, NSDraggingDestination {
-    func windowShouldClose(_ sender:NSWindow)->Bool {confirmUnsaved()}
+    func windowShouldClose(_ sender:NSWindow)->Bool {confirmUnsaved(leaving:true)}
     func droppedFiles(_ sender:NSDraggingInfo)->[URL] {
         (sender.draggingPasteboard.readObjects(forClasses:[NSURL.self],options:[.urlReadingFileURLsOnly:true]) as? [URL]) ?? []
     }

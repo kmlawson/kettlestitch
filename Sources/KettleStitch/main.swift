@@ -78,6 +78,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
     var detecting=false
     /// Changes to a project file that have not been written to it yet.
     var unsaved=false
+    /// True once an untitled session has been changed since it was started or opened.
+    var untitledChanged=false
     var autosaveTimer: Timer?
     var exportCancelled=false
     var exporting=false
@@ -209,7 +211,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
         }
     }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication)->Bool {true}
-    func applicationShouldTerminate(_ sender: NSApplication)->NSApplication.TerminateReply {confirmUnsaved() ? .terminateNow:.terminateCancel}
+    func applicationShouldTerminate(_ sender: NSApplication)->NSApplication.TerminateReply {confirmUnsaved(leaving:true) ? .terminateNow:.terminateCancel}
     func applicationWillTerminate(_ notification: Notification){queue.cancelAllOperations();reviewTask?.cancel();writeUntitled()}
 
     // MARK: Page list
@@ -411,6 +413,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
     func save(change:Bool=true){
         if change {deviationCache=nil}
         if hasProjectFile {if change{unsaved=true};updateTitle();return}
+        if change {untitledChanged=true}
         // Writing a long project takes tens of milliseconds, so a run of steps or edits is written once it pauses.
         NSObject.cancelPreviousPerformRequests(withTarget:self,selector:#selector(writeUntitled),object:nil)
         perform(#selector(writeUntitled),with:nil,afterDelay:1)
@@ -430,10 +433,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
         if write() {status.stringValue="Saved \(projectURL.lastPathComponent)"}
     }
     /// Asks what to do with unsaved changes before the project is closed or replaced. False means stay.
-    func confirmUnsaved()->Bool {
-        guard unsaved else{return true}
-        // With auto-save on there is nothing to ask: the changes would have been written anyway.
-        if testDirectory != nil || UserDefaults.standard.bool(forKey:SettingsController.autosaveKey) {return write()}
+    /// `leaving` is true when the app is quitting or its window closing. Work that was never given a file is then
+    /// asked about too; replacing it by opening something else is not, since it stays under Open Recent.
+    func confirmUnsaved(leaving:Bool=false)->Bool {
+        let action=LaunchPolicy.onQuit(hasProjectFile:hasProjectFile,unsaved:unsaved,untitledChanged:untitledChanged,pageCount:project.pages.count,autosave:UserDefaults.standard.bool(forKey:SettingsController.autosaveKey))
+        // A test run has nobody to answer.
+        if testDirectory != nil {return action == .nothing || action == .askToName ? true:write()}
+        switch action {
+        case .nothing:return true
+        case .saveQuietly:return write()
+        case .askToSave:break
+        case .askToName:
+            guard leaving else{return true}
+            writeUntitled()
+            let alert=NSAlert();alert.messageText="Do you want to save this project?"
+            alert.informativeText="It has not been saved to a file yet. If you don’t save it, it is kept as an untitled session that you can find again under File ▸ Open Recent."
+            alert.addButton(withTitle:"Save…");alert.addButton(withTitle:"Cancel");alert.addButton(withTitle:"Don’t Save")
+            switch alert.runModal() {
+            case .alertFirstButtonReturn:return saveAs(nil)
+            case .alertSecondButtonReturn:return false
+            default:untitledChanged=false;return true
+            }
+        }
         let alert=NSAlert();alert.messageText="Do you want to save the changes made to “\(projectURL.deletingPathExtension().lastPathComponent)”?"
         alert.informativeText="Your changes will be lost if you don’t save them."
         alert.addButton(withTitle:"Save");alert.addButton(withTitle:"Cancel");alert.addButton(withTitle:"Don’t Save")
@@ -893,7 +914,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
         thumbnailPending=[:];thumbnailFailures=[:];save();reloadPages();selectCurrent()
         status.stringValue="Found \(found) photograph\(found==1 ? "":"s")"+(missing.isEmpty ? "":" · \(missing.count) still missing — File ▸ Locate Missing Photographs")
     }
-    @objc func saveAs(){let panel=NSSavePanel();panel.nameFieldStringValue="Book.kettlestitch";guard panel.runModal() == .OK,let url=panel.url else{return};do{try project.save(url);projectURL=url;write();status.stringValue="Saved \(url.lastPathComponent)"}catch{showError(error)}}
+    /// Returns whether the project was saved to a file; false when the panel was cancelled or the save failed.
+    @discardableResult @objc func saveAs(_ sender:Any?=nil)->Bool {
+        let panel=NSSavePanel();panel.nameFieldStringValue="Book.kettlestitch";guard panel.runModal() == .OK,let url=panel.url else{return false}
+        do{try project.save(url);projectURL=url;untitledChanged=false;write();status.stringValue="Saved \(url.lastPathComponent)";return true}catch{showError(error);return false}
+    }
 
     // MARK: Background work
     func beginProgress(_ kind:ProgressTracker.Kind,_ total:Int){tracker.begin(kind,total:total);showProgress()}
@@ -1145,7 +1170,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
         }
         switch key {
         case "b" where e.modifierFlags.contains(.shift):e.modifierFlags.contains(.option) ? removeSmudges():toggleSmudge()
-        case "g":newProject();case "i":importImages();case "o":openProject();case "s":e.modifierFlags.contains(.shift) ? saveAs():saveProject();case "d":targetIndexes.count>1 ? detectPending():detectCurrent();case "b":detectPending();case "e":exportImages()
+        case "g":newProject();case "i":importImages();case "o":openProject();case "s":if e.modifierFlags.contains(.shift) {saveAs()} else {saveProject()}
+        case "d":targetIndexes.count>1 ? detectPending():detectCurrent();case "b":detectPending();case "e":exportImages()
         case "p":togglePreview()
         case "r":e.modifierFlags.contains(.shift) ? rotateLeft():rotate()
         case "a":sendToClaude();case "m":toggleFlag()

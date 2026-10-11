@@ -30,6 +30,18 @@ final class LaunchPolicyTests:XCTestCase {
         XCTAssertEqual(pages.map{$0.path},["/new/place/IMG_1.jpg","/new/place/book/IMG_2.jpg","/new/place/plates/IMG_3.jpg","/kept/IMG_4.jpg","/old/book/IMG_5.jpg"])
         XCTAssertEqual(Relink.missing(pages,exists:exists),[4]);XCTAssertEqual(Relink.relink(&pages,in:URL(fileURLWithPath:"/elsewhere"),exists:exists),0)
     }
+    func testQuittingAsksAboutWorkThatHasNoFileOfItsOwn() {
+        // A project file with changes: saved quietly when auto-save is on, asked about when it is off.
+        XCTAssertEqual(LaunchPolicy.onQuit(hasProjectFile:true,unsaved:true,untitledChanged:false,pageCount:9,autosave:true),.saveQuietly)
+        XCTAssertEqual(LaunchPolicy.onQuit(hasProjectFile:true,unsaved:true,untitledChanged:false,pageCount:9,autosave:false),.askToSave)
+        XCTAssertEqual(LaunchPolicy.onQuit(hasProjectFile:true,unsaved:false,untitledChanged:false,pageCount:9,autosave:false),.nothing)
+        // Work never given a file: asked where to save it, whatever auto-save says, since there is no file to save to.
+        XCTAssertEqual(LaunchPolicy.onQuit(hasProjectFile:false,unsaved:false,untitledChanged:true,pageCount:9,autosave:true),.askToName)
+        XCTAssertEqual(LaunchPolicy.onQuit(hasProjectFile:false,unsaved:false,untitledChanged:true,pageCount:9,autosave:false),.askToName)
+        // Nothing was done, or nothing is in it: no question.
+        XCTAssertEqual(LaunchPolicy.onQuit(hasProjectFile:false,unsaved:false,untitledChanged:false,pageCount:9,autosave:true),.nothing)
+        XCTAssertEqual(LaunchPolicy.onQuit(hasProjectFile:false,unsaved:false,untitledChanged:true,pageCount:0,autosave:true),.nothing)
+    }
     func testUntitledNamesAreDistinctAndSortByTime() {
         let first=LaunchPolicy.untitledName(Date(timeIntervalSince1970:1_800_000_000)),later=LaunchPolicy.untitledName(Date(timeIntervalSince1970:1_800_000_061))
         XCTAssertTrue(first.hasPrefix("Untitled ") && first.hasSuffix(".kettlestitch"));XCTAssertNotEqual(first,later);XCTAssertLessThan(first,later)

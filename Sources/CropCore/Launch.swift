@@ -16,6 +16,21 @@ public enum LaunchPolicy {
     public static func isUntitled(_ url: URL) -> Bool {url.deletingPathExtension().lastPathComponent.hasPrefix("Untitled ")}
     public static let autosaveInterval: TimeInterval = 300
     public static func shouldAutosave(enabled: Bool, hasProjectFile: Bool, unsaved: Bool) -> Bool {enabled && hasProjectFile && unsaved}
+    /// What to do about the project when the app is about to quit or its window to close.
+    public enum QuitAction: Equatable {
+        /// Nothing is at stake.
+        case nothing
+        /// A project file has changes and auto-save is on: write them without asking.
+        case saveQuietly
+        /// A project file has changes and auto-save is off: ask whether to save them.
+        case askToSave
+        /// The work was never given a file: ask where to save it.
+        case askToName
+    }
+    public static func onQuit(hasProjectFile: Bool, unsaved: Bool, untitledChanged: Bool, pageCount: Int, autosave: Bool) -> QuitAction {
+        if hasProjectFile {return unsaved ? (autosave ? .saveQuietly:.askToSave):.nothing}
+        return untitledChanged && pageCount>0 ? .askToName:.nothing
+    }
     public static func shouldWrite(pageCount: Int, fileExists: Bool) -> Bool {pageCount>0 || fileExists}
 }
 public enum ImportPolicy {
