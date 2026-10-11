@@ -268,25 +268,66 @@ extension AppDelegate {
             let rep=view.bitmapImageRepForCachingDisplay(in:view.bounds)!;view.cacheDisplay(in:view.bounds,to:rep)
             try? rep.representation(using:.png,properties:[:])?.write(to:URL(fileURLWithPath:dir).appendingPathComponent("empty.png"))
             print("EMPTY_LAUNCH passed")
-            // The same route a drop on the window or on the app's icon takes.
+            // The same route a drop on the window or on the app's icon takes. The import itself runs off the main thread.
             self.application(NSApp,open:[folder])
-            let count=self.project.pages.count
-            precondition(count>0 && self.project.selected==0 && self.table.numberOfRows==count && FileManager.default.fileExists(atPath:self.projectURL.path),"Dropped photographs are added and saved")
-            self.receive([folder]);precondition(self.project.pages.count==count,"The same photographs are not added twice")
-            self.undo();precondition(self.project.pages.isEmpty);self.redo();precondition(self.project.pages.count==count)
-            let started=Date()
-            Timer.scheduledTimer(withTimeInterval:0.25,repeats:true){timer in
-                guard (self.canvas.image != nil && !self.detecting) || Date().timeIntervalSince(started)>60 else{return}
-                timer.invalidate()
-                precondition(self.canvas.image != nil,"The first dropped photograph is shown")
-                precondition(!self.project.pages.contains{$0.status=="Pending"},"Crops are proposed for imported photographs without being asked")
-                print("DROP_PHOTOGRAPHS passed")
-                self.receive([other])
-                precondition(self.projectURL==other && self.project.pages.count != count && self.window.title==other.deletingPathExtension().lastPathComponent,"A dropped project file is opened")
-                print("DROP_PROJECT passed")
-                DispatchQueue.main.asyncAfter(deadline:.now()+5){print("TERMINATE_REFUSED");exit(3)}
-                NSApp.terminate(nil)
+            precondition(self.importing && !self.banner.isHidden,"A notice over the canvas says photographs are being imported")
+            /// Runs `then` once the import under way has finished.
+            func afterImport(_ then:@escaping()->Void){
+                let began=Date()
+                Timer.scheduledTimer(withTimeInterval:0.05,repeats:true){timer in
+                    guard !self.importing || Date().timeIntervalSince(began)>60 else{return}
+                    timer.invalidate();precondition(!self.importing && self.banner.isHidden,"The import finishes and its notice goes");then()
+                }
+            }
+            afterImport{
+                let count=self.project.pages.count
+                precondition(count>0 && self.project.selected==0 && self.table.numberOfRows==count && FileManager.default.fileExists(atPath:self.projectURL.path),"Dropped photographs are added and saved")
+                self.receive([folder])
+                afterImport{
+                    precondition(self.project.pages.count==count,"The same photographs are not added twice")
+                    self.undo();precondition(self.project.pages.isEmpty);self.redo();precondition(self.project.pages.count==count)
+                    let started=Date()
+                    Timer.scheduledTimer(withTimeInterval:0.25,repeats:true){timer in
+                        guard (self.canvas.image != nil && !self.detecting) || Date().timeIntervalSince(started)>60 else{return}
+                        timer.invalidate()
+                        precondition(self.canvas.image != nil,"The first dropped photograph is shown")
+                        precondition(!self.project.pages.contains{$0.status=="Pending"},"Crops are proposed for imported photographs without being asked")
+                        print("DROP_PHOTOGRAPHS passed")
+                        self.receive([other])
+                        precondition(self.projectURL==other && self.project.pages.count != count && self.window.title==other.deletingPathExtension().lastPathComponent,"A dropped project file is opened")
+                        print("DROP_PROJECT passed")
+                        DispatchQueue.main.asyncAfter(deadline:.now()+5){print("TERMINATE_REFUSED");exit(3)}
+                        NSApp.terminate(nil)
+                    }
+                }
             }
         }
+    }
+    /// Times moving through a long project: how long each step holds the main thread, and how long until its
+    /// photograph is on screen, near the start, the middle and the end of the list.
+    func runBench(){
+        let count=project.pages.count;guard count>30 else{print("BENCH needs a long project");exit(2)}
+        var plan:[(String,Int)]=[("start",2),("middle",count/2),("end",count-12)],lines:[String]=[]
+        func measure(_ label:String,_ from:Int,_ done:@escaping()->Void){
+            self.show(from)
+            var step=0,held:[Double]=[],shown:[Double]=[]
+            func next(){
+                guard step<8 else{
+                    lines.append(String(format:"BENCH %@ row=%d main_ms=%.1f shown_ms=%.0f",label,from,held.reduce(0,+)/8*1000,shown.reduce(0,+)/8*1000));done();return
+                }
+                step+=1
+                let began=Date();self.navigate(1);held.append(Date().timeIntervalSince(began))
+                Timer.scheduledTimer(withTimeInterval:0.005,repeats:true){timer in
+                    guard self.canvas.image != nil || Date().timeIntervalSince(began)>10 else{return}
+                    timer.invalidate();shown.append(Date().timeIntervalSince(began));next()
+                }
+            }
+            DispatchQueue.main.asyncAfter(deadline:.now()+1.5){next()}
+        }
+        func run(){
+            guard !plan.isEmpty else{lines.forEach{print($0)};self.unsaved=false;exit(0)}
+            let (label,row)=plan.removeFirst();measure(label,row,run)
+        }
+        DispatchQueue.main.asyncAfter(deadline:.now()+2){run()}
     }
 }

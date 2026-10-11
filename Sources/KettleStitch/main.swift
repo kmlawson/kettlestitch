@@ -83,6 +83,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
     var reviewNumber=0
     var adjusting=false
     var reloading=false
+    /// Decoded photographs around the one on screen, by path, and the way the user last stepped.
+    var decoded:[String:CGImage]=[:]
+    var travel=1
+    var importing=false
+    let banner=NSVisualEffectView(),bannerLabel=NSTextField(labelWithString:""),bannerSpinner=NSProgressIndicator()
     var shownSize=(width:0.0,height:0.0)
     var copiedSettings: (Adjustments?,PageFormat?)?
     var pixelSizes: [String:CGSize]=[:]
@@ -157,6 +162,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
         }
         if let folder=ProcessInfo.processInfo.environment["KETTLESTITCH_SMOKE_FOLDER"],let other=ProcessInfo.processInfo.environment["KETTLESTITCH_SMOKE_PROJECT"],let dir=testDirectory {runEmptySmoke(dir,folder:URL(fileURLWithPath:folder),project:URL(fileURLWithPath:other))}
         if CommandLine.arguments.contains("--smoke"),let dir=testDirectory {runSmoke(dir)}
+        if CommandLine.arguments.contains("--bench"),testDirectory != nil {runBench()}
     }
     /// Moves sessions saved under an earlier name into place and copies its preferences, unless this name already has its own.
     func carryOverLegacyData(in library:URL,to new:URL){
@@ -173,7 +179,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
     }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication)->Bool {true}
     func applicationShouldTerminate(_ sender: NSApplication)->NSApplication.TerminateReply {confirmUnsaved() ? .terminateNow:.terminateCancel}
-    func applicationWillTerminate(_ notification: Notification){queue.cancelAllOperations();reviewProcess?.terminate();if !hasProjectFile{write()}}
+    func applicationWillTerminate(_ notification: Notification){queue.cancelAllOperations();reviewProcess?.terminate();writeUntitled()}
 
     // MARK: Page list
     func numberOfRows(in tableView:NSTableView)->Int {project.pages.count}
@@ -223,15 +229,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
     }
     func selectCurrent(){
         guard let i=current else {displayToken=UUID();original=nil;canvas.placeholder=CropCanvas.emptyProjectMessage;canvas.image=nil;refreshDetail();return}
-        table.selectRowIndexes(IndexSet(integer:i),byExtendingSelection:false);table.scrollRowToVisible(i);loadCurrent()
+        // Selecting the row would otherwise start a load of its own beside the one below.
+        reloading=true;table.selectRowIndexes(IndexSet(integer:i),byExtendingSelection:false);reloading=false
+        table.scrollRowToVisible(i);loadCurrent()
     }
     func loadCurrent(){
         guard let i=current else{return};let p=project.pages[i],token=UUID();displayToken=token
         original=nil;canvas.placeholder="";canvas.image=nil;canvas.quad=p.quad;canvas.fit();refreshDetail()
         displayQueue.cancelAllOperations()
+        // A neighbour of the last photograph is usually decoded already.
+        if let ready=decoded[p.path] {present(ready);readAhead(from:i);return}
         displayQueue.addOperation{[weak self] in
-            let result=Result {try Imaging.load(URL(fileURLWithPath:p.path),maxPixel:3200)}
-            DispatchQueue.main.async {guard let self,self.displayToken==token else{return};switch result {case .success(let image):self.original=image;if self.canvas.preview{self.renderPreview()}else{self.canvas.image=image;self.showPhotograph()};case .failure(let e):self.canvas.placeholder="Could not load this photograph\nFile ▸ Locate Missing Photographs… finds moved files";self.status.stringValue=e.localizedDescription}}
+            // It may have been read ahead while this waited its turn.
+            let ready=DispatchQueue.main.sync{self?.decoded[p.path]}
+            let result=ready.map{Result<CGImage,Error>.success($0)} ?? Result {try Imaging.load(URL(fileURLWithPath:p.path),maxPixel:3200)}
+            DispatchQueue.main.async {guard let self,self.displayToken==token else{return};switch result {case .success(let image):self.decoded[p.path]=image;self.present(image);self.readAhead(from:i);case .failure(let e):self.canvas.placeholder="Could not load this photograph\nFile ▸ Locate Missing Photographs… finds moved files";self.status.stringValue=e.localizedDescription}}
+        }
+    }
+    func present(_ image:CGImage){original=image;if canvas.preview{renderPreview()}else{canvas.image=image;showPhotograph()}}
+    /// Decodes the photograph the user is heading for, so the next step shows it at once. Only the photograph on
+    /// screen and its two neighbours are kept; each is about 30 MB.
+    func readAhead(from i:Int){
+        let near=[i-1,i,i+1].filter{project.pages.indices.contains($0)}.map{project.pages[$0].path}
+        decoded=decoded.filter{near.contains($0.key)}
+        let next=i+travel;guard project.pages.indices.contains(next) else{return}
+        let path=project.pages[next].path;guard decoded[path]==nil else{return}
+        displayQueue.addOperation{[weak self] in
+            guard let image=try? Imaging.load(URL(fileURLWithPath:path),maxPixel:3200) else{return}
+            DispatchQueue.main.async{guard let self,let now=self.current,[now-1,now,now+1].contains(where:{self.project.pages.indices.contains($0) && self.project.pages[$0].path==path}) else{return};self.decoded[path]=image}
         }
     }
     func outputPixelSize(_ p:Page)->CGSize {
@@ -280,8 +305,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
     /// Records that the project changed. An untitled session is written at once; a project file waits for Save
     /// or the auto-save timer. `change` is false when only the page on screen moved.
     func save(change:Bool=true){
-        deviationCache=nil
-        if hasProjectFile {if change{unsaved=true};updateTitle()} else {write()}
+        if change {deviationCache=nil}
+        if hasProjectFile {if change{unsaved=true};updateTitle();return}
+        // Writing a long project takes tens of milliseconds, so a run of steps or edits is written once it pauses.
+        NSObject.cancelPreviousPerformRequests(withTarget:self,selector:#selector(writeUntitled),object:nil)
+        perform(#selector(writeUntitled),with:nil,afterDelay:1)
+    }
+    @objc func writeUntitled(){
+        NSObject.cancelPreviousPerformRequests(withTarget:self,selector:#selector(writeUntitled),object:nil)
+        if !hasProjectFile {write()}
     }
     @discardableResult func write()->Bool {
         // An untitled project nothing was added to leaves no file behind.
@@ -325,7 +357,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
     func invalidateWork(){queue.cancelAllOperations();splitQueue.cancelAllOperations();generation=UUID();thumbnailPending=[];detecting=false;endProgress(.detect);endProgress(.split)}
     func restructure(_ change:()->Void){
         undoStack.append(.structure(project.pages,project.selected));redoStack.removeAll();invalidateWork();change()
-        project.selected=min(max(0,project.selected),max(0,project.pages.count-1));save();reloadPages();selectCurrent()
+        project.selected=min(max(0,project.selected),max(0,project.pages.count-1));save();writeUntitled();reloadPages();selectCurrent()
     }
     /// Applies an entry and returns its inverse.
     func exchange(_ entry:UndoEntry)->UndoEntry? {
@@ -353,7 +385,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
         guard let i=current else{return};let target=min(project.pages.count-1,max(0,i+d))
         // Nothing further that way: the photograph stays as it is and the canvas says so.
         guard target != i else{canvas.flashEdges();return}
-        project.selected=target;selectCurrent();save(change:false)
+        travel=target>i ? 1:-1;project.selected=target;selectCurrent();save(change:false)
     }
     func show(_ index:Int){guard project.pages.indices.contains(index) else{return};project.selected=index;selectCurrent();save(change:false)}
     @objc func previous(){navigate(-1)}
@@ -638,7 +670,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
         guard confirmUnsaved() else{return}
         let panel=NSSavePanel();panel.nameFieldStringValue="Book.kettlestitch";panel.message="Choose where to save the new project."
         guard panel.runModal() == .OK,let url=panel.url else{return}
-        do{let fresh=Project();try fresh.save(url);stop();project=fresh;projectURL=url;undoStack=[];redoStack=[];unsaved=false;noteRecent();updateTitle();reloadPages();selectCurrent()}catch{showError(error)}
+        do{let fresh=Project();try fresh.save(url);writeUntitled();stop();decoded=[:];project=fresh;projectURL=url;undoStack=[];redoStack=[];unsaved=false;noteRecent();updateTitle();reloadPages();selectCurrent()}catch{showError(error)}
     }
     @objc func importImages(){
         let panel=NSOpenPanel();panel.canChooseFiles=true;panel.canChooseDirectories=true;panel.allowsMultipleSelection=true;panel.message="Choose photographs or a folder. Subfolders are not imported."
@@ -649,22 +681,42 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
     /// Files and folders from the Import panel, a drop on the window or a drop on the app's icon.
     /// A project file is opened; photographs are added to the project that is open.
     func receive(_ urls:[URL]){
-        let incoming=ImportPolicy.sort(urls,existing:Set(project.pages.map{$0.path})){url in
-            var directory:ObjCBool=false
-            guard FileManager.default.fileExists(atPath:url.path,isDirectory:&directory),directory.boolValue else{return nil}
-            return (try? FileManager.default.contentsOfDirectory(at:url,includingPropertiesForKeys:nil,options:.skipsHiddenFiles)) ?? []
+        if let file=urls.first(where:ImportPolicy.isProject) {if confirmUnsaved(){open(file)};return}
+        guard !importing else{status.stringValue="An import is already under way";return}
+        // Listing folders and reading each photograph's size takes a while for a long book, so it happens off the
+        // main thread with a notice over the canvas. This is separate from detection, which follows.
+        importing=true;showBanner("Importing photographs…")
+        let existing=Set(project.pages.map{$0.path}),target=projectURL
+        DispatchQueue.global(qos:.userInitiated).async{[weak self] in
+            let incoming=ImportPolicy.sort(urls,existing:existing){url in
+                var directory:ObjCBool=false
+                guard FileManager.default.fileExists(atPath:url.path,isDirectory:&directory),directory.boolValue else{return nil}
+                return (try? FileManager.default.contentsOfDirectory(at:url,includingPropertiesForKeys:nil,options:.skipsHiddenFiles)) ?? []
+            }
+            let count=incoming.photographs.count
+            if count>0 {DispatchQueue.main.async{if self?.importing==true {self?.showBanner("Importing \(count) photograph\(count==1 ? "":"s")…")}}}
+            let added=incoming.photographs.map{Page(path:$0.path)}
+            DispatchQueue.main.async{guard let self else{return}
+                self.importing=false;self.showBanner(nil)
+                // Another project was opened meanwhile; these photographs were meant for the one before.
+                guard self.projectURL==target else{return}
+                guard !added.isEmpty else{self.status.stringValue="Nothing new to import";return}
+                let wasEmpty=self.project.pages.isEmpty
+                self.restructure{self.project.pages += added;if wasEmpty{self.project.selected=0}}
+                self.status.stringValue="Imported \(added.count) photograph\(added.count==1 ? "":"s") · proposing crops"
+                self.detectPending()
+            }
         }
-        if let file=incoming.project {if confirmUnsaved(){open(file)};return}
-        guard !incoming.photographs.isEmpty else{status.stringValue="Nothing new to import";return}
-        let added=incoming.photographs.map{Page(path:$0.path)},wasEmpty=project.pages.isEmpty
-        restructure{project.pages += added;if wasEmpty{project.selected=0}}
-        status.stringValue="Imported \(added.count) photograph\(added.count==1 ? "":"s") · proposing crops"
-        detectPending()
+    }
+    /// A notice over the canvas for work that holds everything else up; nil takes it away.
+    func showBanner(_ text:String?){
+        banner.isHidden=text==nil;bannerLabel.stringValue=text ?? ""
+        if text == nil {bannerSpinner.stopAnimation(nil)} else {bannerSpinner.startAnimation(nil)}
     }
     @objc func openProject(){let panel=NSOpenPanel();panel.allowedContentTypes=ImportPolicy.projectExtensions.compactMap{UTType(filenameExtension:$0)}+[.json];guard confirmUnsaved(),panel.runModal() == .OK,let url=panel.url else{return};open(url)}
     @objc func openRecent(_ sender:NSMenuItem){if let url=sender.representedObject as? URL,confirmUnsaved(){open(url)}}
     func open(_ url:URL){
-        do{let loaded=try Project.read(url);stop();generation=UUID();project=loaded;project.selected=min(max(0,project.selected),max(0,project.pages.count-1));projectURL=url;unsaved=false;noteRecent();updateTitle();undoStack=[];redoStack=[];thumbs.removeAllObjects();thumbnailPending=[];pixelSizes=[:];reloadPages();selectCurrent();status.stringValue="Opened \(url.lastPathComponent)";DispatchQueue.main.async{self.findMissingPhotographs()}}catch{showError(error)}
+        do{let loaded=try Project.read(url);writeUntitled();stop();generation=UUID();decoded=[:];project=loaded;project.selected=min(max(0,project.selected),max(0,project.pages.count-1));projectURL=url;unsaved=false;noteRecent();updateTitle();undoStack=[];redoStack=[];thumbs.removeAllObjects();thumbnailPending=[];pixelSizes=[:];reloadPages();selectCurrent();status.stringValue="Opened \(url.lastPathComponent)";DispatchQueue.main.async{self.findMissingPhotographs()}}catch{showError(error)}
     }
     @objc func locatePhotographs(){findMissingPhotographs();if Relink.missing(project.pages,exists:FileManager.default.fileExists(atPath:)).isEmpty {status.stringValue="Every photograph is where the project expects it"}}
     /// A project holds each photograph's full path. When some are gone, the project's own folder is tried first;

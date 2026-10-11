@@ -115,6 +115,15 @@ extension AppDelegate: NSToolbarDelegate {
         progress.isIndeterminate=false;progress.controlSize = .small;progress.isHidden=true
         stopButton.image=symbol("xmark.circle.fill");stopButton.isBordered=false;stopButton.toolTip="Stop (Esc)";stopButton.target=self;stopButton.action=#selector(stop);stopButton.isHidden=true
         for v in [canvas,bar] as [NSView] {v.translatesAutoresizingMaskIntoConstraints=false;root.addSubview(v)}
+        banner.material = .hudWindow;banner.blendingMode = .withinWindow;banner.state = .active;banner.wantsLayer=true;banner.layer?.cornerRadius=12;banner.layer?.masksToBounds=true;banner.isHidden=true
+        bannerSpinner.style = .spinning;bannerSpinner.controlSize = .regular;bannerSpinner.isDisplayedWhenStopped=false
+        bannerLabel.font = .systemFont(ofSize:15,weight:.medium);bannerLabel.textColor = .labelColor
+        let notice=NSStackView(views:[bannerSpinner,bannerLabel]);notice.spacing=12;notice.translatesAutoresizingMaskIntoConstraints=false
+        banner.translatesAutoresizingMaskIntoConstraints=false;banner.addSubview(notice);root.addSubview(banner)
+        NSLayoutConstraint.activate([
+            banner.centerXAnchor.constraint(equalTo:canvas.centerXAnchor),banner.centerYAnchor.constraint(equalTo:canvas.centerYAnchor),
+            notice.topAnchor.constraint(equalTo:banner.topAnchor,constant:18),notice.bottomAnchor.constraint(equalTo:banner.bottomAnchor,constant:-18),
+            notice.leadingAnchor.constraint(equalTo:banner.leadingAnchor,constant:24),notice.trailingAnchor.constraint(equalTo:banner.trailingAnchor,constant:-24)])
         for v in [line,status,progress,stopButton,counter] as [NSView] {v.translatesAutoresizingMaskIntoConstraints=false;bar.addSubview(v)}
         NSLayoutConstraint.activate([
             canvas.topAnchor.constraint(equalTo:root.safeAreaLayoutGuide.topAnchor),canvas.leadingAnchor.constraint(equalTo:root.leadingAnchor),canvas.trailingAnchor.constraint(equalTo:root.trailingAnchor),canvas.bottomAnchor.constraint(equalTo:bar.topAnchor),
