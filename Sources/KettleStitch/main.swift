@@ -110,6 +110,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
     var settings: SettingsController?
     var shortcuts: ShortcutsController?
     var usageLog: UsageLogController?
+    /// The candidates the last split proposal for each page came with, and which of them is showing.
+    var splitOptions:[UUID:(options:[PageSplit],index:Int,quad:Quad,rotation:Int)]=[:]
     var badExampleItem: NSMenuItem?,badExampleSeparator: NSMenuItem?
     /// Where the history of requests to Claude is kept.
     var usageURL=URL(fileURLWithPath:"/dev/null")
@@ -432,7 +434,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
     }
 
     // MARK: Page split
-    @objc func proposeSplit(){proposeSplits(targetIndexes,record:true)}
+    /// The first press looks for the fold. Pressing again on the same page, with the split still where it was put,
+    /// steps through the detector's other candidates and round to the first.
+    @objc func proposeSplit(){
+        let targets=targetIndexes
+        if targets.count==1,let i=targets.first,let kept=splitOptions[project.pages[i].id],kept.options.count>1,kept.quad==project.pages[i].quad,kept.rotation==project.pages[i].rotation,project.pages[i].split==kept.options[kept.index] {
+            let next=(kept.index+1)%kept.options.count
+            splitOptions[project.pages[i].id]?.index=next
+            edit([i],geometry:false){$0.split=kept.options[next]}
+            status.stringValue=next==0 ? "Back to the first split proposal (1 of \(kept.options.count)) · T for the next":"Split candidate \(next+1) of \(kept.options.count) · T for the next"
+            return
+        }
+        proposeSplits(targets,record:true)
+    }
     /// Looks for the fold on each page in the background. One undo step covers the whole request.
     func proposeSplits(_ indexes:[Int],record:Bool){
         guard !indexes.isEmpty else{return}
@@ -454,13 +468,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
                     // The crop or rotation may have changed while this ran; a proposal for the old shape is not applied.
                     if let i=self.project.pages.firstIndex(where:{$0.id==page.id}),self.project.pages[i].quad==page.quad,self.project.pages[i].rotation==page.rotation,case .success(let proposal)=result {
                         self.project.pages[i].split=proposal.split;if proposal.confident{found+=1}else if guide != nil{guided+=1}
+                        self.splitOptions[page.id]=(proposal.alternatives,0,page.quad,page.rotation)
                         self.save();self.table.reloadData(forRowIndexes:IndexSet(integer:i),columnIndexes:IndexSet(integer:0))
                         if self.current==i {self.refreshDetail()}
                     }
                     self.stepProgress(.split,finished)
                     if finished==pages.count {
                         self.endProgress(.split)
-                        self.status.stringValue=pages.count==1 ? (found==1 ? "Split proposed at the fold — drag it, or press , and . to move it":guided==1 ? "No clear fold found; split placed where the page before has it — drag it, or press , and . to move it":"No clear fold found; split placed at the centre — drag it, or press , and . to move it"):"Split proposed on \(pages.count) pages: \(found) at a fold, \(guided) where the page before has it, \(pages.count-found-guided) at the centre"
+                        self.status.stringValue=pages.count==1 ? (found==1 ? "Split proposed at the fold — T again tries another place; drag it, or press , and . to move it":guided==1 ? "No clear fold found; split placed where the page before has it — drag it, or press , and . to move it":"No clear fold found; split placed at the centre — drag it, or press , and . to move it"):"Split proposed on \(pages.count) pages: \(found) at a fold, \(guided) where the page before has it, \(pages.count-found-guided) at the centre"
                     }
                 }
             }

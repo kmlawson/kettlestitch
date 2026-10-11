@@ -242,6 +242,14 @@ extension AppDelegate {
             precondition(saved.count==1 && Set((try? FileManager.default.contentsOfDirectory(atPath:saved[0].path)) ?? [])==["example.json","overlay.jpg",URL(fileURLWithPath:self.project.pages[0].path).lastPathComponent],"A bad example is one folder of three files")
             precondition(self.badExampleItem?.isHidden==true && self.badExampleItem?.keyEquivalentModifierMask==[.command,.option])
             print("BAD_EXAMPLE passed")
+            // T again steps through the other places the detector offered, and round to the first; a split moved by hand starts afresh.
+            let options=[PageSplit(top:0.47,bottom:0.47),PageSplit(top:0.5,bottom:0.5),PageSplit(top:0.56,bottom:0.56)],cycled=self.project.pages[0]
+            self.table.selectRowIndexes(IndexSet(integer:0),byExtendingSelection:false)
+            self.project.pages[0].split=options[0];self.splitOptions[cycled.id]=(options,0,cycled.quad,cycled.rotation)
+            key("t",17);precondition(self.project.pages[0].split==options[1]);key("t",17);precondition(self.project.pages[0].split==options[2])
+            key("t",17);precondition(self.project.pages[0].split==options[0],"After the last candidate comes the first")
+            self.project.pages[0].split=nil;self.splitOptions[cycled.id]=nil;self.refreshDetail()
+            print("SPLIT_CANDIDATES passed")
             // A project file is written by Save, not by each edit.
             if self.hasProjectFile {
                 func onDisk()->Project? {try? Project.read(self.projectURL)}

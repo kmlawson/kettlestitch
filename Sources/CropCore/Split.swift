@@ -89,6 +89,8 @@ public struct SplitProposal: Equatable {
     public var split: PageSplit
     /// False when no fold or gap stood out and the centre was used instead.
     public var confident: Bool
+    /// The proposal first, then up to three other places the split might go, likeliest first and no two close together.
+    public var alternatives: [PageSplit] = []
 }
 /// Finds the fold between facing pages in the corrected crop.
 ///
@@ -115,6 +117,47 @@ public enum SplitDetector {
             }
         }
         return analyse(bytes.map{Double($0)/255},width:w,height:h,guide:guide)
+    }
+    /// The band of columns free of print that the fold lies in, as first and last column.
+    ///
+    /// `ink` counts, for each column, the sampled rows with a strong change in tone there. A thin line that runs
+    /// through blank paper (a rule, the border of a frame, the fold's own shadow) does not divide the band.
+    static func gutterBand(ink: [Int], rows: Int, width w: Int, from first: Int, to last: Int, expected: Double) -> (lo: Int, hi: Int)? {
+        guard rows>0,w>=40 else {return nil}
+        var quiet=ink.map{Double($0)<=0.04*Double(rows)}
+        let margin=max(4,w/100),thickest=Double(max(12,w/45))
+        // A sliver of quiet inside print is part of it: the even middle of a heavy line, or the gap in a double rule.
+        var x=1
+        while x<w-1 {
+            guard quiet[x] else {x+=1;continue}
+            var end=x;while end+1<w-1,quiet[end+1] {end+=1}
+            if end-x+1<margin,x>1,end<w-2 {for inside in x...end {quiet[inside]=false}}
+            x=end+1
+        }
+        // Runs of quiet and of printed columns, alternating.
+        var runs:[(quiet:Bool,lo:Int,hi:Int)]=[]
+        for x in 1..<w-1 {
+            if let last=runs.last,last.quiet == quiet[x] {runs[runs.count-1].hi=x} else {runs.append((quiet[x],x,x))}
+        }
+        func isLine(_ i: Int) -> Bool {
+            guard !runs[i].quiet,i>0,i<runs.count-1,runs[i].hi-runs[i].lo+1<=w/8 else {return false}
+            guard runs[i-1].hi-runs[i-1].lo+1>=margin,runs[i+1].hi-runs[i+1].lo+1>=margin else {return false}
+            return Double((runs[i].lo...runs[i].hi).reduce(0){$0+ink[$1]})/Double(rows)<=thickest
+        }
+        var bands:[(lo:Int,hi:Int)]=[],i=0
+        while i<runs.count {
+            guard runs[i].quiet else {i+=1;continue}
+            var j=i
+            while j+2<runs.count,isLine(j+1) {j+=2}
+            bands.append((runs[i].lo,runs[j].hi));i=j+1
+        }
+        func score(_ band: (lo: Int, hi: Int)) -> Double {
+            let width=Double(band.hi-band.lo+1),centre=Double(band.lo+band.hi)/2
+            return min(width,0.3*Double(w))/Double(w)-2.5*abs(centre/Double(w)-expected)
+        }
+        // A band whose middle is out of the search's reach is some other gap, such as the one between two columns.
+        let fit=bands.filter{$0.hi-$0.lo+1>=max(8,w/40) && ($0.lo+$0.hi)/2>=first && ($0.lo+$0.hi)/2<=last}
+        return fit.max{score($0)<score($1)}
     }
     /// `gray` is row-major from the top, 0 black to 1 white.
     public static func analyse(_ gray: [Double], width w: Int, height h: Int, guide: PageSplit? = nil) -> SplitProposal {
@@ -160,23 +203,50 @@ public enum SplitDetector {
         // A rule or a stroke of print is a dark line too, but it has print beside it; a fold sits in the inner margins.
         func margin(_ x: Int) -> Double {0.6*quiet(x,narrow+1,2*narrow+2)+0.4*quiet(x,2*narrow+3,4*narrow)}
 
+        // Change in tone from left to right at each sampled row. Print shows as many strong changes along a row;
+        // a fold shows as one, of the same sign, all the way down.
+        var grads=[Double](repeating:0,count:across.count*w),ink=[Int](repeating:0,count:w)
+        for (r,y) in across.enumerated() {for x in 1..<w-1 {let g=gray[y*w+x+1]-gray[y*w+x-1];grads[r*w+x]=g;if abs(g)>0.08 {ink[x]+=1}}}
+        let gutter=printed ? gutterBand(ink:ink,rows:across.count,width:w,from:first,to:last,expected:expected):nil
+        /// The clearest line through each column, dark or merely a step in tone, and where it meets the bottom edge.
+        var features=[(strength:Double,bottom:Int)](repeating:(0,0),count:w)
         var best=(score:-Double.infinity,top:w/2,bottom:w/2,fold:0.0,gap:0.0)
         // With a guide: the clearest line through each column, to find the one nearest the guide afterwards.
         var lines=[(fold:Double,bottom:Int)](repeating:(0,0),count:guide == nil ? 0:w)
         let lean=max(1,w/20)
+        // Which of the twenty stretches of a line each sampled row belongs to, and how many rows each has.
+        let bandOf=across.indices.map{$0*bands/across.count}
+        var counts=[Double](repeating:0,count:bands);for band in bandOf {counts[band]+=1}
+        var stretch=[Double](repeating:0,count:bands),steps=[Double](repeating:0,count:bands),means=[Double](repeating:0,count:bands)
         for top in stride(from:first,through:last,by:1) {
             for shift in stride(from:-lean,through:lean,by:2) {
                 let bottom=top+shift
                 guard bottom>=low,bottom<high else {continue}
-                var fold=0.0,stretch=[Double](repeating:0,count:bands),counts=[Double](repeating:0,count:bands)
+                var fold=0.0,step=0.0
+                for band in 0..<bands {stretch[band]=0;steps[band]=0}
                 for (r,y) in across.enumerated() {
-                    let strength=folds[r*w+top+shift*y/(h-1)],band=r*bands/across.count
-                    fold+=strength;stretch[band]+=strength;counts[band]+=1
+                    let x=top+shift*y/(h-1),strength=folds[r*w+x],band=bandOf[r]
+                    fold+=strength;stretch[band]+=strength
+                    step+=grads[r*w+x];steps[band]+=grads[r*w+x]
                 }
-                fold/=Double(across.count)
+                fold/=Double(across.count);step/=Double(across.count)
                 // The two weakest stretches of the line. Where they fall well below the rest, it stops short and is no fold.
-                let weakest=zip(stretch,counts).map{$1>0 ? $0/$1:0}.sorted().prefix(2).reduce(0,+)/2
+                for band in 0..<bands {means[band]=counts[band]>0 ? stretch[band]/counts[band]:0}
+                means.sort()
+                let weakest=(means[0]+means[1])/2
                 if fold>0 {let whole=min(1,weakest/(0.5*fold));fold*=whole*whole}
+                // The same test for a step in tone: every stretch has to step the same way.
+                var edge=0.0
+                if abs(step)>0.004 {
+                    let sign=step>0 ? 1.0:-1.0
+                    for band in 0..<bands {means[band]=counts[band]>0 ? sign*steps[band]/counts[band]:0}
+                    means.sort()
+                    let least:Double=(means[0]+means[1])/2
+                    let whole=min(1,max(0,least)/(0.4*abs(step)));edge=min(1,abs(step)/0.06)*whole*whole
+                }
+                // Of equally clear lines the more upright one is kept.
+                let feature=max(fold,edge)-0.02*Double(abs(shift))/Double(lean)
+                if feature>features[top].strength {features[top]=(feature,bottom)}
                 let middle=(top+bottom)/2,gap=margin(middle)
                 let off=abs(Double(middle)/Double(w)-expected)
                 // The page before says more about where the fold is than the centre of the crop does.
@@ -189,6 +259,59 @@ public enum SplitDetector {
                 if guide != nil,gap>0.3,fold>lines[top].fold {lines[top]=(fold,bottom)}
             }
         }
+        /// Adds the other places the split might go: the other clear lines, the middle of the gutter, where the page
+        /// before has it, and the centre of the crop.
+        func finish(_ chosen: SplitProposal) -> SplitProposal {
+            var options=[chosen.split]
+            func offer(_ split: PageSplit) {
+                let s=split.clamped,at=(s.top+s.bottom)/2
+                if options.count<4,!options.contains(where:{abs(($0.top+$0.bottom)/2-at)<0.015}) {options.append(s)}
+            }
+            let reach=2*narrow
+            var lines:[Int]=[]
+            for x in first...last where features[x].strength>=0.15 {
+                var peak=true
+                for other in max(first,x-reach)...min(last,x+reach) where features[other].strength>features[x].strength {peak=false;break}
+                if peak {lines.append(x)}
+            }
+            lines.sort{features[$0].strength>features[$1].strength}
+            for x in lines {offer(PageSplit(top:(Double(x)+0.5)/Double(w),bottom:(Double(features[x].bottom)+0.5)/Double(w)))}
+            if let gutter {let centre=(Double(gutter.lo+gutter.hi)/2+0.5)/Double(w);offer(PageSplit(top:centre,bottom:centre))}
+            if let guide {offer(guide)}
+            offer(.centre)
+            var result=chosen;result.alternatives=options;return result
+        }
+        if let gutter {
+            // The fold lies in the band free of print between the two pages. A band that wide open on one side says
+            // little about where; otherwise only its middle part is searched, which leaves out the borders of
+            // printed frames at its edges, however dark and long they are.
+            let centre=Double(gutter.lo+gutter.hi)/2,width=Double(gutter.hi-gutter.lo+1),open=width>0.3*Double(w)
+            let from=open ? Double(max(first,gutter.lo)):centre-0.3*width,to=open ? Double(min(last,gutter.hi)):centre+0.3*width
+            func middle(_ x: Int) -> Double {Double(x+features[x].bottom)/2}
+            func proposal(_ top: Double, _ bottom: Double) -> SplitProposal {SplitProposal(split:PageSplit(top:(top+0.5)/Double(w),bottom:(bottom+0.5)/Double(w)).clamped,confident:true)}
+            let reach=2*narrow,target=expected*Double(w)
+            func isPeak(_ x: Int) -> Bool {
+                let strength=features[x].strength,at=middle(x)
+                guard strength>=0.15,at>=from,at<=to else {return false}
+                for other in max(first,x-reach)...min(last,x+reach) where features[other].strength>strength {return false}
+                return true
+            }
+            let peaks:[Int]=(first...last).filter(isPeak)
+            if let strongest=peaks.map({features[$0].strength}).max() {
+                let clear:[Int]=peaks.filter{features[$0].strength>=0.5*strongest}
+                // With a page before to go by, or nothing else to place it, the line nearest the expected place; otherwise the clearest.
+                func nearer(_ a: Int, _ b: Int) -> Bool {abs(middle(a)-target)<abs(middle(b)-target)}
+                func fainter(_ a: Int, _ b: Int) -> Bool {features[a].strength<features[b].strength}
+                let byPlace=guide != nil || open
+                let x:Int=byPlace ? clear.min(by:nearer)!:clear.max(by:fainter)!
+                return finish(proposal(Double(x),Double(features[x].bottom)))
+            }
+            // Nothing to see in the gutter: where the page before has it if that is in the band's middle, else the middle itself.
+            // A narrow strip of blank paper is more likely one page's margin beside a fold too ragged to read as a line.
+            let roomy=width>=0.1*Double(w)
+            if let guide,target>=from,target<=to,roomy {return finish(SplitProposal(split:guide,confident:!open))}
+            if !open,roomy {return finish(proposal(centre,centre))}
+        }
         if guide != nil {
             // Every line that looks like a fold is a peak among its neighbours; the one nearest the guide is taken,
             // not the darkest. Only when there is none does the weighted search above decide.
@@ -196,11 +319,11 @@ public enum SplitDetector {
             let peaks=(first...last).filter{x in lines[x].fold>0.22 && !(max(first,x-reach)...min(last,x+reach)).contains{lines[$0].fold>lines[x].fold}}
             func distance(_ x: Int) -> Double {abs((Double(x+lines[x].bottom)/2+0.5)/Double(w)-expected)}
             if let x=peaks.min(by:{distance($0)<distance($1)}) {
-                return SplitProposal(split:PageSplit(top:(Double(x)+0.5)/Double(w),bottom:(Double(lines[x].bottom)+0.5)/Double(w)).clamped,confident:true)
+                return finish(SplitProposal(split:PageSplit(top:(Double(x)+0.5)/Double(w),bottom:(Double(lines[x].bottom)+0.5)/Double(w)).clamped,confident:true))
             }
         }
         let confident=best.fold>0.22 || (printed && best.gap>0.75)
-        guard confident else {return fallback}
-        return SplitProposal(split:PageSplit(top:(Double(best.top)+0.5)/Double(w),bottom:(Double(best.bottom)+0.5)/Double(w)).clamped,confident:true)
+        guard confident else {return finish(fallback)}
+        return finish(SplitProposal(split:PageSplit(top:(Double(best.top)+0.5)/Double(w),bottom:(Double(best.bottom)+0.5)/Double(w)).clamped,confident:true))
     }
 }

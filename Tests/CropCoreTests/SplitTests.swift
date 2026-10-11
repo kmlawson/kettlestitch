@@ -31,6 +31,29 @@ private func spread(width:Int=1200,height:Int=800,fold:Double,lean:Double=0,shad
     }
     return c.makeImage()!
 }
+/// Two facing pages of framed advertisements, as in a yearbook: each frame's double border runs most of the height,
+/// with print inside it, and the fold between the frames is only a faint change in the paper's tone, or `fold` dark.
+/// `left` and `right` are each frame's sides as fractions across; `right` nil leaves that page with a few lines of title.
+private func framedSpread(width:Int=1200,height:Int=800,at fold:Double,left:(Double,Double),right:(Double,Double)?,dark:Bool=false)->CGImage {
+    let c=CGContext(data:nil,width:width,height:height,bitsPerComponent:8,bytesPerRow:0,space:CGColorSpaceCreateDeviceRGB(),bitmapInfo:CGImageAlphaInfo.premultipliedLast.rawValue)!
+    let w=CGFloat(width),h=CGFloat(height)
+    c.setFillColor(CGColor(gray:0.80,alpha:1));c.fill(CGRect(x:0,y:0,width:CGFloat(fold)*w,height:h))
+    c.setFillColor(CGColor(gray:0.85,alpha:1));c.fill(CGRect(x:CGFloat(fold)*w,y:0,width:w-CGFloat(fold)*w,height:h))
+    if dark {c.setFillColor(CGColor(gray:0.45,alpha:1));c.fill(CGRect(x:CGFloat(fold)*w-2,y:0,width:4,height:h))}
+    func frame(_ sides:(Double,Double)){
+        let box=CGRect(x:CGFloat(sides.0)*w,y:0.08*h,width:CGFloat(sides.1-sides.0)*w,height:0.875*h)
+        c.setStrokeColor(CGColor(gray:0.1,alpha:1));c.setLineWidth(3);c.stroke(box);c.stroke(box.insetBy(dx:7,dy:7))
+        // Lines of print inside, clear of the border.
+        c.setFillColor(CGColor(gray:0.15,alpha:1))
+        for x in stride(from:box.minX+0.03*w,to:box.maxX-0.03*w,by:14) {c.fill(CGRect(x:x,y:box.minY+0.05*h,width:5,height:box.height-0.1*h))}
+    }
+    frame(left)
+    if let right {frame(right)} else {
+        c.setFillColor(CGColor(gray:0.15,alpha:1))
+        for x in stride(from:0.62*w,to:0.9*w,by:14) {c.fill(CGRect(x:x,y:0.7*h,width:5,height:0.12*h));c.fill(CGRect(x:x,y:0.15*h,width:5,height:0.06*h))}
+    }
+    return c.makeImage()!
+}
 private func temporaryPhoto(_ image:CGImage)throws->URL {
     let url=FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString+".jpg")
     try Exporter.encode(image,as:.jpeg,quality:0.95,dpi:nil).write(to:url)
@@ -128,6 +151,26 @@ final class SplitDetectorTests:XCTestCase {
         XCTAssertTrue(proposal.confident)
         XCTAssertEqual(proposal.split.top,0.5,accuracy:0.012);XCTAssertEqual(proposal.split.bottom,0.5,accuracy:0.012)
     }
+    func testTheFoldBetweenFramedAdvertisementsIsNotAFrameBorder() throws {
+        // The fold is a faint step in tone midway between two heavy frames; the frames' borders are the darkest lines there are.
+        let adverts=framedSpread(at:0.5,left:(0.06,0.44),right:(0.56,0.94))
+        let alone=try SplitDetector.detect(adverts,quad:.full,rotation:0)
+        XCTAssertTrue(alone.confident);XCTAssertEqual(alone.split.top,0.5,accuracy:0.012);XCTAssertEqual(alone.split.bottom,0.5,accuracy:0.012)
+        // Other places it might go come along for the user to step through: the proposal first, none close to another.
+        XCTAssertEqual(alone.alternatives.first,alone.split);XCTAssertGreaterThan(alone.alternatives.count,1);XCTAssertLessThanOrEqual(alone.alternatives.count,4)
+        let places=alone.alternatives.map{($0.top+$0.bottom)/2}.sorted()
+        for (a,b) in zip(places,places.dropFirst()) {XCTAssertGreaterThanOrEqual(b-a,0.015)}
+        XCTAssertTrue(places.contains{abs($0-0.44)<0.012} || places.contains{abs($0-0.56)<0.012},"A frame's border is among them: \(places)")
+        // A page before that was split on its frame's border does not drag this one onto the border too.
+        let misled=try SplitDetector.detect(adverts,quad:.full,rotation:0,guide:PageSplit(top:0.44,bottom:0.44))
+        XCTAssertEqual((misled.split.top+misled.split.bottom)/2,0.5,accuracy:0.012)
+        // The gutter need not be in the middle of the crop.
+        let aside=try SplitDetector.detect(framedSpread(at:0.44,left:(0.05,0.38),right:(0.50,0.9)),quad:.full,rotation:0)
+        XCTAssertEqual((aside.split.top+aside.split.bottom)/2,0.44,accuracy:0.012)
+        // Facing a title page with wide margins, the fold's own shadow is taken, not the middle of the blank paper.
+        let title=try SplitDetector.detect(framedSpread(at:0.5,left:(0.06,0.47),right:nil,dark:true),quad:.full,rotation:0)
+        XCTAssertEqual((title.split.top+title.split.bottom)/2,0.5,accuracy:0.012)
+    }
     func testThePageBeforeGuidesTheSplit() throws {
         let before=PageSplit(top:0.38,bottom:0.4)
         // Nothing to see: the split goes where the page before has it, as a fraction of this crop.
@@ -142,9 +185,9 @@ final class SplitDetectorTests:XCTestCase {
         let near=try SplitDetector.detect(spread(fold:0.45,lean:0.03),quad:.full,rotation:0,guide:PageSplit(top:0.5,bottom:0.5))
         XCTAssertTrue(near.confident);XCTAssertEqual((near.split.top+near.split.bottom)/2,0.45,accuracy:0.012)
         // Of two lines that both cross the page, the one nearer the guide is taken, though the other is darker.
-        let two=spread(fold:0.5,second:0.44)
+        let two=spread(fold:0.5,second:0.46)
         XCTAssertEqual((try SplitDetector.detect(two,quad:.full,rotation:0,guide:PageSplit(top:0.49,bottom:0.49))).split.top,0.5,accuracy:0.012)
-        XCTAssertEqual((try SplitDetector.detect(two,quad:.full,rotation:0,guide:PageSplit(top:0.45,bottom:0.45))).split.top,0.44,accuracy:0.012)
+        XCTAssertEqual((try SplitDetector.detect(two,quad:.full,rotation:0,guide:PageSplit(top:0.465,bottom:0.465))).split.top,0.46,accuracy:0.012)
         // A frame border beside the guide is still not a fold.
         XCTAssertEqual((try SplitDetector.detect(spread(fold:0.5,rule:0.46),quad:.full,rotation:0,guide:PageSplit(top:0.47,bottom:0.47))).split.top,0.5,accuracy:0.012)
         // The guide is the nearest earlier page with a split, turned the same way.
@@ -154,7 +197,7 @@ final class SplitDetectorTests:XCTestCase {
     }
     func testBlankSheetFallsBackToCentre() throws {
         let proposal=try SplitDetector.detect(spread(fold:0.5,shadow:false,print:false),quad:.full,rotation:0)
-        XCTAssertFalse(proposal.confident);XCTAssertEqual(proposal.split,.centre)
+        XCTAssertFalse(proposal.confident);XCTAssertEqual(proposal.split,.centre);XCTAssertEqual(proposal.alternatives,[.centre])
     }
     func testFoldIsFoundInTheRotatedOutput() throws {
         // Seen a quarter turn clockwise, the fold at 45% of the photograph's width lies at 45% of the output's height,
