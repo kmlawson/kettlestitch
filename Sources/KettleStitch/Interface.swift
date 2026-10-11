@@ -167,20 +167,20 @@ extension AppDelegate: NSToolbarDelegate {
     func toolbarAllowedItemIdentifiers(_ toolbar:NSToolbar)->[NSToolbarItem.Identifier] {toolbarDefaultItemIdentifiers(toolbar)+[.space]}
     func toolbar(_ toolbar:NSToolbar,itemForItemIdentifier id:NSToolbarItem.Identifier,willBeInsertedIntoToolbar flag:Bool)->NSToolbarItem? {
         switch id {
-        case .importPhotos:return toolbarItem(id,"Import",symbol("photo.badge.plus","photo.on.rectangle.angled"),#selector(importImages),"Import photographs or a folder (I)")
-        case .detect:return toolbarItem(id,"Detect",symbol("wand.and.stars"),#selector(detectCurrent),"Detect the cropping frame of this photograph (D)")
-        case .detectPending:return toolbarItem(id,"Detect Pending",symbol("wand.and.rays","sparkles"),#selector(detectPending),"Detect every pending photograph (B)")
+        case .importPhotos:return toolbarItem(id,"Import",symbol("photo.badge.plus","photo.on.rectangle.angled"),#selector(importImages),"Import photographs or a folder (i)")
+        case .detect:return toolbarItem(id,"Detect",symbol("wand.and.stars"),#selector(detectCurrent),"Detect the cropping frame of this photograph (d)")
+        case .detectPending:return toolbarItem(id,"Detect Pending",symbol("wand.and.rays","sparkles"),#selector(detectPending),"Detect every pending photograph (b)")
         case .rotateLeft:return toolbarItem(id,"Rotate Left",symbol("rotate.left"),#selector(rotateLeft),"Rotate the output counterclockwise (Shift-R)")
-        case .rotateRight:return toolbarItem(id,"Rotate Right",symbol("rotate.right"),#selector(rotate),"Rotate the output clockwise (R)")
-        case .split:return toolbarItem(id,"Split",symbol("rectangle.split.2x1","square.split.2x1"),#selector(proposeSplit),"Propose a split between facing pages (T)")
-        case .flag:return toolbarItem(id,"Flag",symbol("flag"),#selector(toggleFlag),"Add or remove a flag (M)")
-        case .claude:return toolbarItem(id,"Second Opinion",symbol("sparkles","bubble.left"),#selector(sendToClaude),"Ask Claude, OpenAI or Gemini, as chosen in Settings, to check the crop of the selected pages (A)")
+        case .rotateRight:return toolbarItem(id,"Rotate Right",symbol("rotate.right"),#selector(rotate),"Rotate the output clockwise (r)")
+        case .split:return toolbarItem(id,"Split",symbol("rectangle.split.2x1","square.split.2x1"),#selector(proposeSplit),"Propose a split between facing pages (t)")
+        case .flag:return toolbarItem(id,"Flag",symbol("flag"),#selector(toggleFlag),"Add or remove a flag (m)")
+        case .claude:return toolbarItem(id,"Second Opinion",symbol("sparkles","bubble.left"),#selector(sendToClaude),"Ask Claude, OpenAI or Gemini, as chosen in Settings, to check the crop of the selected pages (a)")
         case .accept:return toolbarItem(id,"Accept",symbol("checkmark.circle"),#selector(accept),"Mark reviewed and go to the next photograph (Return)")
-        case .export:return toolbarItem(id,"Export",symbol("square.and.arrow.up"),#selector(exportImages),"Export a PDF or image files (E)")
+        case .export:return toolbarItem(id,"Export",symbol("square.and.arrow.up"),#selector(exportImages),"Export a PDF or image files (e)")
         case .inspector:return toolbarItem(id,"Inspector",symbol("sidebar.right"),#selector(toggleInspector),"Show or hide the inspector")
         case .preview:
             let group=NSToolbarItemGroup(itemIdentifier:id,images:[symbol("eye") ?? NSImage()],selectionMode:.selectAny,labels:["Preview"],target:self,action:#selector(togglePreview))
-            group.label="Preview";group.paletteLabel="Corrected Preview";group.toolTip="Show the corrected, adjusted result (P)";group.setSelected(canvas.preview,at:0);previewItem=group
+            group.label="Preview";group.paletteLabel="Corrected Preview";group.toolTip="Show the corrected, adjusted result (p)";group.setSelected(canvas.preview,at:0);previewItem=group
             return group
         case .zoom:
             let images=[symbol("minus.magnifyingglass"),symbol("arrow.up.left.and.arrow.down.right","1.magnifyingglass"),symbol("plus.magnifyingglass")].map{$0 ?? NSImage()}

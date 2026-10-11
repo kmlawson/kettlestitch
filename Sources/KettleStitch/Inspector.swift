@@ -52,12 +52,12 @@ extension AppDelegate {
         detail.font = .systemFont(ofSize:12);detail.textColor = .secondaryLabelColor;detail.lineBreakMode = .byTruncatingMiddle;detail.maximumNumberOfLines=2
         note.font = .systemFont(ofSize:11);note.textColor = .labelColor;note.isSelectable=true;note.isHidden=true
         candidates.target=self;candidates.action=#selector(candidateChanged);candidates.toolTip="Proposed cropping frames ([ and ])"
-        let crop=segments(["Detect","Full","Previous"],#selector(cropSegment(_:)),tips:["Detect the cropping frame (D)","Set the cropping frame to the full image (X)","Copy the previous photograph's crop (C)"])
+        let crop=segments(["Detect","Full","Previous"],#selector(cropSegment(_:)),tips:["Detect the cropping frame (d)","Set the cropping frame to the full image (x)","Copy the previous photograph's crop (c)"])
         let corners=segments(["↖","↗","↙","↘"],#selector(cornerSegment(_:)),tips:["Select the top-left corner (1)","Select the top-right corner (2)","Select the bottom-left corner (3)","Select the bottom-right corner (4)"])
         let size=segments(["Shrink","Expand"],#selector(sizeSegment(_:)),tips:["Shrink the crop (;)","Expand the crop (')"])
-        let splits=segments(["Propose","◀","▶","Remove"],#selector(splitSegment(_:)),tips:["Propose a split between facing pages (T)","Move the split left (,)","Move the split right (.)","Remove the split (Shift-T)"])
-        let tilt=segments(["Auto","↺","↻","Reset"],#selector(deskewSegment(_:)),tips:["Level the lines of text (Q)","Turn counterclockwise by 0.1° (Option-,)","Turn clockwise by 0.1° (Option-.)","Remove the deskew (Shift-Q)"])
-        let pictures=segments(["Add Zone","Clear"],#selector(zoneSegment(_:)),tips:["Draw a picture zone that keeps its gray tones on a black-and-white page (W)","Remove the picture zones (Shift-W)"])
+        let splits=segments(["Propose","◀","▶","Remove"],#selector(splitSegment(_:)),tips:["Propose a split between facing pages (t)","Move the split left (,)","Move the split right (.)","Remove the split (Shift-T)"])
+        let tilt=segments(["Auto","↺","↻","Reset"],#selector(deskewSegment(_:)),tips:["Level the lines of text (q)","Turn counterclockwise by 0.1° (Option-,)","Turn clockwise by 0.1° (Option-.)","Remove the deskew (Shift-Q)"])
+        let pictures=segments(["Add Zone","Clear"],#selector(zoneSegment(_:)),tips:["Draw a picture zone that keeps its gray tones on a black-and-white page (w)","Remove the picture zones (Shift-W)"])
         smudgeControl.segmentCount=2;smudgeControl.trackingMode = .selectAny;smudgeControl.segmentDistribution = .fillEqually;smudgeControl.target=self;smudgeControl.action=#selector(smudgeSegment(_:))
         smudgeControl.setLabel("Paint",forSegment:0);smudgeControl.setLabel("Clear",forSegment:1)
         smudgeControl.setToolTip("Pick up or put down the smudge brush, which blurs print so it cannot be read (Shift-B)",forSegment:0);smudgeControl.setToolTip("Remove the smudges (Option-Shift-B)",forSegment:1)
@@ -112,7 +112,7 @@ extension AppDelegate {
         // The keys used most, kept in view; the full list is one key away.
         let keys:[(String,String)]=[("← / →","Previous / next image"),("C","Set crop to same as previous image"),("V","Copy image adjustments from previous image"),("T","Propose split"),("R","Rotate (Shift-R for reverse)"),("; / '","Decrease / increase current crop"),("H J K L","Increase crop edges (Shift to decrease, Option to move crop)"),("/","See more shortcuts")]
         let shortcuts=NSGridView(views:keys.map{entry->[NSView] in
-            let key=NSTextField(labelWithString:entry.0);key.font = .monospacedSystemFont(ofSize:11,weight:.medium);key.textColor = .secondaryLabelColor;key.alignment = .right
+            let key=NSTextField(labelWithString:ShortcutReference.shown(entry.0));key.font = .monospacedSystemFont(ofSize:11,weight:.medium);key.textColor = .secondaryLabelColor;key.alignment = .right
             let action=NSTextField(wrappingLabelWithString:entry.1);action.font = .systemFont(ofSize:11);action.textColor = .secondaryLabelColor
             action.setContentCompressionResistancePriority(.defaultLow,for:.horizontal)
             return [key,action]

@@ -16,7 +16,7 @@ It is named after the kettle stitch, a knot that links one sewn section of a boo
 ## What it does
 
 - **Crop detection.** Each imported photograph gets several proposed crops; pick one with **[** and **]**, adjust its corners and edges, or copy the crop from the page before.
-- **Page splitting.** The fold between facing pages is found in the gutter between their print, starting from where you put the split on the previous page. Press **T** again to step through other candidates.
+- **Page splitting.** The fold between facing pages is found in the gutter between their print, starting from where you put the split on the previous page. Press **t** again to step through other candidates.
 - **Deskew** to level the lines of text, separately for each half of a split spread. Currently does not work very well.
 - **Cleanup**: grayscale, black and white with speck removal, brightness, contrast and sharpness, with picture zones that keep their tones on a black-and-white page.
 - **Smudge brush** to blur text that should not be readable in the output.
@@ -64,27 +64,27 @@ An app you build yourself is not blocked by Gatekeeper, because it was never dow
 ## Using it
 
 1. Drop photographs, or a folder of them, onto the window. Crops are proposed straight away.
-2. Step through with **→**. Fix a crop by dragging its corners or edges, or with the keys below; **C** copies the crop from the page before.
-3. For a two-page spread, press **T** to split it, and drag the line if it is off.
-4. Press **P** to see the result, and **Return** to accept the page and move on.
-5. Press **E** to export.
+2. Step through with **→**. Fix a crop by dragging its corners or edges, or with the keys below; **c** copies the crop from the page before.
+3. For a two-page spread, press **t** to split it, and drag the line if it is off.
+4. Press **p** to see the result, and **Return** to accept the page and move on.
+5. Press **e** to export.
 
-Save the project with **S** to return to it later. A project stores each photograph's location; if the photographs are moved, KettleStitch asks where they are now.
+Save the project with **s** to return to it later. A project stores each photograph's location; if the photographs are moved, KettleStitch asks where they are now.
 
 ## Keyboard shortcuts
 
-Single keys act on the main window and are off while you type in a field. Press **/** or **?** in the app to see this list.
+Single keys act on the main window and are off while you type in a field. Letters are shown as typed: small on their own, capital only together with Shift. Press **/** or **?** in the app to see this list.
 
 ### Project
 
 | Key | Action |
 | --- | --- |
-| G | New project |
-| O | Open project |
-| I | Import photographs or a folder |
-| S | Save the project |
+| g | New project |
+| o | Open project |
+| i | Import photographs or a folder |
+| s | Save the project |
 | Shift S | Save project as |
-| E | Export |
+| e | Export |
 | Esc | Stop background work, release a corner or edge, or put down the smudge brush |
 
 ### Moving between photographs
@@ -96,23 +96,23 @@ Single keys act on the main window and are off while you type in a field. Press 
 | Home / End | First / last |
 | Page Up / Page Down | Back / forward ten |
 | Return | Accept the crop and go to the next |
-| N | Next unreviewed |
-| U | Next unusual page |
-| M | Add or remove a flag |
+| n | Next unreviewed |
+| u | Next unusual page |
+| m | Add or remove a flag |
 
 ### Cropping frame
 
 | Key | Action |
 | --- | --- |
-| D | Detect this photograph; with several selected, all pending photographs |
-| B | Detect all pending photographs |
+| d | Detect this photograph; with several selected, all pending photographs |
+| b | Detect all pending photographs |
 | [ / ] | Previous / next proposal |
-| C | Copy the previous photograph's crop |
-| X | Full image |
+| c | Copy the previous photograph's crop |
+| x | Full image |
 | ; / ' | Shrink / expand the whole crop |
-| H J K L | Expand the left, bottom, top, right side |
+| h j k l | Expand the left, bottom, top, right side |
 | Shift H J K L | Contract that side |
-| Option H J K L | Move the whole crop; add Shift to move farther |
+| Option h j k l | Move the whole crop; add Shift to move farther |
 
 ### Corners and edges
 
@@ -126,7 +126,7 @@ Single keys act on the main window and are off while you type in a field. Press 
 
 | Key | Action |
 | --- | --- |
-| T | Propose a split between facing pages; again for the next candidate |
+| t | Propose a split between facing pages; again for the next candidate |
 | Shift T | Remove the split |
 | , / . | Move the split left / right; add Shift to move farther |
 
@@ -134,10 +134,10 @@ Single keys act on the main window and are off while you type in a field. Press 
 
 | Key | Action |
 | --- | --- |
-| Q | Deskew: level the lines of text |
+| q | Deskew: level the lines of text |
 | Shift Q | Remove the deskew |
 | Option , / . | Turn the page counterclockwise / clockwise by 0.1° |
-| W | Draw a picture zone, kept in gray on a black-and-white page |
+| w | Draw a picture zone, kept in gray on a black-and-white page |
 | Shift W | Remove the picture zones |
 
 ### Smudge
@@ -151,14 +151,14 @@ Single keys act on the main window and are off while you type in a field. Press 
 
 | Key | Action |
 | --- | --- |
-| P | Corrected preview |
-| V | Copy the previous photograph's image adjustments (cleanup, brightness, contrast, sharpness), with the preview on |
-| R | Rotate the output clockwise |
+| p | Corrected preview |
+| v | Copy the previous photograph's image adjustments (cleanup, brightness, contrast, sharpness), with the preview on |
+| r | Rotate the output clockwise |
 | Shift R | Rotate the output counterclockwise |
 | + / − | Zoom in / out |
-| F or 0 | Zoom to fit |
-| A | Send the page to Claude, OpenAI or Gemini for a second opinion |
-| Z / Y | Undo / redo |
+| f or 0 | Zoom to fit |
+| a | Send the page to Claude, OpenAI or Gemini for a second opinion |
+| z / y | Undo / redo |
 | / or ? | Show the shortcut reference |
 
 ### Command-key shortcuts

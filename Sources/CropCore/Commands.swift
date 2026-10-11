@@ -113,7 +113,12 @@ public enum MenuPolicy {
 public enum ShortcutReference {
     public struct Entry {public let keys: String;public let action: String}
     public struct Section {public let title: String;public let entries: [Entry]}
-    private static func section(_ title: String, _ pairs: [(String,String)]) -> Section {Section(title:title,entries:pairs.map{Entry(keys:$0.0,action:$0.1)})}
+    /// A letter is shown as it is typed: small on its own, and a capital only where Shift is held with it.
+    public static func shown(_ keys: String) -> String {
+        guard !keys.contains("Shift") else {return keys}
+        return keys.split(separator:" ",omittingEmptySubsequences:false).map{$0.count == 1 ? $0.lowercased():String($0)}.joined(separator:" ")
+    }
+    private static func section(_ title: String, _ pairs: [(String,String)]) -> Section {Section(title:title,entries:pairs.map{Entry(keys:shown($0.0),action:$0.1)})}
     public static let sections: [Section] = [
         section("Project",[("G","New project"),("O","Open project"),("I","Import photographs or a folder"),("S","Save the project"),("Shift S","Save project as"),("E","Export"),("Esc","Stop background work, or release a corner or edge")]),
         section("Moving between photographs",[("← / →","Previous / next"),("Home / End","First / last"),("Page Up / Page Down","Back / forward ten"),("Return","Accept the crop and go to the next"),("N","Next unreviewed"),("U","Next unusual page"),("M","Add or remove a flag")]),

@@ -443,7 +443,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
             let next=(kept.index+1)%kept.options.count
             splitOptions[project.pages[i].id]?.index=next
             edit([i],geometry:false){$0.split=kept.options[next];$0.splitByHand=true}
-            status.stringValue=next==0 ? "Back to the first split proposal (1 of \(kept.options.count)) · T for the next":"Split candidate \(next+1) of \(kept.options.count) · T for the next"
+            status.stringValue=next==0 ? "Back to the first split proposal (1 of \(kept.options.count)) · t for the next":"Split candidate \(next+1) of \(kept.options.count) · t for the next"
             return
         }
         proposeSplits(targets,record:true)
@@ -479,7 +479,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
                     self.stepProgress(.split,finished)
                     if finished==pages.count {
                         self.endProgress(.split)
-                        self.status.stringValue=pages.count==1 ? (found==1 ? "Split proposed at the fold — T again tries another place; drag it, or press , and . to move it":guided==1 ? "Split placed by the page before, adjusted to this page — T again tries another place; drag it, or press , and . to move it":"No clear fold found; split placed at the centre — drag it, or press , and . to move it"):"Split proposed on \(pages.count) pages: \(found) at a fold, \(guided) where the page before has it, \(pages.count-found-guided) at the centre"
+                        self.status.stringValue=pages.count==1 ? (found==1 ? "Split proposed at the fold — t again tries another place; drag it, or press , and . to move it":guided==1 ? "Split placed by the page before, adjusted to this page — t again tries another place; drag it, or press , and . to move it":"No clear fold found; split placed at the centre — drag it, or press , and . to move it"):"Split proposed on \(pages.count) pages: \(found) at a fold, \(guided) where the page before has it, \(pages.count-found-guided) at the centre"
                     }
                 }
             }
