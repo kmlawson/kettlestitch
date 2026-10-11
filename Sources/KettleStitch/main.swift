@@ -3,6 +3,19 @@ import CropCore
 import UniformTypeIdentifiers
 
 /// Page snapshots restore edits; a structure snapshot restores the whole page list after reordering or removal.
+/// What `saveBadExample` writes beside the photograph.
+struct BadExample: Encodable {
+    var saved: Date
+    var app: String
+    var photograph: String
+    var number: Int
+    var of: Int
+    var note: String
+    var page: Page
+    /// The page before it in the project, whose split guides this one's.
+    var previous: Page?
+    var splitGuide: PageSplit?
+}
 enum UndoEntry {case pages([Page]);case structure([Page],Int)}
 
 func symbol(_ names:String...)->NSImage? {
@@ -97,6 +110,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
     var settings: SettingsController?
     var shortcuts: ShortcutsController?
     var usageLog: UsageLogController?
+    var badExampleItem: NSMenuItem?,badExampleSeparator: NSMenuItem?
     /// Where the history of requests to Claude is kept.
     var usageURL=URL(fileURLWithPath:"/dev/null")
     var shortcutMonitor: Any?
@@ -117,7 +131,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
         exportQueue.maxConcurrentOperationCount=1
         reviewQueue.maxConcurrentOperationCount=1;reviewQueue.qualityOfService = .utility
         splitQueue.maxConcurrentOperationCount=1;splitQueue.qualityOfService = .userInitiated
-        thumbnailQueue.maxConcurrentOperationCount=1;thumbnailQueue.qualityOfService = .utility
+        thumbnailQueue.maxConcurrentOperationCount=3;thumbnailQueue.qualityOfService = .utility
         thumbs.totalCostLimit=24*1024*1024;previewThumbs.countLimit=400
         let library=FileManager.default.urls(for:.applicationSupportDirectory,in:.userDomainMask)[0]
         let support=testDirectory.map{URL(fileURLWithPath:$0)} ?? library.appendingPathComponent("KettleStitch")
@@ -189,11 +203,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
         let cell=(tableView.makeView(withIdentifier:PageCell.identifier,owner:nil) as? PageCell) ?? PageCell()
         cell.show(p,number:row+1,thumbnail:thumbnail(p),unusual:deviationRows.indices.contains(row) ? deviationRows[row].reason:nil,review:ReviewProgress.state(p.id,active:reviewActive,pending:reviewPending))
         if cell.thumb.image==nil && !thumbnailPending.contains(p.path) {
-            thumbnailPending.insert(p.path);let token=generation
+            // A picture belongs to its file, not to the page list as it was when asked for: it is kept whatever has
+            // been removed, reordered or stopped since, and shown in whichever rows now hold that photograph.
+            thumbnailPending.insert(p.path);let path=p.path
             thumbnailQueue.addOperation{[weak self] in
-                let image=try? Imaging.load(URL(fileURLWithPath:p.path),maxPixel:120)
-                DispatchQueue.main.async {guard let self,self.generation==token else{return};self.thumbnailPending.remove(p.path)
-                    if let image {self.thumbs.setObject(NSImage(cgImage:image,size:NSSize(width:image.width,height:image.height)),forKey:p.path as NSString,cost:image.width*image.height*4);self.table.reloadData(forRowIndexes:IndexSet(integer:row),columnIndexes:IndexSet(integer:0))}
+                let image=try? Imaging.load(URL(fileURLWithPath:path),maxPixel:120)
+                DispatchQueue.main.async {guard let self else{return};self.thumbnailPending.remove(path)
+                    guard let image else{return}
+                    self.thumbs.setObject(NSImage(cgImage:image,size:NSSize(width:image.width,height:image.height)),forKey:path as NSString,cost:image.width*image.height*4)
+                    let rows=IndexSet(self.project.pages.indices.filter{self.project.pages[$0].path==path})
+                    if !rows.isEmpty {self.table.reloadData(forRowIndexes:rows,columnIndexes:IndexSet(integer:0))}
                 }
             }
         }
@@ -355,7 +374,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
         save();refreshDetail();table.reloadData(forRowIndexes:IndexSet(indexes),columnIndexes:IndexSet(integer:0));if canvas.preview{renderPreview()}else{showPhotograph()}
         deviations?.refresh()
     }
-    func invalidateWork(){queue.cancelAllOperations();splitQueue.cancelAllOperations();generation=UUID();thumbnailPending=[];detecting=false;endProgress(.detect);endProgress(.split)}
+    func invalidateWork(){queue.cancelAllOperations();splitQueue.cancelAllOperations();generation=UUID();detecting=false;endProgress(.detect);endProgress(.split)}
     func restructure(_ change:()->Void){
         undoStack.append(.structure(project.pages,project.selected));redoStack.removeAll();invalidateWork();change()
         project.selected=min(max(0,project.selected),max(0,project.pages.count-1));save();writeUntitled();reloadPages();selectCurrent()
@@ -867,6 +886,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
     var claudeModel: String {
         let saved=UserDefaults.standard.string(forKey:"claudeModel")
         return ClaudeReview.models.contains{$0.id==saved} ? saved!:ClaudeReview.models[0].id
+    }
+    /// Keeps the photograph on screen with its crop and split as they stand, for working out later why the
+    /// detector got them wrong. Everything goes into one new folder under "Bad Examples" in the support folder.
+    @objc func saveBadExample(){
+        guard let i=current else{NSSound.beep();return}
+        let page=project.pages[i],source=URL(fileURLWithPath:page.path)
+        let stamp=DateFormatter();stamp.locale=Locale(identifier:"en_US_POSIX");stamp.dateFormat="yyyy-MM-dd HH.mm.ss"
+        let folder=usageURL.deletingLastPathComponent().appendingPathComponent("Bad Examples").appendingPathComponent(stamp.string(from:Date())+" "+source.deletingPathExtension().lastPathComponent)
+        do{
+            try FileManager.default.createDirectory(at:folder,withIntermediateDirectories:true)
+            try FileManager.default.copyItem(at:source,to:folder.appendingPathComponent(source.lastPathComponent))
+            // The same reduced picture with the crop and split drawn on it that Claude is shown.
+            let photo=try Imaging.load(source,maxPixel:1568)
+            try Exporter.encode(ClaudeReview.overlay(photo,quad:page.quad,split:ClaudeReview.splitEnds(page)),as:.jpeg,quality:0.85,dpi:nil).write(to:folder.appendingPathComponent("overlay.jpg"))
+            // The example may be handed to someone else to look at, so it names files without the folders they are in.
+            func named(_ page:Page)->Page {var copy=page;copy.path=URL(fileURLWithPath:page.path).lastPathComponent;return copy}
+            let example=BadExample(saved:Date(),app:Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "development build",photograph:source.lastPathComponent,number:i+1,of:project.pages.count,
+                note:"The crop and split below are as the user left them when marking this page as a bad example. Coordinates are fractions of the photograph from its top-left corner; a split is a fraction across the crop at its top and bottom edges. overlay.jpg shows them drawn on the photograph.",
+                page:named(page),previous:i>0 ? named(project.pages[i-1]):nil,splitGuide:SplitDetector.guide(for:i,in:project.pages))
+            let encoder=JSONEncoder();encoder.outputFormatting=[.prettyPrinted,.sortedKeys];encoder.dateEncodingStrategy = .iso8601
+            try encoder.encode(example).write(to:folder.appendingPathComponent("example.json"),options:.atomic)
+            status.stringValue="Saved a bad example to \(folder.path)"
+            if testDirectory == nil {NSWorkspace.shared.activateFileViewerSelecting([folder])}
+        }catch{showError(error)}
     }
     @objc func showUsageLog(){
         if usageLog == nil {usageLog=UsageLogController(url:usageURL)}

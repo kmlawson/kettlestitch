@@ -108,6 +108,10 @@ extension AppDelegate: NSMenuItemValidation, NSMenuDelegate {
         add(crop,"Send to Claude",#selector(sendToClaude),"a",plain);add(crop,"Claude Usage Log…",#selector(showUsageLog))
         crop.addItem(.separator())
         add(crop,"Stop Background Work",#selector(stop),".")
+        // For collecting detector mistakes. Shown only while Option is held as the menu opens; its shortcut always works.
+        crop.delegate=self;crop.addItem(.separator());badExampleSeparator=crop.items.last
+        badExampleItem=add(crop,"Save Bad Crop/Split Example",#selector(saveBadExample),"b",[.command,.option])
+        for item in [badExampleSeparator,badExampleItem] {item?.isHidden=true};badExampleItem?.allowsKeyEquivalentWhenHidden=true
 
         let view=menu("View")
         add(view,"Corrected Preview",#selector(togglePreview),"p",plain)
@@ -124,6 +128,9 @@ extension AppDelegate: NSMenuItemValidation, NSMenuDelegate {
     }
     /// Rebuilds Open Recent from the system's list each time it opens.
     func menuNeedsUpdate(_ menu:NSMenu){
+        if let item=badExampleItem,menu===item.menu {
+            let show=NSEvent.modifierFlags.contains(.option);item.isHidden = !show;badExampleSeparator?.isHidden = !show;return
+        }
         menu.removeAllItems()
         let urls=NSDocumentController.shared.recentDocumentURLs.filter{FileManager.default.fileExists(atPath:$0.path)}
         for url in urls {let item=menu.addItem(withTitle:url.deletingPathExtension().lastPathComponent,action:#selector(openRecent(_:)),keyEquivalent:"");item.target=self;item.representedObject=url;item.toolTip=url.path}

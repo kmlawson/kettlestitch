@@ -236,6 +236,12 @@ extension AppDelegate {
             self.undo();precondition((self.project.pages[0].smudges?.count ?? 0)==strokes)
             key("\u{1b}",53);precondition(!canvas.smudgeMode)
             print("SMUDGE passed")
+            // The hidden tool for collecting detector mistakes keeps the photograph, its data and a marked-up picture.
+            self.project.selected=0;self.selectCurrent();self.saveBadExample()
+            let examples=URL(fileURLWithPath:dir).appendingPathComponent("Bad Examples"),saved=(try? FileManager.default.contentsOfDirectory(at:examples,includingPropertiesForKeys:nil)) ?? []
+            precondition(saved.count==1 && Set((try? FileManager.default.contentsOfDirectory(atPath:saved[0].path)) ?? [])==["example.json","overlay.jpg",URL(fileURLWithPath:self.project.pages[0].path).lastPathComponent],"A bad example is one folder of three files")
+            precondition(self.badExampleItem?.isHidden==true && self.badExampleItem?.keyEquivalentModifierMask==[.command,.option])
+            print("BAD_EXAMPLE passed")
             // A project file is written by Save, not by each edit.
             if self.hasProjectFile {
                 func onDisk()->Project? {try? Project.read(self.projectURL)}
@@ -331,6 +337,17 @@ extension AppDelegate {
         func run(){
             guard !plan.isEmpty else{lines.forEach{print($0)};self.unsaved=false;exit(0)}
             let (label,row)=plan.removeFirst();measure(label,row,run)
+        }
+        if CommandLine.arguments.contains("--thumbs") {
+            // Sidebar pictures after pages are removed: every visible row should still have one.
+            func missing()->[Int] {(0..<min(8,self.project.pages.count)).filter{(self.table.view(atColumn:0,row:$0,makeIfNecessary:true) as? PageCell)?.thumb.image==nil}}
+            DispatchQueue.main.asyncAfter(deadline:.now()+(CommandLine.arguments.contains("--early") ? 0.15:4)){
+                print("THUMBS before removal, rows without a picture: \(missing())")
+                self.table.selectRowIndexes(IndexSet([1,2,3]),byExtendingSelection:false);self.project.selected=1;self.removePages()
+                print("THUMBS just after removal: \(missing())")
+                DispatchQueue.main.asyncAfter(deadline:.now()+4){print("THUMBS 4 s after removal: \(missing())");self.unsaved=false;exit(0)}
+            }
+            return
         }
         DispatchQueue.main.asyncAfter(deadline:.now()+2){run()}
     }

@@ -105,8 +105,10 @@ extension AppDelegate {
         let format=NSGridView(views:[[caption("Width:"),field(widthField)],[caption("Height:"),field(heightField)],[caption("Fit into:"),fitPopup]])
         format.rowSpacing=6;format.columnSpacing=8;format.column(at:0).xPlacement = .trailing;format.column(at:0).width=78;format.column(at:1).xPlacement = .leading
         resolutionLabel.font = .systemFont(ofSize:11);resolutionLabel.textColor = .secondaryLabelColor;resolutionLabel.alignment = .center
-        let all=applyAllButton;all.target=self;all.action=#selector(applySettingsToAll);all.bezelStyle = .rounded;all.controlSize = .small;all.toolTip="Copy this page's image adjustments and page format to every page"
-        section("Page Format",key:"format",open:false,[format,resolutionLabel,all])
+        let all=applyAllButton;all.target=self;all.action=#selector(applySettingsToAll);all.bezelStyle = .rounded;all.controlSize = .small;all.toolTip="Copy this page's image adjustments (cleanup, brightness, contrast, sharpness) and page format to every page. Crops and splits are left as they are."
+        section("Page Format",key:"format",open:false,[format,resolutionLabel])
+        // Outside the sections, because it carries the image adjustments as well as the page format.
+        add(all,after:22)
         // The keys used most, kept in view; the full list is one key away.
         let keys:[(String,String)]=[("← / →","Previous / next image"),("C","Set crop to same as previous image"),("T","Propose split"),("R","Rotate (Shift-R for reverse)"),("; / '","Decrease / increase current crop"),("H J K L","Increase crop edges (Shift to decrease, Option to move crop)"),("/","See more shortcuts")]
         let shortcuts=NSGridView(views:keys.map{entry->[NSView] in
