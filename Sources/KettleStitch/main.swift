@@ -145,6 +145,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
     var exportSheet: ExportSheetController?
     var settings: SettingsController?
     var recovery: RecoveryController?
+    /// The incomplete files named by the last import.
+    var incompleteNames:[String]=[]
     /// Edit ▸ Image Settings Preset, filled each time it opens.
     let presetMenu=NSMenu(title:"Image Settings Preset")
     /// The app's folder in Application Support, or the test folder.
@@ -1164,6 +1166,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
     func application(_ application:NSApplication,open urls:[URL]){if window==nil {pendingOpen += urls} else {receive(urls)}}
     /// Files and folders from the Import panel, a drop on the window or a drop on the app's icon.
     /// A project file is opened; photographs are added to the project that is open.
+    /// Says which imported photographs are incomplete files. They stay in the project, marked, so that copying
+    /// each one again to the same place puts it right; nothing of them is cropped or exported meanwhile.
+    func warnIncomplete(_ names:[String]){
+        guard !names.isEmpty else{return}
+        incompleteNames=names
+        status.stringValue="\(names.count) imported photograph\(names.count==1 ? " is an incomplete file":"s are incomplete files") and cannot be used: \(names.prefix(3).joined(separator:", "))\(names.count>3 ? "…":"")"
+        guard testDirectory == nil else{return}
+        let alert=NSAlert();alert.alertStyle = .warning
+        alert.messageText=names.count==1 ? "“\(names[0])” is an incomplete file":"\(names.count) of the photographs are incomplete files"
+        let list=names.count==1 ? "":names.prefix(12).joined(separator:"\n")+(names.count>12 ? "\n… and \(names.count-12) more":"")+"\n\n"
+        alert.informativeText=list+"\(names.count==1 ? "The file ends":"These files end") before the picture does, usually because copying or downloading was interrupted. \(names.count==1 ? "It is":"They are") marked in the sidebar and will not be cropped or exported. Copy \(names.count==1 ? "it":"them") again from where \(names.count==1 ? "it":"they") came, to the same place, and the page\(names.count==1 ? "":"s") will work."
+        alert.runModal()
+    }
     func receive(_ urls:[URL]){
         if let file=urls.first(where:ImportPolicy.isProject) {if confirmUnsaved(){open(file)};return}
         guard !importing else{status.stringValue="An import is already under way";return}
@@ -1181,6 +1196,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
             let count=incoming.photographs.count
             if count>0 {DispatchQueue.main.async{if self?.importing==true {self?.showBanner("Importing \(count) photograph\(count==1 ? "":"s")…")}}}
             let added=incoming.photographs.map{Page(path:$0.path)}
+            // A file cut short while it was copied opens like any other; it is found now, before any work is done on it.
+            let cutShort=incoming.photographs.filter{Imaging.incomplete($0) != nil}.map{$0.lastPathComponent}
             DispatchQueue.main.async{guard let self else{return}
                 self.importing=false;self.showBanner(nil)
                 // Another project was opened meanwhile; these photographs were meant for the one before.
@@ -1190,6 +1207,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
                 self.restructure{self.project.pages += added;if wasEmpty{self.project.selected=0}}
                 self.status.stringValue="Imported \(added.count) photograph\(added.count==1 ? "":"s") · proposing crops"
                 self.detectPending()
+                self.warnIncomplete(cutShort)
             }
         }
     }

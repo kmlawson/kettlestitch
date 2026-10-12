@@ -17,6 +17,8 @@ public enum Imaging {
     }
     public static func aspectRatio(_ url: URL) -> Double? {pixelSize(url).map{Double($0.width/$0.height)}}
     public static func load(_ url: URL, maxPixel: Int) throws -> CGImage {
+        // A file cut short opens all the same, with gray or black where the picture is missing; it is refused here.
+        if let problem=incomplete(url) {throw CropError.message(problem)}
         guard let source = CGImageSourceCreateWithURL(url as CFURL, [kCGImageSourceShouldCache: false] as CFDictionary),
               let image = CGImageSourceCreateThumbnailAtIndex(source, 0, [kCGImageSourceCreateThumbnailFromImageAlways: true, kCGImageSourceCreateThumbnailWithTransform: true, kCGImageSourceThumbnailMaxPixelSize: maxPixel, kCGImageSourceShouldCacheImmediately: true] as CFDictionary) else {throw CropError.message("Cannot read image: \(url.lastPathComponent)")}
         return image

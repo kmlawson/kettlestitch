@@ -266,6 +266,8 @@ Your API key is still a secret that can spend money: anyone who can unlock your 
 
 ## Acknowledgements
 
+Thanks to Bluesky user [@anhphong.bsky.social](https://bsky.app/profile/anhphong.bsky.social) for kindly pointing out that macOS reports a truncated image file as complete, so that a half-decoded page could reach the exported PDF. KettleStitch now checks each photograph's file for completeness itself (`Sources/CropCore/Completeness.swift`) and refuses one that was cut short.
+
 Several parts of KettleStitch follow the approach of [ScanTailor](https://github.com/scantailor/scantailor), the long-standing tool for post-processing scanned pages. No ScanTailor source code is included; these parts were written afresh in Swift for photographs rather than flatbed scans, taking its methods as the model:
 
 - **Page splitting** (`Sources/CropCore/Split.swift`) combines the two cues of ScanTailor's page-split stage, a near-vertical dark fold line and a column free of print between two bodies of content, and falls back to the centre as ScanTailor does.

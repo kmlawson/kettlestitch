@@ -125,7 +125,7 @@ final class PageCell: NSTableCellView {
     private(set) var unreadable=false
     func showUnreadable(){
         thumb.image=symbol("exclamationmark.triangle","questionmark.square.dashed");thumb.contentTintColor = .tertiaryLabelColor;thumb.imageScaling = .scaleNone;unreadable=true
-        thumb.toolTip="This photograph is missing or cannot be read. File ▸ Locate Missing Photographs… finds moved files."
+        thumb.toolTip="This photograph is missing, is an incomplete file, or cannot be read. File ▸ Locate Missing Photographs… finds moved files; an incomplete file needs copying again."
     }
     func show(_ page:Page,number:Int,thumbnail:NSImage?,unusual:String?=nil,review:ReviewProgress.State?=nil){
         thumb.image=thumbnail;thumb.toolTip=nil;thumb.contentTintColor=nil;thumb.imageScaling = .scaleProportionallyUpOrDown;unreadable=false;flag.isHidden=page.flagged != true

@@ -252,7 +252,9 @@ A model's corners are estimates; treat them like any other proposal.
 
 **macOS will not open the app.** It is not notarized. Try to open it once, then use System Settings ▸ Privacy & Security ▸ Open Anyway. The README's install section has the steps.
 
-**A sidebar row shows a warning triangle.** The photograph is missing or cannot be read. Use File ▸ Locate Missing Photographs… if it was moved.
+**A sidebar row shows a warning triangle.** The photograph is missing, cannot be read, or is an incomplete file. Use File ▸ Locate Missing Photographs… if it was moved.
+
+**"…is incomplete: the file ends before the picture does."** The photograph's file was cut short, usually by an interrupted copy or download. macOS would still open such a file and show gray or black where the picture is missing, so KettleStitch checks each file itself and refuses these: you are told at import, the page is marked in the sidebar, and an export stops rather than include it. Copy the file again from the camera or wherever it came from, to the same place, and the page works as it is.
 
 **"KettleStitch was updated while it was running…"** in Settings or when sending a page. macOS will not let a copy of the app that was replaced on disk read the keychain. Quit and reopen; your key is still saved.
 

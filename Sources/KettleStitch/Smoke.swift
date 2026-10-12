@@ -543,6 +543,13 @@ extension AppDelegate {
                         timer.invalidate()
                         precondition(self.canvas.image != nil,"The first dropped photograph is shown")
                         precondition(!self.project.pages.contains{$0.status=="Pending"},"Crops are proposed for imported photographs without being asked")
+                        // A photograph whose file was cut short is named at import, marked, and kept out of any export.
+                        if let short=self.project.pages.first(where:{$0.path.hasSuffix("cut-short.jpg")}) {
+                            precondition(self.incompleteNames==["zz-cut-short.jpg"] && short.status==AppDelegate.detectionError && self.status.stringValue.contains("incomplete"),"\(self.incompleteNames) \(short.status) \(self.status.stringValue)")
+                            var options=ExportOptions();options.format = .png
+                            precondition((try? Exporter.render(short,options:options)) == nil,"An incomplete photograph is not exported")
+                            print("INCOMPLETE_IMPORT passed")
+                        }
                         print("DROP_PHOTOGRAPHS passed")
                         self.receive([other])
                         precondition(self.projectURL==other && self.project.pages.count != count && self.window.title==other.deletingPathExtension().lastPathComponent,"A dropped project file is opened")
