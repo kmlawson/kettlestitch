@@ -87,6 +87,8 @@ public struct KeyBindings: Equatable {
         return changed.contains{$0.stroke.key == pressed.key} ? .nothing:.unchanged
     }
     public func encode() throws -> Data {try JSONEncoder().encode(overrides)}
+    /// True when something was saved but cannot be read, as against nothing having been saved.
+    public static func isUnreadable(_ data: Data?) -> Bool {data.map{(try? JSONDecoder().decode([String:KeyStroke].self,from:$0)) == nil} ?? false}
     /// Reads saved changes, leaving out any that no longer make sense.
     public static func decode(_ data: Data?) -> KeyBindings {
         var bindings=KeyBindings()

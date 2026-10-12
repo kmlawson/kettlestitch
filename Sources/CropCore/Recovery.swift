@@ -41,16 +41,19 @@ public enum RecoveryList {
         case neverNamed
         /// The project file has been saved since the copy was written.
         case savedSince
+        /// The copy itself cannot be read.
+        case damaged
         public var explanation: String {
             switch self {
             case .unsavedChanges:return "Changes that were not saved to the project"
             case .originalMissing:return "The project file is no longer there"
             case .neverNamed:return "Never saved to a project file"
             case .savedSince:return "Older than the saved project"
+            case .damaged:return "Damaged: it cannot be opened"
             }
         }
         /// True for work that exists nowhere else, which is worth raising when the app opens.
-        public var needsAttention: Bool {self == .unsavedChanges || self == .originalMissing}
+        public var needsAttention: Bool {self == .unsavedChanges || self == .originalMissing || self == .damaged}
     }
     public struct Entry: Equatable {
         /// The copy's own file.
@@ -64,6 +67,23 @@ public enum RecoveryList {
         public var reason: Reason
         /// The copy's session, or nil for an untitled session's file.
         public var snapshot: UUID?
+    }
+    /// Copies and untitled sessions that are there but cannot be read. They are listed, not passed over in silence:
+    /// the user should know that something was kept and lost, and be able to remove it.
+    public static func damaged(in support: URL, exceptFile: URL? = nil, modified: (String) -> Date?) -> [Entry] {
+        var found:[Entry]=[]
+        for file in (try? FileManager.default.contentsOfDirectory(at:RecoverySnapshot.folder(in:support),includingPropertiesForKeys:nil)) ?? [] where file.pathExtension == RecoverySnapshot.fileExtension {
+            guard (try? RecoverySnapshot.read(file)) == nil else {continue}
+            // What can still be made out of it says whose it was.
+            let loose=(try? Data(contentsOf:file)).flatMap{try? JSONSerialization.jsonObject(with:$0) as? [String:Any]}
+            let original=loose?["originalPath"] as? String
+            found.append(Entry(file:file,name:original.map{URL(fileURLWithPath:$0).deletingPathExtension().lastPathComponent} ?? "Recovery copy",pageCount:0,missing:0,written:modified(file.path) ?? .distantPast,originalPath:original,reason:.damaged,snapshot:nil))
+        }
+        for file in (try? FileManager.default.contentsOfDirectory(at:support,includingPropertiesForKeys:nil)) ?? [] where LaunchPolicy.isUntitled(file) && ImportPolicy.isProject(file) {
+            guard file.standardizedFileURL != exceptFile?.standardizedFileURL,(try? Project.read(file)) == nil else {continue}
+            found.append(Entry(file:file,name:file.deletingPathExtension().lastPathComponent,pageCount:0,missing:0,written:modified(file.path) ?? .distantPast,originalPath:nil,reason:.damaged,snapshot:nil))
+        }
+        return found.sorted{$0.written != $1.written ? $0.written>$1.written:$0.name<$1.name}
     }
     /// Everything recoverable in the support folder, newest first. `except` and `exceptFile` leave out the session
     /// that is open now. `exists` and `modified` answer for a path; a copy that cannot be read is left out.

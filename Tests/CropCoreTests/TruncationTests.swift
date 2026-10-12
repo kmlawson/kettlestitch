@@ -107,4 +107,18 @@ final class TruncationTests: XCTestCase {
         for n in 0..<10 {try writer.add(try noisyPage(n),options:ExportOptions())}
         XCTAssertThrowsError(try writer.close()){XCTAssertTrue($0.localizedDescription.contains("not written completely"),$0.localizedDescription)}
     }
+    // Removing a PDF's document information is checked by reading the file back, not by the remover's own word.
+    func testWhatIsLeftOfAPDFsDocumentInformationIsReported() throws {
+        let url=folder.appendingPathComponent("clean.pdf"),writer=try PDFWriter(url:url)
+        try writer.add(try noisyPage(0),options:ExportOptions());try writer.close()
+        XCTAssertEqual(writer.informationLeft,[]);XCTAssertEqual(PDFInfo.remaining(url,password:nil),[])
+        // A PDF as Quartz leaves it says what made it and when.
+        let raw=folder.appendingPathComponent("raw.pdf");var box=CGRect(x:0,y:0,width:200,height:200)
+        let context=try XCTUnwrap(CGContext(raw as CFURL,mediaBox:&box,nil));context.beginPDFPage(nil);context.endPDFPage();context.closePDF()
+        let left=PDFInfo.remaining(raw,password:nil);XCTAssertTrue(left.contains("Producer") && left.contains("CreationDate"),"\(left)")
+        try PDFInfo.strip(raw);XCTAssertEqual(PDFInfo.remaining(raw,password:nil),[])
+        // A protected PDF is read with its password.
+        let locked=folder.appendingPathComponent("locked2.pdf"),secret=try PDFWriter(url:locked,password:"open sesame")
+        try secret.add(try noisyPage(0),options:ExportOptions());try secret.close();XCTAssertEqual(secret.informationLeft,[])
+    }
 }

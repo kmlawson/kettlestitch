@@ -38,6 +38,10 @@ final class PresetTests: XCTestCase {
         XCTAssertEqual(PresetStore.mostUsed(Array(list.prefix(2)),uses:[:]),["Text","Plates"]);XCTAssertEqual(PresetStore.mostUsed(list,uses:["Maps":1],limit:1),["Maps"])
         XCTAssertEqual(PresetStore.counting("Maps",in:["Maps":2]),["Maps":3]);XCTAssertEqual(PresetStore.counting("Text",in:[:]),["Text":1])
     }
+    func testSavedDataThatCannotBeReadIsToldApartFromNone() throws {
+        XCTAssertFalse(PresetStore.isUnreadable(nil));XCTAssertFalse(PresetStore.isUnreadable(try PresetStore.encode([])));XCTAssertTrue(PresetStore.isUnreadable(Data("nonsense".utf8)))
+        XCTAssertFalse(KeyBindings.isUnreadable(nil));XCTAssertFalse(KeyBindings.isUnreadable(try KeyBindings().encode()));XCTAssertTrue(KeyBindings.isUnreadable(Data("nonsense".utf8)))
+    }
     func testAPresetSaysWhatItHolds() {
         var a=settings(.grayscale,brightness:0.2);a.sharpness=0.5
         let summary=SettingsPreset(name:"Text",adjustments:a,format:PageFormat(fitInto:.a5)).summary

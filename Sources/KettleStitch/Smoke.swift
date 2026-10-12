@@ -490,6 +490,24 @@ extension AppDelegate {
                 precondition(self.sessionID==own && self.unsaved && self.window.isDocumentEdited && (try? Data(contentsOf:self.projectURL))==before && FileManager.default.fileExists(atPath:copy.path))
                 self.showRecovery();precondition(self.recovery!.rows.allSatisfy{$0.snapshot != own},"The open session is not offered to itself");snapshot(self.recovery!.window.contentView!,"recovery.png");self.recovery!.window.close()
                 self.saveProject();precondition(!self.unsaved && !FileManager.default.fileExists(atPath:copy.path),"Saving makes the copy unnecessary")
+                // A copy of unsaved changes is found again when its project is opened, and a damaged copy is listed as such.
+                self.edit{$0.flagged = $0.flagged==true ? nil:true};self.writeRecoveryCopy();let mine=self.sessionID;self.sessionID=UUID()
+                precondition(self.recoveryCopy(for:self.projectURL)?.snapshot==mine && self.recoveryCopy(for:URL(fileURLWithPath:"/elsewhere/Other.kettlestitch"))==nil)
+                let torn=RecoverySnapshot.folder(in:self.supportURL).appendingPathComponent(UUID().uuidString+"."+RecoverySnapshot.fileExtension);try? Data("{ torn".utf8).write(to:torn)
+                precondition(self.recoveryEntries().contains{$0.reason == .damaged && $0.file.lastPathComponent==torn.lastPathComponent},"A damaged copy is listed, not hidden")
+                try? FileManager.default.removeItem(at:torn);self.sessionID=mine;self.saveProject()
+                // After a crash: a half-written PDF is removed, the photographs that were being read are set aside until asked for.
+                var left=CrashJournal();left.project=self.projectURL.path;left.activity="Exporting"
+                let partial=self.supportURL.appendingPathComponent(".partial-smoke.pdf"),bystander=self.supportURL.appendingPathComponent("keep.pdf")
+                try? Data("half".utf8).write(to:partial);try? Data("whole".utf8).write(to:bystander)
+                left.partialExport=partial.path;left.exportDestination=bystander.path;left.reading=[self.project.pages[1].path]
+                self.handleCrash(left)
+                precondition(!FileManager.default.fileExists(atPath:partial.path) && FileManager.default.fileExists(atPath:bystander.path),"Only the unfinished file goes")
+                precondition(Imaging.heldCount==1 && (try? Imaging.load(URL(fileURLWithPath:self.project.pages[1].path),maxPixel:200)) == nil && self.status.stringValue.contains("closed unexpectedly"),self.status.stringValue)
+                var wrong=CrashJournal();wrong.partialExport=bystander.path;self.handleCrash(wrong);precondition(FileManager.default.fileExists(atPath:bystander.path),"A file that is not an unfinished export is never removed")
+                self.tryHeldAgain();precondition(Imaging.heldCount==0 && (try? Imaging.load(URL(fileURLWithPath:self.project.pages[1].path),maxPixel:200)) != nil)
+                try? FileManager.default.removeItem(at:bystander)
+                print("CRASH_HANDLING passed")
                 print("RECOVERY passed")
                 print("SAVE passed")
             }

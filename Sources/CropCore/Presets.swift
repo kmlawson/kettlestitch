@@ -50,5 +50,7 @@ public enum PresetStore {
     }
     public static func counting(_ name: String, in uses: [String:Int]) -> [String:Int] {var uses=uses;uses[name,default:0]+=1;return uses}
     public static func encode(_ list: [SettingsPreset]) throws -> Data {try JSONEncoder().encode(list)}
+    /// True when something was saved but cannot be read, as against nothing having been saved.
+    public static func isUnreadable(_ data: Data?) -> Bool {data.map{(try? JSONDecoder().decode([SettingsPreset].self,from:$0)) == nil} ?? false}
     public static func decode(_ data: Data?) -> [SettingsPreset] {data.flatMap{try? JSONDecoder().decode([SettingsPreset].self,from:$0)} ?? []}
 }

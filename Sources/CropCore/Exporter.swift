@@ -168,6 +168,18 @@ public enum Exporter {
 /// Removes the document information (Producer, Creator, dates) from a finished PDF by blanking the dictionary
 /// in place, so no offset in the file moves. It works the same on a password-protected file.
 public enum PDFInfo {
+    /// The entries of the document information that still say something, read back from the file itself. Empty
+    /// when it was removed; a file that does not open, or cannot be unlocked, gives nothing to report.
+    public static func remaining(_ url: URL, password: String?) -> [String] {
+        guard let document=CGPDFDocument(url as CFURL) else {return []}
+        if document.isEncrypted,!document.isUnlocked {_=document.unlockWithPassword(password ?? "")}
+        guard let info=document.info else {return []}
+        return ["Title","Author","Subject","Keywords","Creator","Producer","CreationDate","ModDate"].filter{key in
+            var text:CGPDFStringRef?
+            guard CGPDFDictionaryGetString(info,key,&text),let text else {return false}
+            return CGPDFStringGetLength(text)>0
+        }
+    }
     public static func strip(_ url: URL) throws {
         let failure=CropError.message("Could not remove the document information from \(url.lastPathComponent)")
         let file=try FileHandle(forUpdating:url);defer {try? file.close()}
@@ -213,6 +225,8 @@ public final class PDFWriter {
     private let password: String?
     /// How many pages have been added, and the size of each different picture handed over as a JPEG: the finished
     /// file must have that many pages and cannot be smaller than those pictures together.
+    /// What was left of the document information after it was removed; empty when all of it went.
+    public private(set) var informationLeft:[String]=[]
     private var pages=0
     private var embedded:[Int:Int]=[:]
     public init(url: URL, password: String? = nil) throws {
@@ -250,6 +264,8 @@ public final class PDFWriter {
         closed=true;context.closePDF()
         if pages>0 {try PDFWriter.verify(url,pages:pages,atLeast:embedded.values.reduce(0,+),password:password)}
         try PDFInfo.strip(url)
+        // The remover finding nothing to remove is not proof that nothing is there: the file is read back.
+        informationLeft=PDFInfo.remaining(url,password:password)
     }
     /// Throws unless the file at `url` is a whole PDF of `pages` pages and at least `bytes` long.
     public static func verify(_ url: URL, pages: Int, atLeast bytes: Int, password: String?) throws {

@@ -34,6 +34,7 @@ extension AppDelegate: NSMenuItemValidation, NSMenuDelegate {
         // A shortcut without Command or Control is an ordinary key, which belongs to a text field while one is being edited.
         if item.target === self,!item.keyEquivalent.isEmpty,item.keyEquivalentModifierMask.isDisjoint(with:[.command,.control]),
            editedText != nil || window.attachedSheet != nil || !(NSApp.keyWindow==nil || NSApp.keyWindow===window) {return false}
+        if item.action == #selector(tryHeldAgain) {return Imaging.heldCount>0}
         guard let action=item.action,let command=AppDelegate.commands[action] else{return true}
         let state=menuState
         if let title=MenuPolicy.title(command,state){item.title=title}
@@ -67,7 +68,7 @@ extension AppDelegate: NSMenuItemValidation, NSMenuDelegate {
         add(file,"New Project…",#selector(newProject),"n");add(file,"Open Project…",#selector(openProject),"o")
         let recent=NSMenu(title:"Open Recent");recent.delegate=self;add(file,"Open Recent",nil,own:false).submenu=recent
         add(file,"Recovery…",#selector(showRecovery))
-        file.addItem(.separator());add(file,"Import Photographs…",#selector(importImages),"i",plain);add(file,"Locate Missing Photographs…",#selector(locatePhotographs))
+        file.addItem(.separator());add(file,"Import Photographs…",#selector(importImages),"i",plain);add(file,"Locate Missing Photographs…",#selector(locatePhotographs));add(file,"Try Set-Aside Photographs Again",#selector(tryHeldAgain))
         file.addItem(.separator());add(file,"Close",#selector(NSWindow.performClose(_:)),"w",own:false);add(file,"Save",#selector(saveProject),"s");add(file,"Save Project As…",#selector(saveAs),"s",[.command,.shift])
         file.addItem(.separator());add(file,"Export…",#selector(exportImages),"e",plain)
 
@@ -276,7 +277,7 @@ final class RecoveryController: NSObject, NSTableViewDataSource, NSTableViewDele
         if rows.isEmpty {note.stringValue="There is nothing to recover."}
         showSelection()
     }
-    func showSelection(){let chosen=table.selectedRow>=0;for button in [openButton,saveAsButton,deleteButton] {button.isEnabled=chosen}}
+    func showSelection(){let chosen=table.selectedRow>=0;for button in [openButton,saveAsButton,deleteButton] {button.isEnabled=chosen};if selected?.reason == .damaged {saveAsButton.isEnabled=false}}
     var selected:RecoveryList.Entry? {rows.indices.contains(table.selectedRow) ? rows[table.selectedRow]:nil}
     static let date:DateFormatter={let f=DateFormatter();f.dateStyle = .medium;f.timeStyle = .short;return f}()
     func text(_ entry:RecoveryList.Entry,_ column:String)->String {
@@ -303,6 +304,8 @@ final class RecoveryController: NSObject, NSTableViewDataSource, NSTableViewDele
     }
     func tableViewSelectionDidChange(_ notification:Notification){showSelection()}
     @objc func open(){if let selected {onOpen?(selected,false)}}
+    /// A damaged copy can be looked at and deleted, not saved elsewhere.
+    func tableViewSelectionIsChanging(_ notification:Notification){showSelection()}
     @objc func saveAs(){if let selected {onOpen?(selected,true)}}
     @objc func remove(){
         guard let selected else{return}

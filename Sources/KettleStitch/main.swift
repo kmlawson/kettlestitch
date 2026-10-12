@@ -145,8 +145,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
     var exportSheet: ExportSheetController?
     var settings: SettingsController?
     var recovery: RecoveryController?
+    /// What this run is doing, written to the support folder as it changes so that a launch after a crash can tell.
+    var journal=CrashJournal()
+    let journalLock=NSLock()
+    /// A test run keeps no journal, unless it is the test of the journal itself.
+    lazy var journalKept=testDirectory == nil || ProcessInfo.processInfo.environment["KETTLESTITCH_TEST_JOURNAL"] != nil
+    /// The journal a crashed run left behind, as it was found at launch.
+    var crashFound: CrashJournal?
     /// The incomplete files named by the last import.
     var incompleteNames:[String]=[]
+    /// Saved settings found unreadable at launch and kept under another name.
+    var settingsSetAside:[String]=[]
     /// Edit ▸ Image Settings Preset, filled each time it opens.
     let presetMenu=NSMenu(title:"Image Settings Preset")
     /// The app's folder in Application Support, or the test folder.
@@ -202,6 +211,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
         if testDirectory == nil {carryOverLegacyData(in:library,to:support)}
         do {try FileManager.default.createDirectory(at:support,withIntermediateDirectories:true)} catch {showError(error)}
         supportURL=support
+        // What the last run left behind is read before this run begins its own journal.
+        if journalKept {
+            crashFound=CrashJournal.read(in:support);try? journal.write(in:support)
+            Imaging.readingChanged={[weak self] paths in self?.updateJournal{$0.reading=paths}}
+        }
+        if testDirectory == nil {
+            // Saved presets or keys that cannot be read are set aside under another name, not written over.
+            for (key,unreadable) in [(PresetStore.key,PresetStore.isUnreadable),(KeyBindings.key,KeyBindings.isUnreadable)] {
+                if let data=UserDefaults.standard.data(forKey:key),unreadable(data) {UserDefaults.standard.set(data,forKey:key+".unreadable");UserDefaults.standard.removeObject(forKey:key);settingsSetAside.append(key==PresetStore.key ? "presets":"shortcut changes")}
+            }
+        }
         // The app opens empty. Each session gets its own untitled file, so unnamed work from an earlier
         // session is never overwritten; it stays reachable under File ▸ Open Recent.
         projectURL=support.appendingPathComponent(LaunchPolicy.untitledName(Date()))
@@ -246,13 +266,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
             if self.write() {self.status.stringValue="Auto-saved \(self.projectURL.lastPathComponent)"}
         }
         status.stringValue=project.pages.isEmpty ? "Drop photographs here, or choose File ▸ Import Photographs":"Press ? for keyboard shortcuts"
-        checkForUpdatesAtStartup();DispatchQueue.main.async{self.offerRecovery()}
+        checkForUpdatesAtStartup()
+        if !settingsSetAside.isEmpty {status.stringValue="Your saved \(settingsSetAside.joined(separator:" and ")) could not be read and were set aside; the app starts without them"}
+        DispatchQueue.main.async{if let found=self.crashFound {self.handleCrash(found)};self.offerRecovery()}
         window.delegate=self;window.registerForDraggedTypes([.fileURL])
         let waiting=pendingOpen;pendingOpen=[];if !waiting.isEmpty {receive(waiting)} else if !project.pages.isEmpty {DispatchQueue.main.async{self.findMissingPhotographs()}}
         // Test hook for files handed over by the system at launch: report what arrived, then quit.
         if testDirectory != nil,let report=ProcessInfo.processInfo.environment["KETTLESTITCH_REPORT"] {
             DispatchQueue.main.asyncAfter(deadline:.now()+2){
-                try? "pages=\(self.project.pages.count) title=\(self.window.title)\n".write(toFile:report,atomically:true,encoding:.utf8);NSApp.terminate(nil)
+                try? "pages=\(self.project.pages.count) title=\(self.window.title) status=\(self.status.stringValue) held=\(Imaging.heldCount)\n".write(toFile:report,atomically:true,encoding:.utf8);NSApp.terminate(nil)
             }
         }
         if let folder=ProcessInfo.processInfo.environment["KETTLESTITCH_SMOKE_FOLDER"],let other=ProcessInfo.processInfo.environment["KETTLESTITCH_SMOKE_PROJECT"],let dir=testDirectory {runEmptySmoke(dir,folder:URL(fileURLWithPath:folder),project:URL(fileURLWithPath:other))}
@@ -283,7 +305,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
         if current != nil,original == nil {loadCurrent()}
     }
     func applicationShouldTerminate(_ sender: NSApplication)->NSApplication.TerminateReply {confirmUnsaved(leaving:true) ? .terminateNow:.terminateCancel}
-    func applicationWillTerminate(_ notification: Notification){queue.cancelAllOperations();reviewTask?.cancel();commitAdjustments();writeUntitled();writeRecoveryCopy()}
+    func applicationWillTerminate(_ notification: Notification){
+        queue.cancelAllOperations();reviewTask?.cancel();commitAdjustments();writeUntitled();writeRecoveryCopy()
+        // A proper quit leaves no journal; one found at the next launch then means a crash.
+        Imaging.readingChanged=nil;journalLock.lock();if journalKept {CrashJournal.clear(in:supportURL)};journalLock.unlock()
+    }
 
     // MARK: Page list
     func numberOfRows(in tableView:NSTableView)->Int {project.pages.count}
@@ -470,7 +496,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
             DispatchQueue.main.async {guard let self,self.displayToken==token else{return};switch result {case .success(let image):self.decoded[p.path]=image;self.present(image);self.readAhead(from:i);case .failure(let e):
                 // An incomplete file says so on the canvas: looking for it elsewhere would not help.
                 let cutShort=Imaging.incomplete(URL(fileURLWithPath:p.path)) != nil
-                self.canvas.placeholder=cutShort ? "This photograph’s file is incomplete\nCopy it again from where it came, to the same place":"Could not load this photograph\nFile ▸ Locate Missing Photographs… finds moved files";self.status.stringValue=e.localizedDescription}}
+                self.canvas.placeholder=Imaging.isHeld(p.path) ? "This photograph was set aside after KettleStitch closed unexpectedly\nFile ▸ Try Set-Aside Photographs Again reads it once more":cutShort ? "This photograph’s file is incomplete\nCopy it again from where it came, to the same place":"Could not load this photograph\nFile ▸ Locate Missing Photographs… finds moved files";self.status.stringValue=e.localizedDescription}}
         }
     }
     func present(_ image:CGImage){original=image;if canvas.preview{renderPreview()}else{canvas.image=image;showPhotograph()}}
@@ -529,6 +555,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
     func updateTitle(){
         let name=projectURL.deletingPathExtension().lastPathComponent,untitled = !hasProjectFile
         window?.title=untitled ? "Untitled":name;window?.representedURL=untitled ? nil:projectURL;window?.isDocumentEdited=unsaved
+        let path=untitled ? nil:projectURL.path;updateJournal{$0.project=path}
     }
     func noteRecent(){if testDirectory == nil,notedRecent != projectURL {notedRecent=projectURL;NSDocumentController.shared.noteNewRecentDocumentURL(projectURL)}}
     /// Records that the project changed. An untitled session is written at once; a project file waits for Save
@@ -585,8 +612,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
         RecoverySnapshot.remove(sessionID,in:supportURL)
     }
     func recoveryEntries()->[RecoveryList.Entry] {
-        RecoveryList.entries(in:supportURL,except:sessionID,exceptFile:hasProjectFile ? nil:projectURL,exists:FileManager.default.fileExists(atPath:),
-            modified:{(try? FileManager.default.attributesOfItem(atPath:$0))?[.modificationDate] as? Date})
+        let modified={(path:String) in (try? FileManager.default.attributesOfItem(atPath:path))?[.modificationDate] as? Date}
+        let own=hasProjectFile ? nil:projectURL
+        // Copies that cannot be read are listed too, so that they are known about and can be removed.
+        return RecoveryList.entries(in:supportURL,except:sessionID,exceptFile:own,exists:FileManager.default.fileExists(atPath:),modified:modified)+RecoveryList.damaged(in:supportURL,exceptFile:own,modified:modified)
     }
     @objc func showRecovery(){
         if recovery == nil {
@@ -599,6 +628,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
     /// Opens a recovery copy. A named project's copy opens as that project with its changes unsaved, so the file
     /// itself changes only when the user saves; `saveAs` asks for a new file at once.
     func recover(_ entry:RecoveryList.Entry,saveAs:Bool){
+        if entry.reason == .damaged {
+            let alert=NSAlert();alert.alertStyle = .warning;alert.messageText="This copy is damaged and cannot be opened"
+            alert.informativeText="Its file is at:\n\(entry.file.path)\n\nIt is kept until you delete it here, in case it can be repaired by hand."+(entry.originalPath.map{"\n\nThe project it belongs to, as last saved, is at:\n\($0)"} ?? "")
+            if testDirectory == nil {alert.runModal()};return
+        }
         guard confirmUnsaved() else{return}
         if entry.snapshot == nil {open(entry.file)} else {
             do {
@@ -1231,7 +1265,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
     @objc func openProject(){let panel=NSOpenPanel();panel.allowedContentTypes=ImportPolicy.projectExtensions.compactMap{UTType(filenameExtension:$0)}+[.json];guard confirmUnsaved(),panel.runModal() == .OK,let url=panel.url else{return};open(url)}
     @objc func openRecent(_ sender:NSMenuItem){if let url=sender.representedObject as? URL,confirmUnsaved(){open(url)}}
     func open(_ url:URL){
-        do{let loaded=try Project.read(url);guard readyToReplace() else{return};show(loaded,at:url);status.stringValue="Opened \(url.lastPathComponent)"}catch{showError(error)}
+        // Changes to this project that a crash left unsaved are offered before the file as it was last saved.
+        if testDirectory == nil,let copy=recoveryCopy(for:url) {
+            let when=RecoveryController.date.string(from:copy.written)
+            let alert=NSAlert();alert.messageText="“\(url.deletingPathExtension().lastPathComponent)” has unsaved changes that were kept"
+            alert.informativeText="KettleStitch closed before changes made up to \(when) were saved. You can carry on from them, or open the project as it was last saved; the kept changes stay in File ▸ Recovery until you delete them or save over them."
+            alert.addButton(withTitle:"Open with Those Changes");alert.addButton(withTitle:"Open as Last Saved");alert.addButton(withTitle:"Cancel")
+            switch alert.runModal() {
+            case .alertFirstButtonReturn:recover(copy,saveAs:false);return
+            case .alertSecondButtonReturn:break
+            default:return
+            }
+        }
+        do{
+            let loaded=try Project.read(url);guard readyToReplace() else{return};show(loaded,at:url)
+            let pending=loaded.pages.filter{$0.status=="Pending" || $0.status==AppDelegate.detectionError}.count
+            status.stringValue="Opened \(url.lastPathComponent)"+(pending>0 ? " · \(pending) page\(pending==1 ? " has":"s have") no crop proposal yet; Tools ▸ Detect All Pending Pages proposes \(pending==1 ? "it":"them")":"")
+        }catch{showError(error)}
     }
     /// Replaces the project on screen with another. What was open has been saved or let go by now.
     func show(_ loaded:Project,at url:URL){
@@ -1275,9 +1325,51 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
     }
 
     // MARK: Background work
-    func beginProgress(_ kind:ProgressTracker.Kind,_ total:Int){tracker.begin(kind,total:total);showProgress()}
+    func beginProgress(_ kind:ProgressTracker.Kind,_ total:Int){tracker.begin(kind,total:total);showProgress();noteActivity()}
     func stepProgress(_ kind:ProgressTracker.Kind,_ done:Int){tracker.advance(kind,to:done);showProgress()}
-    func endProgress(_ kind:ProgressTracker.Kind){tracker.end(kind);showProgress()}
+    func endProgress(_ kind:ProgressTracker.Kind){tracker.end(kind);showProgress();noteActivity()}
+    // MARK: After a crash
+    /// Changes the journal and writes it down, from any thread. A test run keeps none.
+    func updateJournal(_ change:(inout CrashJournal)->Void){
+        journalLock.lock();defer{journalLock.unlock()}
+        let before=journal;change(&journal)
+        if journal != before,journalKept,let support=supportURL {try? journal.write(in:support)}
+    }
+    func noteActivity(){
+        let names:[(ProgressTracker.Kind,String)]=[(.export,"Exporting"),(.detect,"Proposing crops"),(.split,"Proposing splits or measuring tilt"),(.review,"Waiting for a second opinion")]
+        let now=names.first{tracker.isRunning($0.0)}?.1
+        updateJournal{$0.activity=now}
+    }
+    /// Deals with what a crashed run left: removes a half-written PDF, sets aside the photographs that were being
+    /// read, and tells the user what happened and what was kept.
+    func handleCrash(_ found:CrashJournal){
+        if let partial=found.partialExport {
+            // Only ever a file this app named as its own unfinished export.
+            let url=URL(fileURLWithPath:partial)
+            if url.lastPathComponent.hasPrefix(".partial-"),url.pathExtension=="pdf" {try? FileManager.default.removeItem(at:url)}
+        }
+        Imaging.hold(found.suspects)
+        let kept=recoveryEntries().filter{$0.reason.needsAttention}.count,lines=found.account(recoverable:kept)
+        status.stringValue="KettleStitch closed unexpectedly last time"+(lines.first.map{" · "+$0} ?? "")
+        guard testDirectory == nil,!lines.isEmpty else{return}
+        let alert=NSAlert();alert.messageText="KettleStitch closed unexpectedly last time";alert.informativeText=lines.joined(separator:"\n\n")
+        let project=found.project.map{URL(fileURLWithPath:$0)}.flatMap{FileManager.default.fileExists(atPath:$0.path) ? $0:nil}
+        // With changes kept aside the Recovery window is the way back in; otherwise the project can be reopened here.
+        if let project,kept==0,self.project.pages.isEmpty {alert.addButton(withTitle:"Reopen “\(project.deletingPathExtension().lastPathComponent)”");alert.addButton(withTitle:"Not Now")} else {alert.addButton(withTitle:"OK")}
+        if alert.runModal() == .alertFirstButtonReturn,let project,kept==0,self.project.pages.isEmpty {open(project)}
+    }
+    /// Reads again the photographs set aside after a crash.
+    @objc func tryHeldAgain(){
+        let count=Imaging.heldCount;guard count>0 else{return}
+        Imaging.release();thumbnailFailures=[:];thumbnailPending=[:]
+        table.reloadData(forRowIndexes:IndexSet(integersIn:0..<project.pages.count),columnIndexes:IndexSet(integer:0))
+        if current != nil,original == nil {loadCurrent()}
+        status.stringValue="Reading \(count) set-aside photograph\(count==1 ? "":"s") again"
+    }
+    /// A copy of unsaved changes to this project file that a crash left, if there is one.
+    func recoveryCopy(for url:URL)->RecoveryList.Entry? {
+        recoveryEntries().first{$0.reason == .unsavedChanges && $0.originalPath.map{URL(fileURLWithPath:$0).standardizedFileURL.path}==url.standardizedFileURL.path}
+    }
     /// Detection, export, Claude review and split proposals can overlap; the bar shows them together and hides when all are done.
     func showProgress(){
         progress.isHidden = !tracker.isActive;stopButton.isHidden = !tracker.isActive
@@ -1358,16 +1450,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
             var completed=0
             func cancelled()->Bool {DispatchQueue.main.sync{self?.exportCancelled ?? true}}
             func report(_ index:Int){completed+=parts[index];let done=completed;DispatchQueue.main.async{self?.status.stringValue="Exporting \(done)/\(total)";self?.stepProgress(.export,done)}}
+            self?.updateJournal{$0.exportDestination=destination.path}
+            defer{self?.updateJournal{$0.exportDestination=nil;$0.partialExport=nil}}
+            var informationLeft:[String]=[]
             do{
                 var finished=true
                 if options.format == .pdf {
                     let temp=destination.deletingLastPathComponent().appendingPathComponent(".partial-\(UUID().uuidString).pdf")
+                    self?.updateJournal{$0.partialExport=temp.path}
                     do{
                         let writer=try PDFWriter(url:temp,password:options.password)
                         for (i,page) in pages.enumerated() {if cancelled(){finished=false;break};try autoreleasepool{try writer.add(page,options:options)};report(i)}
                         // Closing and moving a long PDF takes a while after the last page is drawn.
                         if finished {DispatchQueue.main.async{self?.status.stringValue="Finishing the PDF…";self?.beginProgress(.export,1)}}
-                        try writer.close()
+                        try writer.close();informationLeft=writer.informationLeft
                         if finished {
                             // An existing PDF is exchanged for the new one in a single step, so it is never gone without its replacement.
                             if FileManager.default.fileExists(atPath:destination.path) {_=try FileManager.default.replaceItemAt(destination,withItemAt:temp)}
@@ -1382,9 +1478,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
                         };report(i)
                     }
                 }
-                let done=completed,complete=finished
+                let done=completed,complete=finished,left=informationLeft
                 DispatchQueue.main.async{guard let self else{return};self.exporting=false;self.endProgress(.export)
                     self.status.stringValue=complete ? "Exported \(done) pages to \(destination.lastPathComponent)":options.format == .pdf ? "Export stopped; no PDF was written":"Export stopped after \(done)/\(total)"
+                    // The PDF is whole, but says more about how it was made than it should.
+                    if complete,!left.isEmpty {
+                        self.status.stringValue+=" · its document information could not be removed (\(left.joined(separator:", ")))"
+                        if self.testDirectory == nil {
+                            let alert=NSAlert();alert.messageText="The PDF was exported, but its document information could not be removed"
+                            alert.informativeText="It still holds: \(left.joined(separator:", ")). macOS writes its own version and the time of export there. KettleStitch normally removes them and could not on this version of macOS; please report this.";alert.runModal()
+                        }
+                    }
                     if complete,self.testDirectory == nil {NSWorkspace.shared.activateFileViewerSelecting([destination])}
                 }
             }catch{DispatchQueue.main.async{self?.exporting=false;self?.endProgress(.export);self?.showError(error)}}

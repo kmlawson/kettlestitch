@@ -33,7 +33,7 @@ The app is not notarized, so Gatekeeper blocks the first launch of a downloaded 
 
 ## Test modes
 
-Setting `KETTLESTITCH_TEST_DIR` to a folder puts the app in test mode: it uses that folder instead of Application Support, opens `Recovery.kettlestitch` from it if present, stays out of Open Recent, never asks questions, and leaves the keychain alone unless `KETTLESTITCH_TEST_KEYCHAIN` is also set.
+Setting `KETTLESTITCH_TEST_DIR` to a folder puts the app in test mode: it uses that folder instead of Application Support, opens `Recovery.kettlestitch` from it if present, stays out of Open Recent, never asks questions, and leaves the keychain alone unless `KETTLESTITCH_TEST_KEYCHAIN` is also set. It keeps no crash journal unless `KETTLESTITCH_TEST_JOURNAL` is set, which is how handling of a killed run is tested: start it, `kill -9` it, start it again with `KETTLESTITCH_REPORT`.
 
 | Run | What it does |
 | --- | --- |

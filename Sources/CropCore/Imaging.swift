@@ -19,6 +19,9 @@ public enum Imaging {
     public static func load(_ url: URL, maxPixel: Int) throws -> CGImage {
         // A file cut short opens all the same, with gray or black where the picture is missing; it is refused here.
         if let problem=incomplete(url) {throw CropError.message(problem)}
+        // A photograph that was being read when the app last crashed is left alone until the user says to try it again.
+        if isHeld(url.path) {throw CropError.message("“\(url.lastPathComponent)” has been set aside: KettleStitch closed unexpectedly while reading it. File ▸ Try Set-Aside Photographs Again reads it once more.")}
+        noteReading(url.path,begun:true);defer {noteReading(url.path,begun:false)}
         guard let source = CGImageSourceCreateWithURL(url as CFURL, [kCGImageSourceShouldCache: false] as CFDictionary),
               let image = CGImageSourceCreateThumbnailAtIndex(source, 0, [kCGImageSourceCreateThumbnailFromImageAlways: true, kCGImageSourceCreateThumbnailWithTransform: true, kCGImageSourceThumbnailMaxPixelSize: maxPixel, kCGImageSourceShouldCacheImmediately: true] as CFDictionary) else {throw CropError.message("Cannot read image: \(url.lastPathComponent)")}
         return image

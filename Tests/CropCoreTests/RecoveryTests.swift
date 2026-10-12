@@ -34,6 +34,24 @@ final class RecoveryTests: XCTestCase {
         XCTAssertThrowsError(try RecoverySnapshot.read(bad))
         XCTAssertTrue(RecoveryList.entries(in:support,exists:{_ in true},modified:{_ in nil}).isEmpty)
     }
+    func testADamagedCopyIsListedAsDamagedNotHidden() throws {
+        let when=Date(timeIntervalSince1970:1_800_000_000)
+        // A copy whose project is damaged, but which still says whose it is.
+        let folder=support.appendingPathComponent("Recovery");try FileManager.default.createDirectory(at:folder,withIntermediateDirectories:true)
+        let named=folder.appendingPathComponent(UUID().uuidString+".kettlestitch-recovery")
+        try Data(#"{"version":1,"id":"not an id","originalPath":"/books/Atlas.kettlestitch","project":{"pages":"lost"}}"#.utf8).write(to:named)
+        // One that is nothing but noise, and an untitled session that no longer opens.
+        let noise=folder.appendingPathComponent(UUID().uuidString+".kettlestitch-recovery");try Data("{ not a copy".utf8).write(to:noise)
+        let untitled=support.appendingPathComponent(LaunchPolicy.untitledName(when));try Data("[]".utf8).write(to:untitled)
+        let entries=RecoveryList.damaged(in:support,modified:{_ in when})
+        XCTAssertEqual(entries.count,3);XCTAssertTrue(entries.allSatisfy{$0.reason == .damaged && $0.pageCount==0 && $0.snapshot==nil})
+        XCTAssertEqual(Set(entries.map{$0.name}),["Atlas","Recovery copy",untitled.deletingPathExtension().lastPathComponent]);XCTAssertEqual(entries.first{$0.name=="Atlas"}?.originalPath,"/books/Atlas.kettlestitch")
+        XCTAssertFalse(RecoveryList.Reason.damaged.explanation.isEmpty);XCTAssertTrue(RecoveryList.Reason.damaged.needsAttention,"Work that may be lost is worth raising")
+        // A whole copy is not among them, and a file that is still being written elsewhere is not judged twice.
+        try RecoverySnapshot(id:UUID(),originalPath:"/books/Herbal.kettlestitch",written:when,project:book(["a"])).write(in:support)
+        XCTAssertEqual(RecoveryList.damaged(in:support,modified:{_ in when}).count,3)
+        XCTAssertEqual(RecoveryList.damaged(in:support,exceptFile:untitled,modified:{_ in when}).count,2,"The session that is open is not judged")
+    }
     func testTheListSaysWhatEachCopyIsAndWhyItExists() throws {
         let saved=Date(timeIntervalSince1970:1_800_000_000)
         // Changes to a named project that never reached its file.
