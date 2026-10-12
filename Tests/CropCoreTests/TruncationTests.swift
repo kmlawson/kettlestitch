@@ -68,4 +68,43 @@ final class TruncationTests: XCTestCase {
         var options=ExportOptions();options.format = .png
         XCTAssertThrowsError(try Exporter.render(Page(path:short.path),options:options)){XCTAssertTrue($0.localizedDescription.contains("incomplete"),$0.localizedDescription)}
     }
+    // The same fault on the way out: Quartz writes a PDF to a full disk without reporting anything.
+    func noisyPage(_ n: Int) throws -> Page {
+        let url=folder.appendingPathComponent("page\(n).png")
+        if !FileManager.default.fileExists(atPath:url.path) {try Exporter.encode(picture(),as:.png,quality:1,dpi:nil).write(to:url)}
+        var p=Page(path:url.path);var a=Adjustments();a.brightness=Double(n)*0.03;p.adjustments=a;return p
+    }
+    func testAPDFThatWasNotWrittenWholeIsReported() throws {
+        let url=folder.appendingPathComponent("book.pdf"),writer=try PDFWriter(url:url)
+        for n in 0..<4 {try writer.add(try noisyPage(n),options:ExportOptions())}
+        XCTAssertNoThrow(try writer.close())
+        let size=try Data(contentsOf:url).count
+        XCTAssertNoThrow(try PDFWriter.verify(url,pages:4,atLeast:size/2,password:nil))
+        XCTAssertThrowsError(try PDFWriter.verify(url,pages:5,atLeast:0,password:nil),"A page is missing")
+        XCTAssertThrowsError(try PDFWriter.verify(url,pages:4,atLeast:size*2,password:nil),"Smaller than the pictures put into it"){XCTAssertTrue($0.localizedDescription.contains("not written completely"),$0.localizedDescription)}
+        for share in [0.3,0.9] {
+            let short=folder.appendingPathComponent("short.pdf");try Data(contentsOf:url).prefix(Int(Double(size)*share)).write(to:short)
+            XCTAssertThrowsError(try PDFWriter.verify(short,pages:4,atLeast:0,password:nil),"Cut to \(share)")
+        }
+        XCTAssertThrowsError(try PDFWriter.verify(folder.appendingPathComponent("absent.pdf"),pages:1,atLeast:0,password:nil))
+        // A protected PDF is checked with its password.
+        let locked=folder.appendingPathComponent("locked.pdf"),secret=try PDFWriter(url:locked,password:"open sesame")
+        try secret.add(try noisyPage(0),options:ExportOptions());XCTAssertNoThrow(try secret.close())
+        // A writer nothing was added to has nothing to check.
+        XCTAssertNoThrow(try PDFWriter(url:folder.appendingPathComponent("empty.pdf")).close())
+    }
+    func testAPDFWrittenToAFullDiskFails() throws {
+        // A three-megabyte volume, too small for the book.
+        let image=folder.appendingPathComponent("small.dmg"),mount=folder.appendingPathComponent("mnt")
+        func hdiutil(_ arguments: [String]) -> Bool {
+            let p=Process();p.executableURL=URL(fileURLWithPath:"/usr/bin/hdiutil");p.arguments=arguments;p.standardOutput=FileHandle.nullDevice;p.standardError=FileHandle.nullDevice;p.standardInput=FileHandle.nullDevice
+            return (try? p.run()) != nil && {p.waitUntilExit();return p.terminationStatus == 0}()
+        }
+        try FileManager.default.createDirectory(at:mount,withIntermediateDirectories:true)
+        guard hdiutil(["create","-quiet","-size","3m","-fs","HFS+","-volname","KSFull",image.path]),hdiutil(["attach","-quiet","-nobrowse","-mountpoint",mount.path,image.path]) else {throw XCTSkip("Could not make a small test volume")}
+        defer {_=hdiutil(["detach","-quiet","-force",mount.path])}
+        let url=mount.appendingPathComponent("book.pdf"),writer=try PDFWriter(url:url)
+        for n in 0..<10 {try writer.add(try noisyPage(n),options:ExportOptions())}
+        XCTAssertThrowsError(try writer.close()){XCTAssertTrue($0.localizedDescription.contains("not written completely"),$0.localizedDescription)}
+    }
 }

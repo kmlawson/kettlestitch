@@ -141,6 +141,7 @@ open -n dist/KettleStitch.app
 - AppDelegate is very large; operations and state are not separated.
 - The second opinion sends the photograph with its smudges and clone strokes applied, but whole, not cropped.
 - A late split or deskew result is applied only if `Page.splitResultApplies` / `deskewResultApplies` say the page is still as it was when the work began.
+- System calls that report success for damaged output are checked by their result, not their status: `Imaging.incomplete` for photographs read (ImageIO calls a truncated file complete) and `PDFWriter.verify` for PDFs written (Quartz reports nothing on a full disk). A smudge or clone stroke that cannot be drawn is an error, never left out.
 - `Project.checked()` is the one gate a project file passes: it refuses duplicate page identities and implausible numbers and brings the rest within range.
 - No notarization, so every downloaded copy meets Gatekeeper.
 

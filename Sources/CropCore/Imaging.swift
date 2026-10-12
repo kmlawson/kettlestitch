@@ -113,7 +113,8 @@ public enum Imaging {
     public static var pictureZoneMode = Cleanup.grayscale
     /// The photograph with its smudges blurred in. The blur follows the photograph's size, so the preview and the
     /// full-resolution export hide the same print equally.
-    public static func smudged(_ image: CIImage, _ smudges: [Smudge]) -> CIImage {
+    /// A stroke that cannot be drawn is an error, never a stroke left out: what it hides must not be exported bare.
+    public static func smudged(_ image: CIImage, _ smudges: [Smudge]) throws -> CIImage {
         var result=image
         let extent=image.extent,longer=Double(max(extent.width,extent.height))
         // Strokes of one strength and one amount of grain are blurred together.
@@ -121,7 +122,7 @@ public enum Imaging {
         func kind(_ smudge: Smudge) -> Kind {Kind(strength:smudge.strength,grain:smudge.grain ?? smudgeGrain)}
         for each in Set(smudges.map(kind)).sorted(by:{($0.strength,$0.grain)<($1.strength,$1.grain)}) {
             let strength=each.strength
-            guard let mask=smudgeMask(smudges.filter{kind($0) == each},extent:extent) else {continue}
+            guard let mask=smudgeMask(smudges.filter{kind($0) == each},extent:extent) else {throw CropError.message("Could not render smudges")}
             var blurred=result.clampedToExtent().applyingFilter("CIGaussianBlur",parameters:[kCIInputRadiusKey:longer*(0.002+0.02*strength)]).cropped(to:extent)
             // A little gray grain over the blur, so the smudge reads as paper texture rather than a smooth patch
             // and what lay under it is harder still to recover. The grain's size follows the photograph's.
@@ -138,27 +139,27 @@ public enum Imaging {
         return result
     }
     /// The photograph with its clone strokes copied in and then its smudges blurred in.
-    public static func retouched(_ image: CIImage, smudges: [Smudge], clones: [CloneStroke]) -> CIImage {
+    public static func retouched(_ image: CIImage, smudges: [Smudge], clones: [CloneStroke]) throws -> CIImage {
         var result=image
         let extent=image.extent
         for stroke in clones {
-            guard let mask=smudgeMask([Smudge(points:stroke.points,radius:stroke.radius,strength:0)],extent:extent) else {continue}
+            guard let mask=smudgeMask([Smudge(points:stroke.points,radius:stroke.radius,strength:0)],extent:extent) else {throw CropError.message("Could not render cloned areas")}
             // The picture slid so that what lies `offset` away sits under the brush. Core Image counts upward, photographs downward.
             let source=result.clampedToExtent().transformed(by:CGAffineTransform(translationX:-stroke.offset.x*extent.width,y:stroke.offset.y*extent.height)).cropped(to:extent)
             result=source.applyingFilter("CIBlendWithMask",parameters:[kCIInputBackgroundImageKey:result,kCIInputMaskImageKey:mask])
         }
-        return smudged(result,smudges)
+        return try smudged(result,smudges)
     }
     public static func retouched(_ image: CGImage, smudges: [Smudge], clones: [CloneStroke]) throws -> CGImage {
         guard !smudges.isEmpty || !clones.isEmpty else {return image}
         let input=CIImage(cgImage:image)
-        guard let result=context.createCGImage(retouched(input,smudges:smudges,clones:clones),from:input.extent) else {throw CropError.message("Could not render smudges")}
+        guard let result=context.createCGImage(try retouched(input,smudges:smudges,clones:clones),from:input.extent) else {throw CropError.message("Could not render smudges")}
         return result
     }
     public static func smudged(_ image: CGImage, _ smudges: [Smudge]) throws -> CGImage {try retouched(image,smudges:smudges,clones:[])}
     public static func corrected(_ image: CGImage, quad: Quad, rotation: Int = 0, adjustments: Adjustments = Adjustments(), scale: Double = 1, deskew: Double = 0, zones: [[Point]] = [], smudges: [Smudge] = [], clones: [CloneStroke] = [], zoneMode: Cleanup? = nil) throws -> CGImage {
         guard quad.valid else {throw CropError.message("Invalid crop corners")}
-        let input=retouched(CIImage(cgImage:image),smudges:smudges,clones:clones), w=Double(image.width), h=Double(image.height)
+        let input=try retouched(CIImage(cgImage:image),smudges:smudges,clones:clones), w=Double(image.width), h=Double(image.height)
         func vector(_ p: Point) -> CIVector {CIVector(x:p.x*w, y:(1-p.y)*h)}
         let p=quad.points
         let output=input.applyingFilter("CIPerspectiveCorrection", parameters:["inputTopLeft":vector(p[0]),"inputTopRight":vector(p[1]),"inputBottomRight":vector(p[2]),"inputBottomLeft":vector(p[3])])

@@ -210,8 +210,13 @@ public final class PDFWriter {
     private let context: CGContext
     private var closed=false
     private let url: URL
+    private let password: String?
+    /// How many pages have been added, and the size of each different picture handed over as a JPEG: the finished
+    /// file must have that many pages and cannot be smaller than those pictures together.
+    private var pages=0
+    private var embedded:[Int:Int]=[:]
     public init(url: URL, password: String? = nil) throws {
-        self.url=url
+        self.url=url;self.password=password
         var info:[CFString:Any]=[:]
         if let password,!password.isEmpty {info[kCGPDFContextUserPassword]=password;info[kCGPDFContextOwnerPassword]=password}
         guard let context=CGContext(url as CFURL,mediaBox:nil,info as CFDictionary) else {throw CropError.message("Cannot create PDF: \(url.lastPathComponent)")}
@@ -226,7 +231,7 @@ public final class PDFWriter {
             // A JPEG-backed image is embedded as it stands instead of being recompressed losslessly.
             let data=try Exporter.encode(image,as:.jpeg,quality:options.jpegQuality,dpi:nil)
             guard let provider=CGDataProvider(data:data as CFData),let jpeg=CGImage(jpegDataProviderSource:provider,decode:nil,shouldInterpolate:true,intent:.defaultIntent) else {throw CropError.message("Could not compress page")}
-            image=jpeg
+            image=jpeg;embedded[data.hashValue]=data.count
         }
         let lines=options.searchableText ? try Exporter.recognizeText(in:rendered.image,language:options.textLanguage):[]
         var box=CGRect(origin:.zero,size:rendered.layout.pageSize)
@@ -234,11 +239,35 @@ public final class PDFWriter {
         context.beginPDFPage([kCGPDFContextMediaBox:media] as CFDictionary)
         context.draw(image,in:rendered.layout.imageRect)
         draw(lines,in:rendered.layout.imageRect)
-        context.endPDFPage()
+        context.endPDFPage();pages+=1
     }
     /// Finishes the file, then empties its information dictionary: Quartz always writes the macOS version and
     /// build as Producer, and the creation and modification dates.
-    public func close() throws {if !closed {closed=true;context.closePDF();try PDFInfo.strip(url)}}
+    /// Quartz reports nothing when it cannot write, to a full disk for one, and leaves a short file whose pages
+    /// still open; so the finished file is checked before it is called finished.
+    public func close() throws {
+        guard !closed else {return}
+        closed=true;context.closePDF()
+        if pages>0 {try PDFWriter.verify(url,pages:pages,atLeast:embedded.values.reduce(0,+),password:password)}
+        try PDFInfo.strip(url)
+    }
+    /// Throws unless the file at `url` is a whole PDF of `pages` pages and at least `bytes` long.
+    public static func verify(_ url: URL, pages: Int, atLeast bytes: Int, password: String?) throws {
+        let megabytes={(n: Int) in String(format:"%.1f MB",Double(n)/1_000_000)}
+        func failure(_ why: String) -> CropError {.message("“\(url.lastPathComponent)” was not written completely: \(why). The disk may be full, or may have been disconnected.")}
+        guard let size=((try? FileManager.default.attributesOfItem(atPath:url.path))?[.size] as? NSNumber)?.intValue else {throw failure("the file is not there")}
+        guard size>=bytes else {throw failure("it is \(megabytes(size)) and its pictures alone need \(megabytes(bytes))")}
+        // A whole PDF ends by saying where its table of contents is, and that place is inside the file.
+        guard let file=try? FileHandle(forReadingFrom:url) else {throw failure("it cannot be read")}
+        defer {try? file.close()}
+        try? file.seek(toOffset:UInt64(max(0,size-1024)))
+        let tail=String(decoding:(try? file.readToEnd()) ?? Data(),as:UTF8.self)
+        guard tail.contains("%%EOF"),let mark=tail.range(of:"startxref",options:.backwards),let table=Int(tail[mark.upperBound...].drop{$0.isWhitespace}.prefix{$0.isNumber}),table<size else {throw failure("its end is missing")}
+        guard let document=CGPDFDocument(url as CFURL) else {throw failure("it does not open")}
+        if document.isEncrypted,!document.isUnlocked {_=document.unlockWithPassword(password ?? "")}
+        guard document.isUnlocked || !document.isEncrypted else {return}
+        guard document.numberOfPages == pages else {throw failure("it has \(document.numberOfPages) of its \(pages) pages")}
+    }
     /// Invisible text placed over each recognized line so the PDF can be searched and copied.
     private func draw(_ lines: [TextLine], in rect: CGRect) {
         for line in lines {

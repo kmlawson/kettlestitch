@@ -273,6 +273,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
         }
     }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication)->Bool {true}
+    /// Coming back to the app, photographs that could not be read are tried again: a file that was missing or cut
+    /// short may have been copied again meanwhile.
+    func applicationDidBecomeActive(_ notification: Notification){
+        guard window != nil,!thumbnailFailures.isEmpty || (current != nil && original == nil) else{return}
+        let failed=Set(thumbnailFailures.keys);thumbnailFailures=[:]
+        let rows=IndexSet(project.pages.indices.filter{failed.contains(project.pages[$0].path)})
+        table.reloadData(forRowIndexes:rows,columnIndexes:IndexSet(integer:0))
+        if current != nil,original == nil {loadCurrent()}
+    }
     func applicationShouldTerminate(_ sender: NSApplication)->NSApplication.TerminateReply {confirmUnsaved(leaving:true) ? .terminateNow:.terminateCancel}
     func applicationWillTerminate(_ notification: Notification){queue.cancelAllOperations();reviewTask?.cancel();commitAdjustments();writeUntitled();writeRecoveryCopy()}
 
@@ -458,7 +467,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
             // It may have been read ahead while this waited its turn.
             let ready=DispatchQueue.main.sync{self?.decoded[p.path]}
             let result=ready.map{Result<CGImage,Error>.success($0)} ?? Result {try Imaging.load(URL(fileURLWithPath:p.path),maxPixel:3200)}
-            DispatchQueue.main.async {guard let self,self.displayToken==token else{return};switch result {case .success(let image):self.decoded[p.path]=image;self.present(image);self.readAhead(from:i);case .failure(let e):self.canvas.placeholder="Could not load this photograph\nFile ▸ Locate Missing Photographs… finds moved files";self.status.stringValue=e.localizedDescription}}
+            DispatchQueue.main.async {guard let self,self.displayToken==token else{return};switch result {case .success(let image):self.decoded[p.path]=image;self.present(image);self.readAhead(from:i);case .failure(let e):
+                // An incomplete file says so on the canvas: looking for it elsewhere would not help.
+                let cutShort=Imaging.incomplete(URL(fileURLWithPath:p.path)) != nil
+                self.canvas.placeholder=cutShort ? "This photograph’s file is incomplete\nCopy it again from where it came, to the same place":"Could not load this photograph\nFile ▸ Locate Missing Photographs… finds moved files";self.status.stringValue=e.localizedDescription}}
         }
     }
     func present(_ image:CGImage){original=image;if canvas.preview{renderPreview()}else{canvas.image=image;showPhotograph()}}
@@ -1229,7 +1241,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTableViewDataSource,
     /// A project holds each photograph's full path. When some are gone, the project's own folder is tried first;
     /// then the user is asked for the folder they are in now, until all are found or the user stops.
     func findMissingPhotographs(){
-        func exists(_ path:String)->Bool {FileManager.default.fileExists(atPath:path)}
+        func exists(_ path:String)->Bool {var folder:ObjCBool=false;return FileManager.default.fileExists(atPath:path,isDirectory:&folder) && !folder.boolValue}
         var missing=Relink.missing(project.pages,exists:exists);guard !missing.isEmpty else{return}
         var found=hasProjectFile ? Relink.relink(&project.pages,in:projectURL.deletingLastPathComponent(),exists:exists):0
         missing=Relink.missing(project.pages,exists:exists)
